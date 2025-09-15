@@ -1,6 +1,7 @@
 // lib/authentication/register_screen.dart
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_colors.dart';
@@ -188,7 +189,7 @@ class _RegisterScreenState extends State<RegisterScreen>
   Widget _buildPasswordStrengthIndicator(String password) {
     int strength = 0;
     String strengthText = 'Weak';
-    Color strengthColor = Colors.red;
+    Color strengthColor = AppColors.accentRed;
 
     if (password.length >= 8) strength++;
     if (password.contains(RegExp(r'[A-Z]'))) strength++;
@@ -199,51 +200,87 @@ class _RegisterScreenState extends State<RegisterScreen>
       case 0:
       case 1:
         strengthText = 'Weak';
-        strengthColor = Colors.red;
+        strengthColor = AppColors.accentRed;
         break;
       case 2:
         strengthText = 'Medium';
-        strengthColor = Colors.orange;
+        strengthColor = AppColors.accentYellow;
         break;
       case 3:
         strengthText = 'Strong';
-        strengthColor = AppColors.primaryBlue;
+        strengthColor = AppColors.primaryOrange;
         break;
       case 4:
         strengthText = 'Very Strong';
-        strengthColor = Colors.green;
+        strengthColor = AppColors.accentGreen;
         break;
     }
 
     return password.isEmpty
         ? const SizedBox.shrink()
         : Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 8),
-              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: LinearProgressIndicator(
-                      value: strength / 4,
-                      backgroundColor: Colors.grey[300],
-                      valueColor: AlwaysStoppedAnimation<Color>(strengthColor),
-                      minHeight: 4,
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Text(
-                    strengthText,
-                    style: TextStyle(
-                      color: strengthColor,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
+                    decoration: BoxDecoration(
+                      color: AppColors.cardBackground,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: strengthColor.withOpacity(0.2),
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(4),
+                            child: LinearProgressIndicator(
+                              value: strength / 4,
+                              backgroundColor: Colors.grey[200],
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                strengthColor,
+                              ),
+                              minHeight: 6,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: strengthColor.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            strengthText,
+                            style: TextStyle(
+                              color: strengthColor,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
-              ),
-            ],
-          );
+              )
+              .animate()
+              .fadeIn(duration: 200.ms)
+              .scale(
+                begin: const Offset(0.95, 0.95),
+                end: const Offset(1, 1),
+                duration: 200.ms,
+              );
   }
 
   @override
@@ -254,7 +291,12 @@ class _RegisterScreenState extends State<RegisterScreen>
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [AppColors.primaryWhite, AppColors.backgroundGray],
+            colors: [
+              AppColors.primaryWhite,
+              AppColors.backgroundGray.withOpacity(0.8),
+              AppColors.backgroundGray,
+            ],
+            stops: const [0.0, 0.6, 1.0],
           ),
         ),
         child: SafeArea(
@@ -267,46 +309,72 @@ class _RegisterScreenState extends State<RegisterScreen>
                   children: [
                     // Back button with custom design
                     Container(
+                          height: 50,
+                          width: 50,
                           decoration: BoxDecoration(
                             color: Colors.white,
-                            borderRadius: BorderRadius.circular(16),
+                            borderRadius: BorderRadius.circular(20),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.05),
-                                blurRadius: 15,
+                                color: AppColors.primaryOrange.withOpacity(
+                                  0.08,
+                                ),
+                                blurRadius: 20,
+                                offset: const Offset(0, 10),
+                                spreadRadius: -5,
+                              ),
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.03),
+                                blurRadius: 10,
                                 offset: const Offset(0, 5),
-                                spreadRadius: 1,
+                                spreadRadius: 0,
                               ),
                             ],
+                            border: Border.all(
+                              color: Colors.white.withOpacity(0.95),
+                              width: 1.5,
+                            ),
                           ),
-                          child: IconButton(
-                            onPressed: () => Navigator.pop(context),
-                            icon: const Icon(
-                              Icons.arrow_back_ios_new,
-                              color: AppColors.primaryOrange,
-                              size: 20,
+                          child: Material(
+                            color: Colors.transparent,
+                            borderRadius: BorderRadius.circular(20),
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(20),
+                              onTap: () {
+                                HapticFeedback.lightImpact();
+                                Navigator.pop(context);
+                              },
+                              child: const Icon(
+                                Icons.arrow_back_ios_new_rounded,
+                                color: AppColors.primaryOrange,
+                                size: 18,
+                              ),
                             ),
                           ),
                         )
                         .animate()
-                        .fadeIn(duration: 400.ms)
+                        .fadeIn(duration: 500.ms)
                         .slideX(
                           begin: -0.2,
                           end: 0,
-                          duration: 400.ms,
+                          duration: 500.ms,
                           curve: Curves.easeOutQuad,
                         ),
                     Expanded(
-                      child: Text(
-                        'Create Account',
-                        textAlign: TextAlign.center,
-                        style: GoogleFonts.poppins(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textDark,
-                          letterSpacing: 0.5,
-                        ),
-                      ),
+                      child:
+                          Text(
+                                'Create Account',
+                                textAlign: TextAlign.center,
+                                style: GoogleFonts.poppins(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.primaryOrange,
+                                  letterSpacing: 0.5,
+                                ),
+                              )
+                              .animate()
+                              .fadeIn(duration: 600.ms, delay: 200.ms)
+                              .slideY(begin: -0.2, end: 0, duration: 400.ms),
                     ),
                     const SizedBox(width: 48), // Balance the layout
                   ],
@@ -329,45 +397,89 @@ class _RegisterScreenState extends State<RegisterScreen>
 
                           // Welcome illustration/logo
                           Container(
-                                width: 100,
-                                height: 100,
+                                width: 120,
+                                height: 120,
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      Colors.white,
+                                      AppColors.backgroundGray.withOpacity(0.8),
+                                    ],
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                  ),
                                   boxShadow: [
                                     BoxShadow(
                                       color: AppColors.primaryOrange
-                                          .withOpacity(0.25),
-                                      blurRadius: 20,
-                                      offset: const Offset(0, 8),
-                                      spreadRadius: 1,
+                                          .withOpacity(0.15),
+                                      blurRadius: 30,
+                                      offset: const Offset(0, 15),
+                                      spreadRadius: -5,
+                                    ),
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.03),
+                                      blurRadius: 10,
+                                      offset: const Offset(0, 5),
+                                      spreadRadius: 0,
                                     ),
                                   ],
+                                  border: Border.all(
+                                    color: Colors.white.withOpacity(0.95),
+                                    width: 5,
+                                  ),
                                 ),
-                                child: ClipOval(
-                                  child: Image.asset(
-                                    'assets/images/pact_consultancy_pact_cover.jpg',
-                                    fit: BoxFit.cover,
+                                child: Padding(
+                                  padding: const EdgeInsets.all(4.0),
+                                  child: ClipOval(
+                                    child: Image.asset(
+                                      'assets/images/pact_consultancy_pact_cover.jpg',
+                                      fit: BoxFit.cover,
+                                    ),
                                   ),
                                 ),
                               )
                               .animate()
-                              .fadeIn(duration: 600.ms, delay: 200.ms)
+                              .fadeIn(duration: 800.ms, delay: 200.ms)
                               .scale(
                                 begin: const Offset(0.9, 0.9),
                                 end: const Offset(1, 1),
-                                duration: 500.ms,
+                                duration: 800.ms,
+                                curve: Curves.easeOutQuint,
+                              )
+                              .shimmer(
+                                duration: 1800.ms,
+                                delay: 400.ms,
+                                color: Colors.white.withOpacity(0.8),
                               ),
 
-                          const SizedBox(height: 20),
+                          const SizedBox(height: 25),
 
                           // Subtitle
-                          const Text(
-                            'Fill in your details to get started',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: AppColors.textLight,
-                            ),
-                          ),
+                          Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 8,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primaryOrange.withOpacity(
+                                    0.08,
+                                  ),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Text(
+                                  'Fill in your details to get started',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w500,
+                                    color: AppColors.textLight,
+                                    letterSpacing: 0.2,
+                                  ),
+                                ),
+                              )
+                              .animate()
+                              .fadeIn(duration: 800.ms, delay: 400.ms)
+                              .slideY(begin: 0.3, end: 0, duration: 500.ms),
 
                           const SizedBox(height: 30),
 
@@ -378,36 +490,125 @@ class _RegisterScreenState extends State<RegisterScreen>
                               children: [
                                 // Full Name Field
                                 TextFormField(
-                                  controller: _nameController,
-                                  keyboardType: TextInputType.name,
-                                  validator: _validateName,
-                                  textCapitalization: TextCapitalization.words,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Full Name',
-                                    hintText: 'Enter your full name',
-                                    prefixIcon: Icon(
-                                      Icons.person_outline,
-                                      color: AppColors.primaryBlue,
+                                      controller: _nameController,
+                                      keyboardType: TextInputType.name,
+                                      validator: _validateName,
+                                      textCapitalization:
+                                          TextCapitalization.words,
+                                      decoration: InputDecoration(
+                                        labelText: 'Full Name',
+                                        hintText: 'Enter your full name',
+                                        labelStyle: const TextStyle(
+                                          color: AppColors.textLight,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                        prefixIcon: const Icon(
+                                          Icons.person_outline,
+                                          color: AppColors.primaryOrange,
+                                        ),
+                                        border: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            16,
+                                          ),
+                                          borderSide: BorderSide.none,
+                                        ),
+                                        filled: true,
+                                        fillColor: AppColors.primaryOrange
+                                            .withOpacity(0.05),
+                                        contentPadding:
+                                            const EdgeInsets.symmetric(
+                                              horizontal: 20,
+                                              vertical: 16,
+                                            ),
+                                        enabledBorder: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            16,
+                                          ),
+                                          borderSide: BorderSide(
+                                            color: AppColors.primaryOrange
+                                                .withOpacity(0.1),
+                                            width: 1.5,
+                                          ),
+                                        ),
+                                        focusedBorder: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            16,
+                                          ),
+                                          borderSide: const BorderSide(
+                                            color: AppColors.primaryOrange,
+                                            width: 2,
+                                          ),
+                                        ),
+                                      ),
+                                    )
+                                    .animate()
+                                    .fadeIn(duration: 600.ms, delay: 300.ms)
+                                    .slideX(
+                                      begin: -0.1,
+                                      end: 0,
+                                      duration: 400.ms,
                                     ),
-                                  ),
-                                ),
 
                                 const SizedBox(height: 20),
 
                                 // Email Field
                                 TextFormField(
-                                  controller: _emailController,
-                                  keyboardType: TextInputType.emailAddress,
-                                  validator: _validateEmail,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Email',
-                                    hintText: 'Enter your email',
-                                    prefixIcon: Icon(
-                                      Icons.email_outlined,
-                                      color: AppColors.primaryBlue,
+                                      controller: _emailController,
+                                      keyboardType: TextInputType.emailAddress,
+                                      validator: _validateEmail,
+                                      decoration: InputDecoration(
+                                        labelText: 'Email',
+                                        hintText: 'Enter your email',
+                                        labelStyle: const TextStyle(
+                                          color: AppColors.textLight,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                        prefixIcon: const Icon(
+                                          Icons.email_outlined,
+                                          color: AppColors.primaryOrange,
+                                        ),
+                                        border: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            16,
+                                          ),
+                                          borderSide: BorderSide.none,
+                                        ),
+                                        filled: true,
+                                        fillColor: AppColors.primaryOrange
+                                            .withOpacity(0.05),
+                                        contentPadding:
+                                            const EdgeInsets.symmetric(
+                                              horizontal: 20,
+                                              vertical: 16,
+                                            ),
+                                        enabledBorder: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            16,
+                                          ),
+                                          borderSide: BorderSide(
+                                            color: AppColors.primaryOrange
+                                                .withOpacity(0.1),
+                                            width: 1.5,
+                                          ),
+                                        ),
+                                        focusedBorder: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            16,
+                                          ),
+                                          borderSide: const BorderSide(
+                                            color: AppColors.primaryOrange,
+                                            width: 2,
+                                          ),
+                                        ),
+                                      ),
+                                    )
+                                    .animate()
+                                    .fadeIn(duration: 600.ms, delay: 400.ms)
+                                    .slideX(
+                                      begin: -0.1,
+                                      end: 0,
+                                      duration: 400.ms,
                                     ),
-                                  ),
-                                ),
 
                                 const SizedBox(height: 20),
 
@@ -424,16 +625,54 @@ class _RegisterScreenState extends State<RegisterScreen>
                                       decoration: InputDecoration(
                                         labelText: 'Password',
                                         hintText: 'Create a strong password',
+                                        labelStyle: const TextStyle(
+                                          color: AppColors.textLight,
+                                          fontWeight: FontWeight.w500,
+                                        ),
                                         prefixIcon: const Icon(
                                           Icons.lock_outline,
-                                          color: AppColors.primaryBlue,
+                                          color: AppColors.primaryOrange,
+                                        ),
+                                        border: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            16,
+                                          ),
+                                          borderSide: BorderSide.none,
+                                        ),
+                                        filled: true,
+                                        fillColor: AppColors.primaryOrange
+                                            .withOpacity(0.05),
+                                        contentPadding:
+                                            const EdgeInsets.symmetric(
+                                              horizontal: 20,
+                                              vertical: 16,
+                                            ),
+                                        enabledBorder: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            16,
+                                          ),
+                                          borderSide: BorderSide(
+                                            color: AppColors.primaryOrange
+                                                .withOpacity(0.1),
+                                            width: 1.5,
+                                          ),
+                                        ),
+                                        focusedBorder: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            16,
+                                          ),
+                                          borderSide: const BorderSide(
+                                            color: AppColors.primaryOrange,
+                                            width: 2,
+                                          ),
                                         ),
                                         suffixIcon: IconButton(
                                           icon: Icon(
                                             _isPasswordVisible
                                                 ? Icons.visibility_off
                                                 : Icons.visibility,
-                                            color: AppColors.textLight,
+                                            color: AppColors.primaryOrange
+                                                .withOpacity(0.7),
                                           ),
                                           onPressed: () {
                                             setState(() {
@@ -454,142 +693,343 @@ class _RegisterScreenState extends State<RegisterScreen>
 
                                 // Confirm Password Field
                                 TextFormField(
-                                  controller: _confirmPasswordController,
-                                  obscureText: !_isConfirmPasswordVisible,
-                                  validator: _validateConfirmPassword,
-                                  decoration: InputDecoration(
-                                    labelText: 'Confirm Password',
-                                    hintText: 'Re-enter your password',
-                                    prefixIcon: const Icon(
-                                      Icons.lock_outline,
-                                      color: AppColors.primaryBlue,
-                                    ),
-                                    suffixIcon: IconButton(
-                                      icon: Icon(
-                                        _isConfirmPasswordVisible
-                                            ? Icons.visibility_off
-                                            : Icons.visibility,
-                                        color: AppColors.textLight,
+                                      controller: _confirmPasswordController,
+                                      obscureText: !_isConfirmPasswordVisible,
+                                      validator: _validateConfirmPassword,
+                                      decoration: InputDecoration(
+                                        labelText: 'Confirm Password',
+                                        hintText: 'Re-enter your password',
+                                        labelStyle: const TextStyle(
+                                          color: AppColors.textLight,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                        prefixIcon: const Icon(
+                                          Icons.lock_outline,
+                                          color: AppColors.primaryOrange,
+                                        ),
+                                        border: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            16,
+                                          ),
+                                          borderSide: BorderSide.none,
+                                        ),
+                                        filled: true,
+                                        fillColor: AppColors.primaryOrange
+                                            .withOpacity(0.05),
+                                        contentPadding:
+                                            const EdgeInsets.symmetric(
+                                              horizontal: 20,
+                                              vertical: 16,
+                                            ),
+                                        enabledBorder: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            16,
+                                          ),
+                                          borderSide: BorderSide(
+                                            color: AppColors.primaryOrange
+                                                .withOpacity(0.1),
+                                            width: 1.5,
+                                          ),
+                                        ),
+                                        focusedBorder: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            16,
+                                          ),
+                                          borderSide: const BorderSide(
+                                            color: AppColors.primaryOrange,
+                                            width: 2,
+                                          ),
+                                        ),
+                                        suffixIcon: IconButton(
+                                          icon: Icon(
+                                            _isConfirmPasswordVisible
+                                                ? Icons.visibility_off
+                                                : Icons.visibility,
+                                            color: AppColors.primaryOrange
+                                                .withOpacity(0.7),
+                                          ),
+                                          onPressed: () {
+                                            setState(() {
+                                              _isConfirmPasswordVisible =
+                                                  !_isConfirmPasswordVisible;
+                                            });
+                                          },
+                                        ),
                                       ),
-                                      onPressed: () {
-                                        setState(() {
-                                          _isConfirmPasswordVisible =
-                                              !_isConfirmPasswordVisible;
-                                        });
-                                      },
+                                    )
+                                    .animate()
+                                    .fadeIn(duration: 600.ms, delay: 500.ms)
+                                    .slideX(
+                                      begin: -0.1,
+                                      end: 0,
+                                      duration: 400.ms,
                                     ),
-                                  ),
-                                ),
 
                                 const SizedBox(height: 20),
 
                                 // Terms and Conditions Checkbox
-                                Row(
-                                  children: [
-                                    Checkbox(
-                                      value: _acceptTerms,
-                                      onChanged: (value) {
-                                        setState(() {
-                                          _acceptTerms = value ?? false;
-                                        });
-                                      },
-                                      activeColor: AppColors.primaryOrange,
-                                    ),
-                                    Expanded(
-                                      child: GestureDetector(
-                                        onTap: () {
-                                          setState(() {
-                                            _acceptTerms = !_acceptTerms;
-                                          });
-                                        },
-                                        child: RichText(
-                                          text: const TextSpan(
-                                            style: TextStyle(
-                                              color: AppColors.textLight,
-                                              fontSize: 14,
-                                            ),
-                                            children: [
-                                              TextSpan(text: 'I agree to the '),
-                                              TextSpan(
-                                                text: 'Terms & Conditions',
-                                                style: TextStyle(
-                                                  color: AppColors.primaryBlue,
-                                                  fontWeight: FontWeight.w500,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
+                                Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                        vertical: 8,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.primaryOrange
+                                            .withOpacity(0.04),
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(
+                                          color: AppColors.primaryOrange
+                                              .withOpacity(0.1),
+                                          width: 1,
                                         ),
                                       ),
+                                      child: Row(
+                                        children: [
+                                          SizedBox(
+                                            height: 24,
+                                            width: 24,
+                                            child: Transform.scale(
+                                              scale: 0.9,
+                                              child: Checkbox(
+                                                value: _acceptTerms,
+                                                onChanged: (value) {
+                                                  setState(() {
+                                                    _acceptTerms =
+                                                        value ?? false;
+                                                  });
+                                                  if (value == true) {
+                                                    HapticFeedback.lightImpact();
+                                                  }
+                                                },
+                                                activeColor:
+                                                    AppColors.primaryOrange,
+                                                shape: RoundedRectangleBorder(
+                                                  borderRadius:
+                                                      BorderRadius.circular(6),
+                                                ),
+                                                side: BorderSide(
+                                                  color: AppColors.primaryOrange
+                                                      .withOpacity(0.6),
+                                                  width: 1.5,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 10),
+                                          Expanded(
+                                            child: GestureDetector(
+                                              onTap: () {
+                                                setState(() {
+                                                  _acceptTerms = !_acceptTerms;
+                                                });
+                                                if (_acceptTerms) {
+                                                  HapticFeedback.lightImpact();
+                                                }
+                                              },
+                                              child: RichText(
+                                                text: TextSpan(
+                                                  style: GoogleFonts.poppins(
+                                                    color: AppColors.textLight,
+                                                    fontSize: 14,
+                                                  ),
+                                                  children: [
+                                                    const TextSpan(
+                                                      text: 'I agree to the ',
+                                                    ),
+                                                    TextSpan(
+                                                      text:
+                                                          'Terms & Conditions',
+                                                      style: GoogleFonts.poppins(
+                                                        color: AppColors
+                                                            .primaryOrange,
+                                                        fontWeight:
+                                                            FontWeight.w600,
+                                                        decoration:
+                                                            TextDecoration
+                                                                .underline,
+                                                        decorationColor:
+                                                            AppColors
+                                                                .primaryOrange
+                                                                .withOpacity(
+                                                                  0.4,
+                                                                ),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    )
+                                    .animate()
+                                    .fadeIn(duration: 600.ms, delay: 550.ms)
+                                    .slideY(
+                                      begin: 0.2,
+                                      end: 0,
+                                      duration: 400.ms,
                                     ),
-                                  ],
-                                ),
 
                                 const SizedBox(height: 30),
 
                                 // Register Button
-                                SizedBox(
-                                  width: double.infinity,
-                                  height: 56,
-                                  child: ElevatedButton(
-                                    onPressed: _isLoading
-                                        ? null
-                                        : _handleRegister,
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: AppColors.primaryBlue,
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(12),
+                                Container(
+                                      width: double.infinity,
+                                      height: 58,
+                                      decoration: BoxDecoration(
+                                        gradient: AppColors.primaryGradient,
+                                        borderRadius: BorderRadius.circular(16),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: AppColors.primaryOrange
+                                                .withOpacity(0.3),
+                                            blurRadius: 12,
+                                            offset: const Offset(0, 6),
+                                            spreadRadius: -2,
+                                          ),
+                                        ],
                                       ),
-                                      elevation: 4,
-                                    ),
-                                    child: _isLoading
-                                        ? const CircularProgressIndicator(
-                                            color: Colors.white,
-                                            strokeWidth: 2,
-                                          )
-                                        : const Text(
-                                            'SIGN UP',
-                                            style: TextStyle(
-                                              fontSize: 16,
-                                              fontWeight: FontWeight.bold,
-                                              letterSpacing: 1.2,
-                                              color: Colors.white,
+                                      child: ElevatedButton(
+                                        onPressed: _isLoading
+                                            ? null
+                                            : () {
+                                                HapticFeedback.mediumImpact();
+                                                _handleRegister();
+                                              },
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: Colors.transparent,
+                                          shadowColor: Colors.transparent,
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              16,
                                             ),
                                           ),
-                                  ),
-                                ),
+                                          elevation: 0,
+                                        ),
+                                        child: _isLoading
+                                            ? const SizedBox(
+                                                width: 24,
+                                                height: 24,
+                                                child:
+                                                    CircularProgressIndicator(
+                                                      color: Colors.white,
+                                                      strokeWidth: 2.5,
+                                                    ),
+                                              )
+                                            : Row(
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment.center,
+                                                children: [
+                                                  const Text(
+                                                    'CREATE ACCOUNT',
+                                                    style: TextStyle(
+                                                      fontSize: 16,
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                      letterSpacing: 1,
+                                                      color: Colors.white,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 8),
+                                                  Icon(
+                                                    Icons.arrow_forward_rounded,
+                                                    color: Colors.white
+                                                        .withOpacity(0.9),
+                                                    size: 20,
+                                                  ),
+                                                ],
+                                              ),
+                                      ),
+                                    )
+                                    .animate()
+                                    .fadeIn(duration: 800.ms, delay: 600.ms)
+                                    .slideY(
+                                      begin: 0.3,
+                                      end: 0,
+                                      duration: 500.ms,
+                                      curve: Curves.easeOutQuint,
+                                    ),
 
                                 const SizedBox(height: 30),
 
                                 // Already have account link
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    const Text(
-                                      'Already have an account?',
-                                      style: TextStyle(
-                                        color: AppColors.textLight,
-                                        fontSize: 14,
+                                Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 12,
+                                        horizontal: 16,
                                       ),
-                                    ),
-                                    TextButton(
-                                      onPressed: () {
-                                        Navigator.pushReplacementNamed(
-                                          context,
-                                          '/login',
-                                        );
-                                      },
-                                      child: const Text(
-                                        'Sign In',
-                                        style: TextStyle(
-                                          color: AppColors.primaryOrange,
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 14,
+                                      decoration: BoxDecoration(
+                                        color: Colors.white.withOpacity(0.7),
+                                        borderRadius: BorderRadius.circular(16),
+                                        border: Border.all(
+                                          color: AppColors.primaryOrange
+                                              .withOpacity(0.15),
+                                          width: 1,
                                         ),
                                       ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          Text(
+                                            'Already have an account?',
+                                            style: GoogleFonts.poppins(
+                                              color: AppColors.textLight,
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                          TextButton(
+                                            onPressed: () {
+                                              HapticFeedback.lightImpact();
+                                              Navigator.pushReplacementNamed(
+                                                context,
+                                                '/login',
+                                              );
+                                            },
+                                            style: TextButton.styleFrom(
+                                              minimumSize: Size.zero,
+                                              padding: const EdgeInsets.only(
+                                                left: 8,
+                                                right: 4,
+                                              ),
+                                              tapTargetSize:
+                                                  MaterialTapTargetSize
+                                                      .shrinkWrap,
+                                            ),
+                                            child: Row(
+                                              children: [
+                                                Text(
+                                                  'Sign In',
+                                                  style: GoogleFonts.poppins(
+                                                    color:
+                                                        AppColors.primaryOrange,
+                                                    fontWeight: FontWeight.w700,
+                                                    fontSize: 14,
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 4),
+                                                const Icon(
+                                                  Icons.login_rounded,
+                                                  color:
+                                                      AppColors.primaryOrange,
+                                                  size: 16,
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    )
+                                    .animate()
+                                    .fadeIn(duration: 800.ms, delay: 700.ms)
+                                    .slideY(
+                                      begin: 0.2,
+                                      end: 0,
+                                      duration: 400.ms,
                                     ),
-                                  ],
-                                ),
 
                                 const SizedBox(height: 20),
                               ],
