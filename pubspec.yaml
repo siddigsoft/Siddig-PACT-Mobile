@@ -42,6 +42,7 @@ dependencies:
   google_fonts: ^6.3.1        # For modern typography
   flutter_animate: ^4.5.2     # For modern animations
   cached_network_image: ^3.4.1 # For efficient image loading and caching
+  connectivity_plus: ^7.0.0
 
 dev_dependencies:
   flutter_test:

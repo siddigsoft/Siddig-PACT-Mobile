@@ -1,9 +1,11 @@
 // lib/screens/field_operations_screen.dart
 
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_menu_overlay.dart';
 import '../widgets/map_widget.dart';
@@ -20,6 +22,43 @@ class FieldOperationsScreen extends StatefulWidget {
 class _FieldOperationsScreenState extends State<FieldOperationsScreen> {
   bool _isOnline = false;
   bool _showMenu = false;
+  late StreamSubscription<List<ConnectivityResult>> _connectivitySubscription;
+  final Connectivity _connectivity = Connectivity();
+
+  @override
+  void initState() {
+    super.initState();
+    _initConnectivity();
+    _connectivitySubscription = _connectivity.onConnectivityChanged.listen(
+      _updateConnectionStatus,
+    );
+  }
+
+  @override
+  void dispose() {
+    _connectivitySubscription.cancel();
+    super.dispose();
+  }
+
+  // Initialize connectivity checking
+  Future<void> _initConnectivity() async {
+    late List<ConnectivityResult> result;
+    try {
+      result = await _connectivity.checkConnectivity();
+    } catch (e) {
+      return;
+    }
+    _updateConnectionStatus(result);
+  }
+
+  // Update connection status based on connectivity changes
+  void _updateConnectionStatus(List<ConnectivityResult> results) {
+    setState(() {
+      _isOnline =
+          results.isNotEmpty &&
+          results.any((result) => result != ConnectivityResult.none);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -132,14 +171,16 @@ class _FieldOperationsScreenState extends State<FieldOperationsScreen> {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(
-                  Icons.wifi_tethering_rounded,
-                  color: AppColors.primaryOrange,
+                  _isOnline ? Icons.wifi_rounded : Icons.wifi_off_rounded,
+                  color: _isOnline
+                      ? AppColors.accentGreen
+                      : AppColors.accentRed,
                   size: 22,
                 ),
               ),
               const SizedBox(width: 12),
               Text(
-                'Status',
+                'Connection',
                 style: GoogleFonts.poppins(
                   fontSize: 20,
                   fontWeight: FontWeight.w600,
@@ -148,33 +189,48 @@ class _FieldOperationsScreenState extends State<FieldOperationsScreen> {
               ),
             ],
           ),
-          Row(
-            children: [
-              Text(
-                _isOnline ? 'Online' : 'Offline',
-                style: GoogleFonts.poppins(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w500,
-                  color: _isOnline
-                      ? AppColors.accentGreen
-                      : AppColors.accentRed,
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: _isOnline
+                  ? AppColors.accentGreen.withOpacity(0.1)
+                  : AppColors.accentRed.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(30),
+              border: Border.all(
+                color: _isOnline
+                    ? AppColors.accentGreen.withOpacity(0.3)
+                    : AppColors.accentRed.withOpacity(0.3),
+                width: 1,
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color: _isOnline
+                            ? AppColors.accentGreen
+                            : AppColors.accentRed,
+                        shape: BoxShape.circle,
+                      ),
+                    )
+                    .animate(onPlay: (controller) => controller.repeat())
+                    .fadeOut(duration: 1.seconds, curve: Curves.easeInOutCirc)
+                    .fadeIn(duration: 1.seconds, curve: Curves.easeInOutCirc),
+                const SizedBox(width: 8),
+                Text(
+                  _isOnline ? 'Online' : 'Offline',
+                  style: GoogleFonts.poppins(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: _isOnline
+                        ? AppColors.accentGreen
+                        : AppColors.accentRed,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 12),
-              Switch(
-                value: _isOnline,
-                onChanged: (value) {
-                  HapticFeedback.lightImpact();
-                  setState(() {
-                    _isOnline = value;
-                  });
-                },
-                activeThumbColor: AppColors.accentGreen,
-                activeTrackColor: AppColors.accentGreen.withOpacity(0.3),
-                inactiveThumbColor: Colors.white,
-                inactiveTrackColor: AppColors.accentRed.withOpacity(0.3),
-              ),
-            ],
+              ],
+            ),
           ),
         ],
       ),
