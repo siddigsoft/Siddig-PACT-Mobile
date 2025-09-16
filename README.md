@@ -53,15 +53,11 @@ flutter run
   - `theme/`: Centralized color and theme management
 - `assets/`: Contains images and icons used in the app
 
-## Contributing
-
-We welcome contributions to improve the app. Please fork the repository and submit a pull request with your changes.
 
 ## License
 
 This project is licensed under the MIT License. See the LICENSE file for details.
 
----
 
-Thank you for using the PACT Mobile App! If you have any questions or feedback, feel free to reach out to us.
+
 
