@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_colors.dart';
+import '../widgets/app_menu_overlay.dart';
 import '../widgets/map_widget.dart';
 import '../widgets/modern_app_header.dart';
 import '../widgets/modern_card.dart';
@@ -18,35 +19,56 @@ class FieldOperationsScreen extends StatefulWidget {
 
 class _FieldOperationsScreenState extends State<FieldOperationsScreen> {
   bool _isOnline = false;
+  bool _showMenu = false;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.backgroundGray,
-      body: SafeArea(
-        child: Column(
-          children: [
-            _buildHeader(),
-            Expanded(
-              child: SingleChildScrollView(
-                physics: const BouncingScrollPhysics(),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildStatusCard(),
-                      const SizedBox(height: 16),
-                      _buildLocationCard(),
-                      const SizedBox(height: 24),
-                      _buildQuickActionsSection(),
-                    ],
+      body: Stack(
+        children: [
+          SafeArea(
+            child: Column(
+              children: [
+                _buildHeader(),
+                Expanded(
+                  child: SingleChildScrollView(
+                    physics: const BouncingScrollPhysics(),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildStatusCard(),
+                          const SizedBox(height: 16),
+                          _buildLocationCard(),
+                          const SizedBox(height: 24),
+                          _buildQuickActionsSection(),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
+              ],
+            ),
+          ),
+          // Show menu overlay when menu button is clicked
+          if (_showMenu)
+            GestureDetector(
+              onTap: () {
+                setState(() {
+                  _showMenu = false;
+                });
+              },
+              child: AppMenuOverlay(
+                onClose: () {
+                  setState(() {
+                    _showMenu = false;
+                  });
+                },
               ),
             ),
-          ],
-        ),
+        ],
       ),
     );
   }
@@ -56,9 +78,27 @@ class _FieldOperationsScreenState extends State<FieldOperationsScreen> {
       title: 'Field Operations',
       actions: [
         HeaderActionButton(
-          icon: Icons.settings_rounded,
-          tooltip: 'Settings',
-          onPressed: () {},
+          icon: Icons.notifications_outlined,
+          tooltip: 'Notifications',
+          backgroundColor: Colors.white,
+          color: AppColors.accentYellow,
+          onPressed: () {
+            HapticFeedback.lightImpact();
+            // Show notifications
+          },
+        ),
+        const SizedBox(width: 8),
+        HeaderActionButton(
+          icon: Icons.menu_rounded,
+          tooltip: 'Menu',
+          backgroundColor: AppColors.primaryBlue.withOpacity(0.1),
+          color: AppColors.primaryBlue,
+          onPressed: () {
+            HapticFeedback.mediumImpact();
+            setState(() {
+              _showMenu = true;
+            });
+          },
         ),
       ],
     );

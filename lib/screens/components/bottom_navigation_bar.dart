@@ -64,15 +64,18 @@ class CustomBottomNavigationBar extends StatelessWidget {
           // Navigation items
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 12),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _buildNavItem(0, 'Home', Icons.home_outlined),
-                _buildNavItem(1, 'Forms', Icons.article_outlined),
-                _buildNavItem(2, 'Equipment', Icons.build_outlined),
-                _buildNavItem(3, 'Safety', Icons.shield_outlined),
-                _buildNavItem(4, 'Chat', Icons.chat_bubble_outline),
-              ],
+            child: SizedBox(
+              width: double.infinity,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  _buildNavItem(0, 'Home', Icons.home_outlined),
+                  _buildNavItem(1, 'Forms', Icons.article_outlined),
+                  _buildNavItem(2, 'Equipment', Icons.build_outlined),
+                  _buildNavItem(3, 'Safety', Icons.shield_outlined),
+                  _buildNavItem(4, 'Chat', Icons.chat_bubble_outline),
+                ],
+              ),
             ),
           ),
         ],
@@ -101,17 +104,17 @@ class CustomBottomNavigationBar extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       child:
           SizedBox(
-                width: 70,
+                width: 65,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Container(
-                      padding: const EdgeInsets.all(10),
+                      padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
                         color: isActive
                             ? activeColor.withOpacity(0.1)
                             : Colors.transparent,
-                        borderRadius: BorderRadius.circular(18),
+                        borderRadius: BorderRadius.circular(16),
                         boxShadow: isActive
                             ? [
                                 BoxShadow(
@@ -126,19 +129,22 @@ class CustomBottomNavigationBar extends StatelessWidget {
                       child: Icon(
                         icon,
                         color: isActive ? activeColor : AppColors.textLight,
-                        size: isActive ? 26 : 24,
+                        size: isActive ? 24 : 22,
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      label,
-                      style: GoogleFonts.poppins(
-                        color: isActive ? activeColor : AppColors.textLight,
-                        fontSize: 12,
-                        fontWeight: isActive
-                            ? FontWeight.w600
-                            : FontWeight.w500,
-                        height: 1.2,
+                    const SizedBox(height: 2),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        label,
+                        style: GoogleFonts.poppins(
+                          color: isActive ? activeColor : AppColors.textLight,
+                          fontSize: 11,
+                          fontWeight: isActive
+                              ? FontWeight.w600
+                              : FontWeight.w500,
+                          height: 1.1,
+                        ),
                       ),
                     ),
                   ],
