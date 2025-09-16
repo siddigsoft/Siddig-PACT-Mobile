@@ -174,14 +174,33 @@ class _RegisterScreenState extends State<RegisterScreen>
 
       // Show success message
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Registration successful! Please login.'),
-          backgroundColor: AppColors.primaryBlue,
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.check_circle, color: Colors.white),
+              const SizedBox(width: 12),
+              Text(
+                'Registration successful!',
+                style: GoogleFonts.poppins(
+                  fontWeight: FontWeight.w500,
+                  fontSize: 14,
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: AppColors.primaryOrange,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          margin: const EdgeInsets.all(16),
+          duration: const Duration(seconds: 3),
         ),
       );
 
-      // Navigate back to login
-      Navigator.pushReplacementNamed(context, '/login');
+      // Navigate directly to main screen
+      // Use rootNavigator to ensure we break out of any nested navigators
+      Navigator.of(context, rootNavigator: true).pushReplacementNamed('/main');
     }
   }
 

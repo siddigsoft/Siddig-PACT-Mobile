@@ -137,8 +137,9 @@ class _LoginScreenState extends State<LoginScreen>
         ),
       );
 
-      // Navigate to home screen (uncomment when home screen is created)
-      // Navigator.pushReplacementNamed(context, '/home');
+      // Navigate to the main screen with bottom navigation
+      // Use direct navigation instead of utility
+      Navigator.of(context).pushReplacementNamed('/main');
     }
   }
 

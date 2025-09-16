@@ -1,15 +1,30 @@
-// lib/main.dart
+﻿// lib/main.dart
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'authentication/login_screen.dart';
 import 'authentication/register_screen.dart';
 import 'authentication/forgot_password_screen.dart';
+import 'screens/main_screen.dart';
 import 'theme/app_colors.dart';
+
+// Conditionally import web plugins only when needed
+// This prevents errors on non-web platforms
+import 'utils/web_config.dart'
+    if (dart.library.html) 'utils/web_config_web.dart';
+
+// Global navigator key to use for navigation from anywhere
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() {
   // Ensures Flutter widgets are initialized before running the app
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Configure URL strategy for web platform only
+  configureApp();
+
+  // Debug log - helpful for troubleshooting routing
+  debugPrint('🚀 Starting PACT Consultancy app');
 
   // Sets the status bar to be transparent for a modern look
   SystemChrome.setSystemUIOverlayStyle(
@@ -19,12 +34,25 @@ void main() {
     ),
   );
 
+  // Set up a route observer for logging navigation (helps with debugging)
+  final routeObserver = RouteObserver<PageRoute>();
+
+  // Debug logging for route handling
+  FlutterError.onError = (FlutterErrorDetails details) {
+    if (details.exception.toString().contains('no route')) {
+      debugPrint('❌ ROUTE ERROR: ${details.exception}');
+    }
+    FlutterError.presentError(details);
+  };
+
   // Runs the main application
-  runApp(const MyApp());
+  runApp(MyApp(routeObserver: routeObserver));
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  final RouteObserver<PageRoute>? routeObserver;
+
+  const MyApp({super.key, this.routeObserver});
 
   @override
   Widget build(BuildContext context) {
@@ -35,137 +63,77 @@ class MyApp extends StatelessWidget {
       // Removes the debug banner in the top-right corner
       debugShowCheckedModeBanner: false,
 
-      // Define the app's theme
-      theme: ThemeData(
-        // Sets the primary color scheme
-        primaryColor: AppColors.primaryOrange,
+      // Use the centralized theme from AppColors
+      theme: AppColors.themeData,
 
-        // Use Material 3 design
-        useMaterial3: true,
-
-        // Defines color scheme for the entire app
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: AppColors.primaryOrange,
-          primary: AppColors.primaryOrange,
-          secondary: AppColors.primaryBlue,
-          surface: AppColors.primaryWhite,
-          background: AppColors.backgroundGray,
-          brightness: Brightness.light,
-        ),
-
-        // Configures the AppBar theme
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Colors.transparent,
-          elevation: 0, // Removes shadow
-          centerTitle: true,
-          iconTheme: IconThemeData(color: AppColors.textDark),
-          titleTextStyle: TextStyle(
-            color: AppColors.textDark,
-            fontSize: 22,
-            fontWeight: FontWeight.w600,
-            letterSpacing: 0.5,
-          ),
-        ),
-
-        // Configures elevated button theme
-        elevatedButtonTheme: ElevatedButtonThemeData(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.primaryOrange,
-            foregroundColor: Colors.white,
-            elevation: 0,
-            shadowColor: Colors.transparent,
-            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 18),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-            textStyle: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 0.8,
-            ),
-          ),
-        ),
-
-        // Configures text button theme
-        textButtonTheme: TextButtonThemeData(
-          style: TextButton.styleFrom(
-            foregroundColor: AppColors.primaryOrange,
-            textStyle: const TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-
-        // Configures input decoration theme
-        inputDecorationTheme: InputDecorationTheme(
-          filled: true,
-          fillColor: Colors.white,
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 24,
-            vertical: 20,
-          ),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide.none,
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide.none,
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(
-              color: AppColors.primaryOrange,
-              width: 2,
-            ),
-          ),
-          errorBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: Colors.red),
-          ),
-          focusedErrorBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: Colors.red, width: 2),
-          ),
-
-          // Modern styling for labels and hints
-          labelStyle: const TextStyle(
-            color: AppColors.textLight,
-            fontWeight: FontWeight.w500,
-          ),
-          hintStyle: const TextStyle(
-            color: AppColors.textLight,
-            fontWeight: FontWeight.w400,
-          ),
-          floatingLabelStyle: const TextStyle(
-            color: AppColors.primaryOrange,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ),
-
-      // Sets the initial route when app starts
+      // Set up routing for proper URL display
+      // Do not set home when using initialRoute
       initialRoute: '/login',
 
-      // Define all the routes in your app
+      // Define routes for navigation throughout the app
       routes: {
-        '/login': (context) => const LoginScreen(), // Login page route
-        '/register': (context) => const RegisterScreen(), // Register page route
-        '/forgot-password': (context) =>
-            const ForgotPasswordScreen(), // Forgot password route
-        // Add more routes here as your app grows
-        // '/home': (context) => const HomeScreen(),
+        '/': (_) => const LoginScreen(),
+        '/login': (_) => const LoginScreen(),
+        '/register': (_) => const RegisterScreen(),
+        '/forgot-password': (_) => const ForgotPasswordScreen(),
+        '/main': (_) => const MainScreen(),
+      },
+
+      // Backup with onGenerateRoute for dynamic routes and better debugging
+      onGenerateRoute: (settings) {
+        debugPrint('⚠️ Fallback route generation: ${settings.name}');
+
+        // Only for routes not defined in routes map
+        switch (settings.name) {
+          case '/login':
+          case '/register':
+          case '/forgot-password':
+          case '/main':
+          case '/':
+            // These should be handled by the routes map above
+            // Just a fallback
+            final routeBuilders = {
+              '/': (_) => const LoginScreen(),
+              '/login': (_) => const LoginScreen(),
+              '/register': (_) => const RegisterScreen(),
+              '/forgot-password': (_) => const ForgotPasswordScreen(),
+              '/main': (_) => const MainScreen(),
+            };
+
+            final builder = routeBuilders[settings.name];
+            if (builder != null) {
+              return PageRouteBuilder(
+                settings: settings,
+                pageBuilder: (context, animation, secondaryAnimation) =>
+                    builder(context),
+                transitionsBuilder:
+                    (context, animation, secondaryAnimation, child) {
+                      return FadeTransition(opacity: animation, child: child);
+                    },
+              );
+            }
+            return null;
+          default:
+            // If route not found, pass to onUnknownRoute
+            return null;
+        }
       },
 
       // Handle unknown routes (404 page)
       onUnknownRoute: (settings) {
+        debugPrint('Unknown route: ${settings.name}');
         return MaterialPageRoute(
           builder: (context) => Scaffold(
             body: Center(child: Text('Page not found: ${settings.name}')),
           ),
         );
       },
+
+      // Add route observer for logging navigation
+      navigatorObservers: [if (routeObserver != null) routeObserver!],
+
+      // Use global navigator key for navigation
+      navigatorKey: navigatorKey,
     );
   }
 }
