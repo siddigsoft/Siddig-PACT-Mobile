@@ -2,7 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'components/bottom_navigation_bar.dart';
-import 'field_operations_screen.dart';
+import 'field_operations_enhanced_screen.dart';
 import 'forms_screen.dart';
 import 'equipment_screen.dart';
 import 'safety_hub_screen.dart';
@@ -18,7 +18,7 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   int _currentIndex = 0;
   final List<Widget> _screens = [
-    const FieldOperationsScreen(),
+    const FieldOperationsEnhancedScreen(),
     const FormsScreen(),
     const EquipmentScreen(),
     const SafetyHubScreen(),

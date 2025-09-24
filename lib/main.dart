@@ -6,6 +6,7 @@ import 'authentication/login_screen.dart';
 import 'authentication/register_screen.dart';
 import 'authentication/forgot_password_screen.dart';
 import 'screens/main_screen.dart';
+import 'screens/field_operations_enhanced_screen.dart';
 import 'theme/app_colors.dart';
 
 // Conditionally import web plugins only when needed
@@ -77,6 +78,7 @@ class MyApp extends StatelessWidget {
         '/register': (_) => const RegisterScreen(),
         '/forgot-password': (_) => const ForgotPasswordScreen(),
         '/main': (_) => const MainScreen(),
+        '/field-operations': (_) => const FieldOperationsEnhancedScreen(),
       },
 
       // Backup with onGenerateRoute for dynamic routes and better debugging

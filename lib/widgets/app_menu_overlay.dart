@@ -9,7 +9,7 @@ import '../theme/app_colors.dart';
 class AppMenuOverlay extends StatelessWidget {
   final Function() onClose;
 
-  const AppMenuOverlay({Key? key, required this.onClose}) : super(key: key);
+  const AppMenuOverlay({super.key, required this.onClose});
 
   @override
   Widget build(BuildContext context) {
