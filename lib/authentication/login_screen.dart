@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_colors.dart';
+import '../services/auth_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -101,15 +102,34 @@ class _LoginScreenState extends State<LoginScreen>
         _isLoading = true; // Show loading indicator
       });
 
-      // Simulate API call with 2 second delay
-      await Future.delayed(const Duration(seconds: 2));
+      try {
+        final authService = AuthService();
+        await authService.signIn(
+          email: _emailController.text.trim(),
+          password: _passwordController.text,
+        );
 
-      // TODO: Implement actual login logic here
-      // Example: await AuthService.login(_emailController.text, _passwordController.text);
-
-      setState(() {
-        _isLoading = false;
-      });
+        // Navigate to main screen on success
+        if (mounted) {
+          Navigator.pushReplacementNamed(context, '/main');
+        }
+      } catch (e) {
+        // Show error message
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Login failed: ${e.toString()}'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      } finally {
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+          });
+        }
+      }
 
       // Show modern success message with animation
       ScaffoldMessenger.of(context).showSnackBar(

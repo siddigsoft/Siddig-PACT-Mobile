@@ -2,12 +2,17 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'authentication/login_screen.dart';
 import 'authentication/register_screen.dart';
 import 'authentication/forgot_password_screen.dart';
 import 'screens/main_screen.dart';
 import 'screens/field_operations_enhanced_screen.dart';
 import 'theme/app_colors.dart';
+import 'utils/environment.dart';
+import 'services/auth_service.dart';
+import 'services/storage_service.dart';
+import 'services/data_sync_service.dart';
 
 // Conditionally import web plugins only when needed
 // This prevents errors on non-web platforms
@@ -17,7 +22,22 @@ import 'utils/web_config.dart'
 // Global navigator key to use for navigation from anywhere
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize Supabase
+  await Supabase.initialize(
+    url: Environment.supabaseUrl,
+    anonKey: Environment.supabaseAnonKey,
+    authOptions: const FlutterAuthClientOptions(
+      authFlowType: AuthFlowType.pkce,
+    ),
+  );
+
+  // Initialize services
+  AuthService();
+  StorageService();
+  DataSyncService();
   // Ensures Flutter widgets are initialized before running the app
   WidgetsFlutterBinding.ensureInitialized();
 
