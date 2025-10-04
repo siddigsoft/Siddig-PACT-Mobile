@@ -6,6 +6,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/mmp_file.dart';
 import '../services/mmp_file_service.dart';
+import '../services/auth_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/modern_app_header.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -19,32 +20,75 @@ class FormsScreen extends StatefulWidget {
 
 class _FormsScreenState extends State<FormsScreen> {
   final MMPFileService _mmpFileService = MMPFileService();
+  final AuthService _authService = AuthService();
   List<MMPFile> _mmpFiles = [];
   bool _isLoading = true;
+  bool _isAuthenticated = false;
 
   @override
   void initState() {
     super.initState();
-    _loadMMPFiles();
+    _checkAuthAndLoadFiles();
+  }
+
+  Future<void> _checkAuthAndLoadFiles() async {
+    final user = _authService.currentUser;
+    if (mounted) {
+      setState(() {
+        _isAuthenticated = user != null;
+      });
+    }
+
+    if (_isAuthenticated) {
+      await _loadMMPFiles();
+    } else {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+        // Show a message that user needs to log in
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please log in to view MMP files')),
+        );
+      }
+    }
+
+    // Listen for auth state changes
+    _authService.authStateChanges.listen((event) {
+      if (mounted) {
+        final isNowAuthenticated = event.session != null;
+        setState(() {
+          _isAuthenticated = isNowAuthenticated;
+        });
+        if (isNowAuthenticated) {
+          _loadMMPFiles();
+        }
+      }
+    });
   }
 
   Future<void> _loadMMPFiles() async {
     try {
       final files = await _mmpFileService.getMMPFiles();
+
       if (mounted) {
+        final parsedFiles = files
+            .map((f) {
+              try {
+                return MMPFile.fromJson(f);
+              } catch (e) {
+                debugPrint('Error parsing MMP file: $e');
+                debugPrint('Problematic data: $f');
+                return null;
+              }
+            })
+            .whereType<MMPFile>()
+            .toList();
+
+        debugPrint('Successfully parsed ${parsedFiles.length} files');
+
         setState(() {
-          _mmpFiles = files
-              .map((f) {
-                try {
-                  return MMPFile.fromJson(f);
-                } catch (e) {
-                  debugPrint('Error parsing MMP file: $e');
-                  debugPrint('Problematic data: $f');
-                  return null;
-                }
-              })
-              .whereType<MMPFile>()
-              .toList();
+          _mmpFiles = parsedFiles;
           _isLoading = false;
         });
       }
@@ -55,9 +99,16 @@ class _FormsScreenState extends State<FormsScreen> {
         setState(() {
           _isLoading = false;
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error loading MMP files: ${e.toString()}')),
-        );
+        // Use addPostFrameCallback to show snackbar after build
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Error loading MMP files: ${e.toString()}'),
+              ),
+            );
+          }
+        });
       }
     }
   }
@@ -80,19 +131,43 @@ class _FormsScreenState extends State<FormsScreen> {
                     children: [
                       _buildSectionTitle('MMP Files'),
                       const SizedBox(height: 12),
-                      _isLoading
-                          ? const Center(child: CircularProgressIndicator())
-                          : _mmpFiles.isEmpty
-                          ? Center(
-                              child: Text(
-                                'No MMP files available',
+                      if (_isLoading)
+                        const Center(child: CircularProgressIndicator())
+                      else if (!_isAuthenticated)
+                        Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                'Please log in to view MMP files',
                                 style: GoogleFonts.poppins(
                                   fontSize: 16,
                                   color: AppColors.textLight,
                                 ),
                               ),
-                            )
-                          : _buildMMPFilesList(),
+                              const SizedBox(height: 16),
+                              ElevatedButton(
+                                onPressed: () {
+                                  // Navigate to login screen
+                                  Navigator.pushNamed(context, '/login');
+                                },
+                                child: const Text('Log In'),
+                              ),
+                            ],
+                          ),
+                        )
+                      else if (_mmpFiles.isEmpty)
+                        Center(
+                          child: Text(
+                            'No MMP files available',
+                            style: GoogleFonts.poppins(
+                              fontSize: 16,
+                              color: AppColors.textLight,
+                            ),
+                          ),
+                        )
+                      else
+                        _buildMMPFilesList(),
                     ],
                   ),
                 ),

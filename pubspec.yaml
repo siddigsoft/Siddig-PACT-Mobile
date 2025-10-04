@@ -41,6 +41,8 @@ dependencies:
   connectivity_plus: ^7.0.0  # For network connectivity
   uuid: ^4.4.0              # For generating unique IDs
   encrypt: ^5.0.3           # For encryption
+  dio: ^5.4.1              # For HTTP client
+  dio_smart_retry: ^6.0.0   # For smart request retrying
   crypto: ^3.0.3            # For cryptographic functions
   path_provider: ^2.1.4     # For working with paths
   image_picker: ^1.0.7      # For camera integration

@@ -89,8 +89,12 @@ class _FieldOperationsEnhancedScreenState
 
     // Initialize repository and sync manager
     _initializeServices();
+  }
 
-    // Load visits
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Load visits after dependencies are initialized
     _loadVisits();
   }
 
@@ -277,9 +281,14 @@ class _FieldOperationsEnhancedScreenState
         setState(() {
           _isLoading = false;
         });
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error loading visits: $e')));
+        // Use addPostFrameCallback to show snackbar after build
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(SnackBar(content: Text('Error loading visits: $e')));
+          }
+        });
       }
     }
   }
