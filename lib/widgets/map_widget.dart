@@ -360,9 +360,6 @@ class _MapWidgetState extends State<MapWidget>
 
   @override
   Widget build(BuildContext context) {
-    // Check if running on web platform
-    final isWebPlatform = kIsWeb;
-
     return Container(
       height: widget.height,
       decoration: BoxDecoration(
@@ -379,20 +376,24 @@ class _MapWidgetState extends State<MapWidget>
         borderRadius: BorderRadius.circular(24), // More modern rounded corners
         child: Stack(
           children: [
-            // For web platform, use an enhanced styled placeholder
-            if (isWebPlatform)
-              Container(
+            Container(
                 width: double.infinity,
                 height: double.infinity,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      AppColors.primaryBlue.withOpacity(0.8),
-                      AppColors.lightBlue.withOpacity(0.6),
-                    ],
+                child: GoogleMap(
+                  initialCameraPosition: CameraPosition(
+                    target: _currentPosition,
+                    zoom: 14.0,
                   ),
+                  markers: _markers,
+                  mapType: MapType.normal,
+                  myLocationEnabled: widget.showUserLocation,
+                  myLocationButtonEnabled: widget.showUserLocation,
+                  zoomControlsEnabled: true,
+                  compassEnabled: true,
+                  onMapCreated: (GoogleMapController controller) {
+                    _controller.complete(controller);
+                    _applyMapStyle(controller);
+                  },
                 ),
                 child: Stack(
                   children: [

@@ -41,7 +41,20 @@ class _FieldOperationsEnhancedScreenState
   bool _isSyncing = false;
 
   // Map controller
-  final Completer<GoogleMapController> _mapController = Completer();
+  // Google Map controller for map operations
+  final Completer<GoogleMapController> _mapController =
+      Completer<GoogleMapController>();
+  GoogleMapController?
+  _controller; // Direct reference to controller for immediate access
+
+  // Method to safely get the map controller
+  Future<GoogleMapController?> _getMapController() async {
+    if (_controller != null) return _controller;
+    if (!_mapController.isCompleted) return null;
+    _controller = await _mapController.future;
+    return _controller;
+  }
+
   Set<Marker> _markers = {};
 
   // Services
@@ -160,10 +173,12 @@ class _FieldOperationsEnhancedScreenState
 
   // Update map camera
   Future<void> _updateMapCamera() async {
-    if (!_mapController.isCompleted) return;
+    final controller = await _getMapController();
+    if (controller == null) return;
 
-    final controller = await _mapController.future;
-    controller.animateCamera(CameraUpdate.newLatLngZoom(_currentLocation, 15));
+    await controller.animateCamera(
+      CameraUpdate.newLatLngZoom(_currentLocation, 15),
+    );
   }
 
   // Update map markers
@@ -516,8 +531,11 @@ class _FieldOperationsEnhancedScreenState
           zoomControlsEnabled: false,
           mapToolbarEnabled: false,
           markers: _markers,
-          onMapCreated: (controller) {
-            _mapController.complete(controller);
+          onMapCreated: (GoogleMapController controller) {
+            if (!_mapController.isCompleted) {
+              _controller = controller;
+              _mapController.complete(controller);
+            }
           },
         ),
 

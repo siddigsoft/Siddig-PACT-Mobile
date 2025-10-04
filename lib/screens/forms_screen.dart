@@ -31,18 +31,33 @@ class _FormsScreenState extends State<FormsScreen> {
   Future<void> _loadMMPFiles() async {
     try {
       final files = await _mmpFileService.getMMPFiles();
-      setState(() {
-        _mmpFiles = files.map((f) => MMPFile.fromJson(f)).toList();
-        _isLoading = false;
-      });
-    } catch (e) {
-      setState(() {
-        _isLoading = false;
-      });
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error loading MMP files: $e')));
+        setState(() {
+          _mmpFiles = files
+              .map((f) {
+                try {
+                  return MMPFile.fromJson(f);
+                } catch (e) {
+                  debugPrint('Error parsing MMP file: $e');
+                  debugPrint('Problematic data: $f');
+                  return null;
+                }
+              })
+              .whereType<MMPFile>()
+              .toList();
+          _isLoading = false;
+        });
+      }
+    } catch (e, stackTrace) {
+      debugPrint('Error loading MMP files: $e');
+      debugPrint('Stack trace: $stackTrace');
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading MMP files: ${e.toString()}')),
+        );
       }
     }
   }
@@ -159,22 +174,45 @@ class _FormsScreenState extends State<FormsScreen> {
   }
 
   Future<void> _handleFileTap(MMPFile file) async {
-    if (file.fileUrl != null) {
-      try {
-        final uri = Uri.parse(file.fileUrl!);
-        await launchUrl(uri);
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text('Could not open file: $e')));
-        }
-      }
-    } else {
+    if (file.fileUrl == null || file.fileUrl!.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(const SnackBar(content: Text('No file URL available')));
+      }
+      return;
+    }
+
+    try {
+      final urlStr = file.fileUrl!.trim();
+
+      // Validate URL format
+      if (!urlStr.startsWith('http://') && !urlStr.startsWith('https://')) {
+        throw FormatException('Invalid URL format');
+      }
+
+      // Try to encode the URL properly
+      final uri = Uri.tryParse(urlStr);
+      if (uri == null) {
+        throw FormatException('Could not parse URL');
+      }
+
+      // Validate the URL can be launched
+      if (!await canLaunchUrl(uri)) {
+        throw Exception('Could not launch URL');
+      }
+
+      // Launch in external browser
+      await launchUrl(
+        uri,
+        mode: LaunchMode.externalApplication,
+        webOnlyWindowName: '_blank',
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not open file: ${e.toString()}')),
+        );
       }
     }
   }

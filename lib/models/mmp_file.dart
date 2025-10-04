@@ -7,7 +7,7 @@ class MMPFile {
   final int? processedEntries;
   final String? mmpId;
   final Map<String, dynamic>? version;
-  final Map<String, dynamic>? siteEntries;
+  final List<Map<String, dynamic>>? siteEntries;
   final Map<String, dynamic>? workflow;
   final String? projectId;
   final String? filePath;
@@ -52,9 +52,9 @@ class MMPFile {
       entries: json['entries'],
       processedEntries: json['processed_entries'],
       mmpId: json['mmp_id'],
-      version: json['version'],
-      siteEntries: json['site_entries'],
-      workflow: json['workflow'],
+      version: _parseMap(json['version']),
+      siteEntries: _parseListOfMaps(json['site_entries']),
+      workflow: _parseMap(json['workflow']),
       projectId: json['project_id'],
       filePath: json['file_path'],
       originalFilename: json['original_filename'],
@@ -93,5 +93,43 @@ class MMPFile {
       'verified_by': verifiedBy,
       'verified_at': verifiedAt?.toIso8601String(),
     };
+  }
+
+  static Map<String, dynamic>? _parseMap(dynamic value) {
+    if (value == null) return null;
+    if (value is Map<String, dynamic>) return value;
+    if (value is Map) return Map<String, dynamic>.from(value);
+    return null;
+  }
+
+  static List<Map<String, dynamic>>? _parseListOfMaps(dynamic value) {
+    if (value == null) return null;
+    if (value is! List) return null;
+
+    try {
+      return value.map<Map<String, dynamic>>((item) {
+        if (item is Map<String, dynamic>) return item;
+        if (item is Map) {
+          return Map<String, dynamic>.from(
+            item.map((key, value) {
+              if (value is Map) {
+                return MapEntry(
+                  key.toString(),
+                  Map<String, dynamic>.from(value),
+                );
+              }
+              return MapEntry(key.toString(), value);
+            }),
+          );
+        }
+        print(
+          'Warning: Invalid item type in site_entries: ${item.runtimeType}',
+        );
+        return <String, dynamic>{};
+      }).toList();
+    } catch (e) {
+      print('Error parsing list of maps: $e\nValue: $value');
+      return null;
+    }
   }
 }
