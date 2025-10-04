@@ -41,7 +41,10 @@ class AppColors {
   // New Accent Colors - For modern UI elements
   static const Color accentGreen = Color(0xFF2ECC71); // Success color
   static const Color accentRed = Color(0xFFE74C3C); // Error color
+  static const Color errorRed = Color(0xFFE74C3C); // Error color
   static const Color accentYellow = Color(0xFFF39C12); // Warning color
+  static const Color accentBlue = Color(0xFF3498DB); // Info color
+  static const Color accentOrange = Color(0xFFE67E22); // Progress color
   static const Color cardBackground = Color(
     0xFFFEFEFE,
   ); // Slightly off-white for card backgrounds

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../models/site_visit.dart';
@@ -13,6 +14,7 @@ import '../services/site_visit_service.dart';
 import '../services/auth_service.dart';
 import '../services/location_tracking_service.dart';
 import '../services/sync_manager.dart';
+import '../services/mmp_file_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_menu_overlay.dart';
 import '../widgets/modern_app_header.dart';
@@ -20,6 +22,7 @@ import '../widgets/modern_card.dart';
 import 'components/report_form_sheet.dart';
 import 'components/visit_assignment_sheet.dart';
 import 'components/visit_details_sheet.dart';
+import 'components/mmp_files_sheet.dart';
 
 class FieldOperationsEnhancedScreen extends StatefulWidget {
   const FieldOperationsEnhancedScreen({super.key});
@@ -32,6 +35,7 @@ class FieldOperationsEnhancedScreen extends StatefulWidget {
 class _FieldOperationsEnhancedScreenState
     extends State<FieldOperationsEnhancedScreen> {
   // UI state
+  bool _isOnline = false;
   bool _showMenu = false;
   bool _isLoading = true;
   bool _isSyncing = false;
@@ -41,9 +45,12 @@ class _FieldOperationsEnhancedScreenState
   Set<Marker> _markers = {};
 
   // Services
+  late StreamSubscription<List<ConnectivityResult>> _connectivitySubscription;
+  final Connectivity _connectivity = Connectivity();
   final LocationTrackingService _locationService = LocationTrackingService();
   final SiteVisitService _siteVisitService = SiteVisitService();
   final AuthService _authService = AuthService();
+  final MMPFileService _mmpFileService = MMPFileService();
   final SyncManager _syncManager = SyncManager();
 
   // Location
@@ -59,7 +66,11 @@ class _FieldOperationsEnhancedScreenState
   @override
   void initState() {
     super.initState();
-    
+    _initConnectivity();
+    _connectivitySubscription = _connectivity.onConnectivityChanged.listen(
+      _updateConnectionStatus,
+    );
+
     // Initialize location tracking
     _initializeLocationTracking();
 
@@ -72,9 +83,41 @@ class _FieldOperationsEnhancedScreenState
 
   @override
   void dispose() {
+    _connectivitySubscription.cancel();
     super.dispose();
   }
 
+  // Initialize connectivity checking
+  Future<void> _initConnectivity() async {
+    List<ConnectivityResult> result;
+    try {
+      result = await _connectivity.checkConnectivity();
+    } catch (e) {
+      debugPrint('Error checking connectivity: $e');
+      return;
+    }
+    _updateConnectionStatus(result);
+  }
+
+  // Update connection status based on connectivity changes
+  Future<void> _updateConnectionStatus(List<ConnectivityResult> results) async {
+    final hasConnectivity =
+        results.contains(ConnectivityResult.mobile) ||
+        results.contains(ConnectivityResult.wifi) ||
+        results.contains(ConnectivityResult.ethernet);
+
+    setState(() {
+      _isOnline = hasConnectivity;
+    });
+
+    // Update collector status
+    if (_authService.currentUser != null) {
+      await _authService.supabase
+          .from('profiles')
+          .update({'status': hasConnectivity ? 'online' : 'offline'})
+          .eq('id', _authService.currentUser!.id);
+    }
+  }
 
   // Initialize location tracking
   Future<void> _initializeLocationTracking() async {
@@ -367,17 +410,79 @@ class _FieldOperationsEnhancedScreenState
     }
   }
 
+  // Toggle collector online/offline status
+  Future<void> _toggleOnlineStatus() async {
+    final newStatus = !_isOnline;
 
+    try {
+      // Save status to Supabase
+      await _authService.supabase
+          .from('profiles')
+          .update({'status': newStatus ? 'online' : 'offline'})
+          .eq('id', _authService.currentUser!.id);
+
+      setState(() {
+        _isOnline = newStatus;
+      });
+
+      // If going online, try to sync
+      if (newStatus) {
+        _forceSyncData();
+      } else {
+        // If going offline, stop any active tracking
+        if (_locationService.isTrackingEnabled()) {
+          await _locationService.stopTracking();
+        }
+      }
+
+      // Show confirmation
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('You are now ${newStatus ? 'online' : 'offline'}'),
+            backgroundColor: newStatus
+                ? AppColors.accentGreen
+                : AppColors.accentRed,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error changing status: $e')));
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.backgroundGray,
-      floatingActionButton: FloatingActionButton(
-        heroTag: 'addVisit',
-        onPressed: () => _showVisitAssignmentSheet(),
-        backgroundColor: AppColors.accentGreen,
-        child: const Icon(Icons.add),
+      floatingActionButton: Column(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          FloatingActionButton(
+            heroTag: 'mmpFiles',
+            onPressed: () {
+              showModalBottomSheet(
+                context: context,
+                isScrollControlled: true,
+                backgroundColor: Colors.transparent,
+                builder: (context) => const MMPFilesSheet(),
+              );
+            },
+            backgroundColor: AppColors.accentBlue,
+            child: const Icon(Icons.folder_special),
+          ),
+          const SizedBox(height: 16),
+          FloatingActionButton(
+            heroTag: 'addVisit',
+            onPressed: () => _showVisitAssignmentSheet(),
+            backgroundColor: AppColors.accentGreen,
+            child: const Icon(Icons.add),
+          ),
+        ],
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       body: Stack(
@@ -468,6 +573,52 @@ class _FieldOperationsEnhancedScreenState
     return ModernAppHeader(
       title: 'Field Operations',
       actions: [
+        // Online/Offline indicator
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: _isOnline
+                ? AppColors.accentGreen.withOpacity(0.1)
+                : AppColors.accentRed.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(30),
+            border: Border.all(
+              color: _isOnline
+                  ? AppColors.accentGreen.withOpacity(0.3)
+                  : AppColors.accentRed.withOpacity(0.3),
+              width: 1,
+            ),
+          ),
+          child: Row(
+            children: [
+              Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: _isOnline
+                          ? AppColors.accentGreen
+                          : AppColors.accentRed,
+                      shape: BoxShape.circle,
+                    ),
+                  )
+                  .animate(onPlay: (controller) => controller.repeat())
+                  .fade(duration: 1.seconds)
+                  .then()
+                  .fade(duration: 1.seconds, end: 0.2),
+              const SizedBox(width: 8),
+              Text(
+                _isOnline ? 'Online' : 'Offline',
+                style: GoogleFonts.poppins(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: _isOnline
+                      ? AppColors.accentGreen
+                      : AppColors.accentRed,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 8),
         HeaderActionButton(
           icon: Icons.refresh,
           tooltip: 'Refresh',
@@ -512,6 +663,92 @@ class _FieldOperationsEnhancedScreenState
       animationDuration: 500.ms,
       child: Column(
         children: [
+          // Connection status row
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppColors.backgroundGray,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(
+                      _isOnline ? Icons.wifi_rounded : Icons.wifi_off_rounded,
+                      color: _isOnline
+                          ? AppColors.accentGreen
+                          : AppColors.accentRed,
+                      size: 18,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    'Connection',
+                    style: GoogleFonts.poppins(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textDark,
+                    ),
+                  ),
+                ],
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: _isOnline
+                      ? AppColors.accentGreen.withOpacity(0.1)
+                      : AppColors.accentRed.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(30),
+                  border: Border.all(
+                    color: _isOnline
+                        ? AppColors.accentGreen.withOpacity(0.3)
+                        : AppColors.accentRed.withOpacity(0.3),
+                    width: 1,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                          width: 6,
+                          height: 6,
+                          decoration: BoxDecoration(
+                            color: _isOnline
+                                ? AppColors.accentGreen
+                                : AppColors.accentRed,
+                            shape: BoxShape.circle,
+                          ),
+                        )
+                        .animate(onPlay: (controller) => controller.repeat())
+                        .fadeOut(
+                          duration: 1.seconds,
+                          curve: Curves.easeInOutCirc,
+                        )
+                        .fadeIn(
+                          duration: 1.seconds,
+                          curve: Curves.easeInOutCirc,
+                        ),
+                    const SizedBox(width: 6),
+                    Text(
+                      _isOnline ? 'Online' : 'Offline',
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: _isOnline
+                            ? AppColors.accentGreen
+                            : AppColors.accentRed,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+
           const SizedBox(height: 12),
           const Divider(height: 1),
           const SizedBox(height: 12),
@@ -602,16 +839,18 @@ class _FieldOperationsEnhancedScreenState
           ),
         ),
         headerTitle: 'My Visits',
-        headerTrailing: TextButton(
-          onPressed: _showVisitAssignmentSheet,
-          child: Text(
-            'Assign Visit',
-            style: GoogleFonts.poppins(
-              color: AppColors.primaryBlue,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
+        headerTrailing: _isOnline
+            ? TextButton(
+                onPressed: _showVisitAssignmentSheet,
+                child: Text(
+                  'Assign Visit',
+                  style: GoogleFonts.poppins(
+                    color: AppColors.primaryBlue,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              )
+            : null,
         animationDelay: 200.ms,
         child: SizedBox(
           height: 120,

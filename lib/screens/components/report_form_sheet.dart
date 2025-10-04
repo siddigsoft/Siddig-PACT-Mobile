@@ -4,13 +4,14 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../models/report_model.dart';
-import '../../models/visit_model.dart';
-import '../../services/field_operations_repository.dart';
+import '../../models/site_visit.dart';
+import '../../services/site_visit_service.dart';
 import '../../theme/app_colors.dart';
 
 class ReportFormSheet extends StatefulWidget {
-  final Visit visit;
+  final SiteVisit visit;
   final Function(Report) onReportSubmitted;
 
   const ReportFormSheet({
@@ -26,7 +27,7 @@ class ReportFormSheet extends StatefulWidget {
 class _ReportFormSheetState extends State<ReportFormSheet> {
   final TextEditingController _notesController = TextEditingController();
   final List<String> _photoUrls = [];
-  final FieldOperationsRepository _repository = FieldOperationsRepository();
+  final SiteVisitService _visitService = SiteVisitService();
   bool _isSubmitting = false;
   bool _showAdvancedOptions = false;
 
@@ -73,15 +74,14 @@ class _ReportFormSheetState extends State<ReportFormSheet> {
       );
 
       // Save report
-      await _repository.initialize();
-      await _repository.saveReport(report);
-
-      // Update the visit with the report ID
+      // Update visit with completion details
       final updatedVisit = widget.visit.copyWith(
-        reportId: report.id,
-        status: VisitStatus.completed,
+        completedAt: DateTime.now(),
+        status: 'completed',
       );
-      await _repository.saveVisit(updatedVisit);
+
+      // Update the visit in Supabase
+      await _visitService.updateSiteVisit(updatedVisit);
 
       // Notify parent
       widget.onReportSubmitted(report);
@@ -171,7 +171,7 @@ class _ReportFormSheetState extends State<ReportFormSheet> {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24),
             child: Text(
-              widget.visit.title,
+              widget.visit.siteName,
               style: const TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w600,

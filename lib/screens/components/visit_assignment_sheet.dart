@@ -2,12 +2,14 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import '../../models/visit_model.dart';
+import 'package:google_fonts/google_fonts.dart';
+import '../../models/site_visit.dart';
+import '../../models/visit_status.dart';
 import '../../theme/app_colors.dart';
 
 class VisitAssignmentSheet extends StatefulWidget {
-  final List<Visit> availableVisits;
-  final Function(Visit) onVisitAssigned;
+  final List<SiteVisit> availableVisits;
+  final Function(SiteVisit) onVisitAssigned;
 
   const VisitAssignmentSheet({
     super.key,
@@ -21,7 +23,7 @@ class VisitAssignmentSheet extends StatefulWidget {
 
 class _VisitAssignmentSheetState extends State<VisitAssignmentSheet> {
   String _searchQuery = '';
-  List<Visit> _filteredVisits = [];
+  List<SiteVisit> _filteredVisits = [];
 
   @override
   void initState() {
@@ -38,9 +40,10 @@ class _VisitAssignmentSheetState extends State<VisitAssignmentSheet> {
         _filteredVisits = widget.availableVisits
             .where(
               (visit) =>
-                  visit.title.toLowerCase().contains(query.toLowerCase()) ||
-                  (visit.address?.toLowerCase().contains(query.toLowerCase()) ??
-                      false),
+                  visit.siteName.toLowerCase().contains(query.toLowerCase()) ||
+                  visit.locationString.toLowerCase().contains(
+                    query.toLowerCase(),
+                  ),
             )
             .toList();
       }
@@ -132,7 +135,7 @@ class _VisitAssignmentSheetState extends State<VisitAssignmentSheet> {
     );
   }
 
-  Widget _buildVisitCard(Visit visit) {
+  Widget _buildVisitCard(SiteVisit visit) {
     return Card(
           margin: const EdgeInsets.only(bottom: 12),
           elevation: 2,
@@ -155,7 +158,7 @@ class _VisitAssignmentSheetState extends State<VisitAssignmentSheet> {
                     children: [
                       Expanded(
                         child: Text(
-                          visit.title,
+                          visit.siteName,
                           style: const TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
@@ -183,12 +186,12 @@ class _VisitAssignmentSheetState extends State<VisitAssignmentSheet> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    visit.address ?? 'Location not specified',
+                    visit.locationString,
                     style: const TextStyle(fontSize: 16, color: Colors.black87),
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    'Scheduled: ${visit.scheduledDate?.toLocal().toString().split('.')[0] ?? 'Flexible'}',
+                    'Due: ${visit.dueDate?.toLocal().toString().split('.')[0] ?? 'Flexible'}',
                     style: TextStyle(fontSize: 14, color: Colors.grey.shade700),
                   ),
                   const SizedBox(height: 12),
@@ -245,7 +248,7 @@ class _VisitAssignmentSheetState extends State<VisitAssignmentSheet> {
   }
 
   // Dummy method to calculate distance - in a real app, this would use actual coordinates
-  String _calculateDistance(Visit visit) {
+  String _calculateDistance(SiteVisit visit) {
     if (visit.latitude == null || visit.longitude == null) {
       return 'Unknown';
     }

@@ -91,12 +91,13 @@ class _LoginScreenState extends State<LoginScreen>
     return null;
   }
 
-  // Handle login logic with improved animations
+  // Handle login logic with improved animations and role check
   Future<void> _handleLogin() async {
     // Validate form fields
     if (_formKey.currentState!.validate()) {
-      // Haptic feedback for button press
-      HapticFeedback.mediumImpact();
+      setState(() {
+        _isLoading = true;
+      });
 
       setState(() {
         _isLoading = true; // Show loading indicator
@@ -104,14 +105,31 @@ class _LoginScreenState extends State<LoginScreen>
 
       try {
         final authService = AuthService();
-        await authService.signIn(
+        final response = await authService.signIn(
           email: _emailController.text.trim(),
           password: _passwordController.text,
         );
 
-        // Navigate to main screen on success
-        if (mounted) {
-          Navigator.pushReplacementNamed(context, '/main');
+        // Check if user is a data collector
+        final userId = response.user?.id;
+        if (userId != null) {
+          final dataCollectorCheck = await authService.supabase
+              .from('user_roles')
+              .select()
+              .eq('user_id', userId)
+              .eq('role', 'data_collector')
+              .single();
+
+          if (dataCollectorCheck != null) {
+            if (mounted) {
+              // Haptic feedback for successful login
+              HapticFeedback.mediumImpact();
+              // Navigate to main screen
+              Navigator.pushReplacementNamed(context, '/main');
+            }
+          } else {
+            throw Exception('Access denied: User is not a data collector');
+          }
         }
       } catch (e) {
         // Show error message

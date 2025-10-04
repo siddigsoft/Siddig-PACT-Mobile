@@ -4,11 +4,48 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../models/mmp_file.dart';
+import '../services/mmp_file_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/modern_app_header.dart';
+import 'package:url_launcher/url_launcher.dart';
 
-class FormsScreen extends StatelessWidget {
+class FormsScreen extends StatefulWidget {
   const FormsScreen({super.key});
+
+  @override
+  State<FormsScreen> createState() => _FormsScreenState();
+}
+
+class _FormsScreenState extends State<FormsScreen> {
+  final MMPFileService _mmpFileService = MMPFileService();
+  List<MMPFile> _mmpFiles = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadMMPFiles();
+  }
+
+  Future<void> _loadMMPFiles() async {
+    try {
+      final files = await _mmpFileService.getMMPFiles();
+      setState(() {
+        _mmpFiles = files.map((f) => MMPFile.fromJson(f)).toList();
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error loading MMP files: $e')));
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -26,9 +63,21 @@ class FormsScreen extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _buildSectionTitle('Available Forms'),
+                      _buildSectionTitle('MMP Files'),
                       const SizedBox(height: 12),
-                      _buildFormsList(),
+                      _isLoading
+                          ? const Center(child: CircularProgressIndicator())
+                          : _mmpFiles.isEmpty
+                          ? Center(
+                              child: Text(
+                                'No MMP files available',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 16,
+                                  color: AppColors.textLight,
+                                ),
+                              ),
+                            )
+                          : _buildMMPFilesList(),
                     ],
                   ),
                 ),
@@ -75,35 +124,59 @@ class FormsScreen extends StatelessWidget {
     ).animate().fadeIn(duration: 500.ms, delay: 100.ms);
   }
 
-  Widget _buildFormsList() {
-    return Column(
-      children: [
-        _buildFormItem(
-          icon: Icons.checklist_rounded,
-          title: 'Safety Checklist',
-          status: 'Pending',
-          statusColor: AppColors.accentYellow,
-          onTap: () {},
-          delay: 0.ms,
-        ),
-        _buildFormItem(
-          icon: Icons.build_outlined,
-          title: 'Equipment Report',
-          status: 'Completed',
-          statusColor: AppColors.accentGreen,
-          onTap: () {},
-          delay: 150.ms,
-        ),
-        _buildFormItem(
-          icon: Icons.article_outlined,
-          title: 'Daily Log',
-          status: 'In Progress',
-          statusColor: AppColors.primaryBlue,
-          onTap: () {},
-          delay: 300.ms,
-        ),
-      ],
+  Widget _buildMMPFilesList() {
+    return ListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: _mmpFiles.length,
+      itemBuilder: (context, index) {
+        final file = _mmpFiles[index];
+        return _buildFormItem(
+          icon: Icons.file_present_rounded,
+          title: file.name ?? 'Unnamed File',
+          status: file.status ?? 'Unknown',
+          statusColor: _getStatusColor(file.status ?? ''),
+          onTap: () => _handleFileTap(file),
+          delay: (index * 150).ms,
+        );
+      },
     );
+  }
+
+  Color _getStatusColor(String status) {
+    switch (status.toLowerCase()) {
+      case 'pending':
+        return AppColors.accentYellow;
+      case 'approved':
+        return AppColors.accentGreen;
+      case 'verified':
+        return AppColors.primaryBlue;
+      case 'rejected':
+        return AppColors.errorRed;
+      default:
+        return AppColors.textLight;
+    }
+  }
+
+  Future<void> _handleFileTap(MMPFile file) async {
+    if (file.fileUrl != null) {
+      try {
+        final uri = Uri.parse(file.fileUrl!);
+        await launchUrl(uri);
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('Could not open file: $e')));
+        }
+      }
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('No file URL available')));
+      }
+    }
   }
 
   Widget _buildFormItem({

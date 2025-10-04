@@ -2,17 +2,18 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import '../../models/visit_model.dart';
+import '../../models/site_visit.dart';
+import '../../models/visit_status.dart';
 import '../../theme/app_colors.dart';
 
 class VisitDetailsSheet extends StatefulWidget {
-  final Visit visit;
-  final Function(Visit) onStatusChange;
+  final SiteVisit visit;
+  final Function(String) onStatusChanged;
 
   const VisitDetailsSheet({
     super.key,
     required this.visit,
-    required this.onStatusChange,
+    required this.onStatusChanged,
   });
 
   @override
@@ -20,7 +21,7 @@ class VisitDetailsSheet extends StatefulWidget {
 }
 
 class _VisitDetailsSheetState extends State<VisitDetailsSheet> {
-  late Visit _visit;
+  late SiteVisit _visit;
 
   @override
   void initState() {
@@ -28,13 +29,10 @@ class _VisitDetailsSheetState extends State<VisitDetailsSheet> {
     _visit = widget.visit;
   }
 
-  void _updateVisitStatus(VisitStatus newStatus) {
-    setState(() {
-      _visit = _visit.copyWith(status: newStatus);
-    });
-    widget.onStatusChange(_visit);
+  void _updateVisitStatus(String newStatus) {
+    widget.onStatusChanged(newStatus);
 
-    if (newStatus == VisitStatus.completed) {
+    if (newStatus.toLowerCase() == 'completed') {
       _showReportDialog();
     }
   }
@@ -104,7 +102,7 @@ class _VisitDetailsSheetState extends State<VisitDetailsSheet> {
               children: [
                 Expanded(
                   child: Text(
-                    _visit.title,
+                    _visit.siteName,
                     style: const TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.bold,
@@ -128,7 +126,7 @@ class _VisitDetailsSheetState extends State<VisitDetailsSheet> {
                     icon: Icons.location_on,
                     iconColor: Colors.red.shade400,
                     title: 'Location',
-                    content: _visit.location ?? 'No location specified',
+                    content: _visit.locationString,
                   ),
                   const Divider(),
 
@@ -137,10 +135,8 @@ class _VisitDetailsSheetState extends State<VisitDetailsSheet> {
                     icon: Icons.calendar_today,
                     iconColor: Colors.blue.shade400,
                     title: 'Scheduled Date',
-                    content: _visit.scheduledDate != null
-                        ? _visit.scheduledDate!.toLocal().toString().split(
-                            '.',
-                          )[0]
+                    content: _visit.dueDate != null
+                        ? _visit.dueDate!.toLocal().toString().split('.')[0]
                         : 'Flexible Timing',
                   ),
                   const Divider(),
@@ -151,7 +147,8 @@ class _VisitDetailsSheetState extends State<VisitDetailsSheet> {
                     iconColor: Colors.purple.shade400,
                     title: 'Client Information',
                     content:
-                        _visit.clientInfo ?? 'No client information provided',
+                        _visit.visitData?['client_info'] ??
+                        'No client information provided',
                   ),
                   const Divider(),
 
@@ -175,39 +172,42 @@ class _VisitDetailsSheetState extends State<VisitDetailsSheet> {
     );
   }
 
-  Widget _buildStatusBadge(VisitStatus status) {
+  Widget _buildStatusBadge(String status) {
     Color badgeColor;
     String statusText;
 
-    switch (status) {
-      case VisitStatus.pending:
+    switch (status.toLowerCase()) {
+      case 'pending':
         badgeColor = Colors.grey.shade500;
         statusText = 'Pending';
         break;
-      case VisitStatus.available:
+      case 'available':
         badgeColor = Colors.blue.shade400;
         statusText = 'Available';
         break;
-      case VisitStatus.assigned:
+      case 'assigned':
         badgeColor = Colors.blue.shade400;
         statusText = 'Assigned';
         break;
-      case VisitStatus.inProgress:
+      case 'in_progress':
         badgeColor = Colors.amber.shade700;
         statusText = 'In Progress';
         break;
-      case VisitStatus.completed:
+      case 'completed':
         badgeColor = Colors.green.shade500;
         statusText = 'Completed';
         break;
-      case VisitStatus.cancelled:
+      case 'cancelled':
         badgeColor = Colors.red.shade400;
         statusText = 'Cancelled';
         break;
-      case VisitStatus.rejected:
+      case 'rejected':
         badgeColor = Colors.red.shade700;
         statusText = 'Rejected';
         break;
+      default:
+        badgeColor = Colors.grey.shade500;
+        statusText = status;
     }
 
     return Container(
@@ -273,39 +273,48 @@ class _VisitDetailsSheetState extends State<VisitDetailsSheet> {
   }
 
   Widget _buildActionButtons() {
+    // Default button if status doesn't match any case
+    Widget defaultButton = _buildButton(
+      label: 'View Details',
+      icon: Icons.info_outline,
+      color: Colors.grey,
+      onPressed: () {},
+      filled: false,
+    );
+
     // Different buttons based on current status
-    switch (_visit.status) {
-      case VisitStatus.pending:
-      case VisitStatus.available:
-      case VisitStatus.assigned:
+    switch (_visit.status.toLowerCase()) {
+      case 'pending':
+      case 'available':
+      case 'assigned':
         return _buildButton(
           label: 'Start Visit',
           icon: Icons.play_arrow,
           color: Colors.blue,
-          onPressed: () => _updateVisitStatus(VisitStatus.inProgress),
+          onPressed: () => _updateVisitStatus('in_progress'),
         );
 
-      case VisitStatus.inProgress:
+      case 'in_progress':
         return Column(
           children: [
             _buildButton(
               label: 'Complete Visit',
               icon: Icons.check_circle,
               color: Colors.green,
-              onPressed: () => _updateVisitStatus(VisitStatus.completed),
+              onPressed: () => _updateVisitStatus('completed'),
             ),
             const SizedBox(height: 16),
             _buildButton(
               label: 'Cancel Visit',
               icon: Icons.cancel,
               color: Colors.red,
-              onPressed: () => _updateVisitStatus(VisitStatus.cancelled),
+              onPressed: () => _updateVisitStatus('cancelled'),
               filled: false,
             ),
           ],
         );
 
-      case VisitStatus.completed:
+      case 'completed':
         return _buildButton(
           label: 'Submit Report',
           icon: Icons.assignment,
@@ -313,15 +322,17 @@ class _VisitDetailsSheetState extends State<VisitDetailsSheet> {
           onPressed: _showReportDialog,
         );
 
-      case VisitStatus.cancelled:
-      case VisitStatus.rejected:
+      case 'cancelled':
+      case 'rejected':
         return _buildButton(
           label: 'Reopen Visit',
           icon: Icons.refresh,
           color: Colors.blue,
-          onPressed: () => _updateVisitStatus(VisitStatus.assigned),
+          onPressed: () => _updateVisitStatus('assigned'),
           filled: false,
         );
+      default:
+        return defaultButton;
     }
   }
 

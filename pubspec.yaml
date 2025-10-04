@@ -30,7 +30,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  supabase_flutter: ^2.3.2
+  supabase_flutter: ^2.10.2
   google_maps_flutter: ^2.5.0
   location: ^5.0.3
   geolocator: ^11.0.0        # For GPS tracking
@@ -48,6 +48,7 @@ dependencies:
   flutter_map: ^6.1.0       # Alternative map provider
   # Using flutter_map_marker_cluster for clustering with flutter_map
   flutter_map_marker_cluster: ^1.3.1 # For marker clustering
+  url_launcher: ^6.3.2      # For launching URLs and files
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
