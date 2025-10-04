@@ -54,9 +54,9 @@ class _ReportFormSheetState extends State<ReportFormSheet> {
 
   Future<void> _submitReport() async {
     if (_notesController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter some notes')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Please enter some notes')));
       return;
     }
 
@@ -92,9 +92,9 @@ class _ReportFormSheetState extends State<ReportFormSheet> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error submitting report: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error submitting report: $e')));
       }
     } finally {
       setState(() {
@@ -166,7 +166,7 @@ class _ReportFormSheetState extends State<ReportFormSheet> {
               ],
             ),
           ),
-          
+
           // Visit info
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -179,7 +179,7 @@ class _ReportFormSheetState extends State<ReportFormSheet> {
               ),
             ),
           ),
-          
+
           // Form content
           Expanded(
             child: SingleChildScrollView(
@@ -190,10 +190,7 @@ class _ReportFormSheetState extends State<ReportFormSheet> {
                   // Notes field
                   const Text(
                     'Visit Notes',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                   ),
                   const SizedBox(height: 8),
                   TextField(
@@ -202,18 +199,16 @@ class _ReportFormSheetState extends State<ReportFormSheet> {
                       hintText: 'Enter your observations and findings...',
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(
-                          color: Colors.grey.shade300,
-                        ),
+                        borderSide: BorderSide(color: Colors.grey.shade300),
                       ),
                       contentPadding: const EdgeInsets.all(16),
                     ),
                     maxLines: 5,
                     minLines: 3,
                   ),
-                  
+
                   const SizedBox(height: 24),
-                  
+
                   // Photos section
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -243,57 +238,58 @@ class _ReportFormSheetState extends State<ReportFormSheet> {
                       ),
                     ],
                   ),
-                  
+
                   const SizedBox(height: 16),
-                  
+
                   // Photos grid
                   if (_photoUrls.isNotEmpty)
                     GridView.builder(
-                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 3,
-                        crossAxisSpacing: 8,
-                        mainAxisSpacing: 8,
-                      ),
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 3,
+                            crossAxisSpacing: 8,
+                            mainAxisSpacing: 8,
+                          ),
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
                       itemCount: _photoUrls.length,
                       itemBuilder: (context, index) {
                         final photoUrl = _photoUrls[index];
                         return Stack(
-                          children: [
-                            Container(
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(8),
-                                image: DecorationImage(
-                                  image: FileImage(File(photoUrl)),
-                                  fit: BoxFit.cover,
-                                ),
-                              ),
-                            ),
-                            Positioned(
-                              top: 4,
-                              right: 4,
-                              child: InkWell(
-                                onTap: () => _removePhoto(index),
-                                child: Container(
-                                  padding: const EdgeInsets.all(4),
+                              children: [
+                                Container(
                                   decoration: BoxDecoration(
-                                    color: Colors.black.withOpacity(0.5),
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: const Icon(
-                                    Icons.close,
-                                    color: Colors.white,
-                                    size: 16,
+                                    borderRadius: BorderRadius.circular(8),
+                                    image: DecorationImage(
+                                      image: FileImage(File(photoUrl)),
+                                      fit: BoxFit.cover,
+                                    ),
                                   ),
                                 ),
-                              ),
-                            ),
-                          ],
-                        )
-                        .animate()
-                        .fadeIn(duration: 300.ms, delay: 50.ms * index)
-                        .slideY(begin: 0.2, end: 0, duration: 300.ms);
+                                Positioned(
+                                  top: 4,
+                                  right: 4,
+                                  child: InkWell(
+                                    onTap: () => _removePhoto(index),
+                                    child: Container(
+                                      padding: const EdgeInsets.all(4),
+                                      decoration: BoxDecoration(
+                                        color: Colors.black.withOpacity(0.5),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Icon(
+                                        Icons.close,
+                                        color: Colors.white,
+                                        size: 16,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            )
+                            .animate()
+                            .fadeIn(duration: 300.ms, delay: 50.ms * index)
+                            .slideY(begin: 0.2, end: 0, duration: 300.ms);
                       },
                     )
                   else
@@ -310,12 +306,10 @@ class _ReportFormSheetState extends State<ReportFormSheet> {
                       ),
                       child: Text(
                         'No photos added yet',
-                        style: TextStyle(
-                          color: Colors.grey.shade600,
-                        ),
+                        style: TextStyle(color: Colors.grey.shade600),
                       ),
                     ),
-                  
+
                   // Advanced options (conditionally visible)
                   if (_showAdvancedOptions) ...[
                     const SizedBox(height: 24),
@@ -333,13 +327,13 @@ class _ReportFormSheetState extends State<ReportFormSheet> {
               ),
             ),
           ),
-          
+
           // Submit button
           Padding(
             padding: EdgeInsets.fromLTRB(
-              24, 
-              0, 
-              24, 
+              24,
+              0,
+              24,
               24 + MediaQuery.of(context).viewInsets.bottom,
             ),
             child: SizedBox(

@@ -5,11 +5,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
-import '../models/visit_model.dart';
-import '../services/field_operations_repository.dart';
+import '../models/site_visit.dart';
+import '../models/visit_status.dart';
+import '../services/site_visit_service.dart';
+import '../services/auth_service.dart';
 import '../services/location_tracking_service.dart';
 import '../services/sync_manager.dart';
 import '../theme/app_colors.dart';
@@ -31,7 +32,6 @@ class FieldOperationsEnhancedScreen extends StatefulWidget {
 class _FieldOperationsEnhancedScreenState
     extends State<FieldOperationsEnhancedScreen> {
   // UI state
-  bool _isOnline = false;
   bool _showMenu = false;
   bool _isLoading = true;
   bool _isSyncing = false;
@@ -41,10 +41,9 @@ class _FieldOperationsEnhancedScreenState
   Set<Marker> _markers = {};
 
   // Services
-  late StreamSubscription<List<ConnectivityResult>> _connectivitySubscription;
-  final Connectivity _connectivity = Connectivity();
   final LocationTrackingService _locationService = LocationTrackingService();
-  final FieldOperationsRepository _repository = FieldOperationsRepository();
+  final SiteVisitService _siteVisitService = SiteVisitService();
+  final AuthService _authService = AuthService();
   final SyncManager _syncManager = SyncManager();
 
   // Location
@@ -54,17 +53,13 @@ class _FieldOperationsEnhancedScreenState
   ); // Default center on Sudan
 
   // Visit data
-  List<Visit> _availableVisits = [];
-  List<Visit> _myVisits = [];
+  List<SiteVisit> _availableVisits = [];
+  List<SiteVisit> _myVisits = [];
 
   @override
   void initState() {
     super.initState();
-    _initConnectivity();
-    _connectivitySubscription = _connectivity.onConnectivityChanged.listen(
-      _updateConnectionStatus,
-    );
-
+    
     // Initialize location tracking
     _initializeLocationTracking();
 
@@ -77,36 +72,9 @@ class _FieldOperationsEnhancedScreenState
 
   @override
   void dispose() {
-    _connectivitySubscription.cancel();
     super.dispose();
   }
 
-  // Initialize connectivity checking
-  Future<void> _initConnectivity() async {
-    List<ConnectivityResult> result;
-    try {
-      result = await _connectivity.checkConnectivity();
-    } catch (e) {
-      debugPrint('Error checking connectivity: $e');
-      return;
-    }
-    _updateConnectionStatus(result);
-  }
-
-  // Update connection status based on connectivity changes
-  void _updateConnectionStatus(List<ConnectivityResult> results) {
-    final hasConnectivity =
-        results.contains(ConnectivityResult.mobile) ||
-        results.contains(ConnectivityResult.wifi) ||
-        results.contains(ConnectivityResult.ethernet);
-
-    setState(() {
-      _isOnline = hasConnectivity;
-    });
-
-    // Update collector status in repository
-    _repository.saveCollectorStatus(hasConnectivity);
-  }
 
   // Initialize location tracking
   Future<void> _initializeLocationTracking() async {
@@ -125,7 +93,6 @@ class _FieldOperationsEnhancedScreenState
   // Initialize services
   Future<void> _initializeServices() async {
     try {
-      await _repository.initialize();
       await _syncManager.initialize();
     } catch (e) {
       debugPrint('Error initializing services: $e');
@@ -182,8 +149,10 @@ class _FieldOperationsEnhancedScreenState
             position: LatLng(visit.latitude!, visit.longitude!),
             icon: _getMarkerIcon(visit.status),
             infoWindow: InfoWindow(
-              title: visit.title,
-              snippet: visit.location ?? 'No location specified',
+              title: visit.siteName ?? 'Unnamed Site',
+              snippet: visit.locationString.isNotEmpty
+                  ? visit.locationString
+                  : 'No location specified',
             ),
             onTap: () => _selectVisit(visit),
           ),
@@ -197,8 +166,8 @@ class _FieldOperationsEnhancedScreenState
   }
 
   // Get marker icon based on visit status
-  BitmapDescriptor _getMarkerIcon(VisitStatus status) {
-    switch (status) {
+  BitmapDescriptor _getMarkerIcon(String status) {
+    switch (visitStatusFromString(status)) {
       case VisitStatus.pending:
       case VisitStatus.available:
         return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed);
@@ -218,37 +187,38 @@ class _FieldOperationsEnhancedScreenState
     }
   }
 
-  // Load visits
+  // Load visits from Supabase
   Future<void> _loadVisits() async {
-    if (mounted) {
-      setState(() => _isLoading = true);
-    }
+    if (!mounted) return;
+
+    setState(() {
+      _isLoading = true;
+    });
 
     try {
-      await _repository.initialize();
-
-      // Get visits from repository
-      final availableVisits = await _repository.getVisitsByStatus(
-        VisitStatus.available,
-      );
-      final myVisits = await _repository.getMyVisits();
-
-      // If we don't have any visits in the repository, generate some example data
-      if (availableVisits.isEmpty && myVisits.isEmpty) {
-        _generateExampleVisits();
-      } else {
-        if (mounted) {
-          setState(() {
-            _availableVisits = availableVisits;
-            _myVisits = myVisits;
-            _isLoading = false;
-          });
-          _updateMarkers();
-        }
+      final userId = _authService.currentUser?.id;
+      if (userId == null) {
+        throw Exception('User not authenticated');
       }
-    } catch (e) {
+
+      final visitData = await _siteVisitService.getAssignedSiteVisits(userId);
+      final visits = visitData.map((data) => SiteVisit.fromJson(data)).toList();
+
       if (mounted) {
-        setState(() => _isLoading = false);
+        setState(() {
+          _availableVisits = visits;
+          _myVisits = visits.where((v) => v.assignedTo == userId).toList();
+          _isLoading = false;
+        });
+      }
+
+      _updateMarkers();
+    } catch (e) {
+      debugPrint('Error loading visits: $e');
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('Error loading visits: $e')));
@@ -256,133 +226,58 @@ class _FieldOperationsEnhancedScreenState
     }
   }
 
-  // Generate some example visits for demonstration
+  // This method is no longer needed since we're using real data
   Future<void> _generateExampleVisits() async {
-    final availableVisits = [
-      Visit(
-        title: 'Site Inspection #1',
-        description: 'Inspect construction site for safety compliance',
-        latitude: 12.8528, // Khartoum area
-        longitude: 30.2176,
-        scheduledDate: DateTime.now().add(const Duration(days: 1)),
-        status: VisitStatus.available,
-        location: 'Central Khartoum',
-        address: '123 Al Qasr Ave, Khartoum',
-        clientInfo: 'Sudan Construction Ltd.',
-        notes: 'Check all safety equipment and documentation',
-        priority: 'High',
-      ),
-      Visit(
-        title: 'Field Survey #2',
-        description: 'Conduct field survey for new project',
-        latitude: 12.8428,
-        longitude: 30.2276,
-        scheduledDate: DateTime.now().add(const Duration(days: 2)),
-        status: VisitStatus.available,
-        location: 'North Khartoum',
-        address: '45 Al Nile Street, Khartoum North',
-        clientInfo: 'Ministry of Infrastructure',
-        notes: 'Bring survey equipment and drones',
-      ),
-      Visit(
-        title: 'Water Quality Testing',
-        description: 'Test water quality at multiple locations',
-        latitude: 12.8328,
-        longitude: 30.2376,
-        scheduledDate: DateTime.now().add(const Duration(days: 1)),
-        status: VisitStatus.available,
-        location: 'East Khartoum',
-        address: '78 Blue Nile Rd, Khartoum',
-        clientInfo: 'Water Resources Authority',
-        notes: 'Bring water testing kit and sample containers',
-        priority: 'Medium',
-      ),
-    ];
-
-    final myAssignedVisits = [
-      Visit(
-        title: 'Equipment Maintenance',
-        description: 'Perform routine maintenance on field equipment',
-        latitude: 12.8728,
-        longitude: 30.2076,
-        scheduledDate: DateTime.now(),
-        status: VisitStatus.assigned,
-        location: 'South Khartoum',
-        address: '78 Al Mek Nimir Ave, Khartoum',
-        clientInfo: 'PACT Field Office',
-        notes: 'Check generators and water pumps',
-        assignedUserId: 'current-user-id',
-      ),
-      Visit(
-        title: 'Community Meeting',
-        description: 'Attend community meeting for new water project',
-        latitude: 12.8828,
-        longitude: 30.1976,
-        scheduledDate: DateTime.now().subtract(const Duration(days: 1)),
-        status: VisitStatus.inProgress,
-        location: 'West Khartoum',
-        address: '156 Africa St, Khartoum',
-        clientInfo: 'Local Community Council',
-        notes: 'Bring presentation materials and surveys',
-        assignedUserId: 'current-user-id',
-      ),
-    ];
-
-    // Save example visits to repository
-    for (final visit in [...availableVisits, ...myAssignedVisits]) {
-      await _repository.saveVisit(visit);
-    }
-
-    // Update state
-    if (mounted) {
-      setState(() {
-        _availableVisits = availableVisits;
-        _myVisits = myAssignedVisits;
-        _isLoading = false;
-      });
-      _updateMarkers();
-    }
+    // Implementation removed as we now use real data from Supabase
+    await _loadVisits();
   }
 
   // Select a visit
-  void _selectVisit(Visit visit) {
+  void _selectVisit(SiteVisit visit) {
     // Show visit details bottom sheet directly
     _showVisitDetailsSheet(visit);
   }
 
   // Show visit details sheet
-  void _showVisitDetailsSheet(Visit visit) {
+  void _showVisitDetailsSheet(SiteVisit visit) {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (context) => VisitDetailsSheet(
         visit: visit,
-        onStatusChange: _handleVisitStatusChanged,
+        onStatusChanged: (newStatus) =>
+            _handleVisitStatusChanged(visit, newStatus),
       ),
     );
   }
 
   // Handle visit status changes
-  Future<void> _handleVisitStatusChanged(Visit updatedVisit) async {
+  Future<void> _handleVisitStatusChanged(
+    SiteVisit visit,
+    String newStatus,
+  ) async {
     try {
+      final visitStatus = visitStatusFromString(newStatus);
+      final updatedVisit = visit.copyWith(status: newStatus);
+
       // If visit was in-progress and is now completed, stop tracking
-      if (updatedVisit.status == VisitStatus.completed &&
-          _locationService.getCurrentVisitId() == updatedVisit.id) {
+      if (visitStatus == VisitStatus.completed &&
+          _locationService.getCurrentVisitId() == visit.id) {
         await _locationService.stopTracking();
       }
 
       // If visit is now in-progress, start tracking
-      if (updatedVisit.status == VisitStatus.inProgress &&
-          _locationService.getCurrentVisitId() != updatedVisit.id) {
-        await _locationService.startTracking(updatedVisit.id);
+      if (visitStatus == VisitStatus.inProgress &&
+          _locationService.getCurrentVisitId() != visit.id) {
+        await _locationService.startTracking(visit.id);
       }
 
-      // Update visit in repository
-      await _repository.saveVisit(updatedVisit);
+      // Update visit in Supabase
+      await _siteVisitService.updateSiteVisit(updatedVisit);
 
       // Show report form if completed
-      if (updatedVisit.status == VisitStatus.completed) {
+      if (visitStatus == VisitStatus.completed) {
         _showReportFormSheet(updatedVisit);
       }
 
@@ -398,7 +293,7 @@ class _FieldOperationsEnhancedScreenState
   }
 
   // Show report form sheet
-  void _showReportFormSheet(Visit visit) {
+  void _showReportFormSheet(SiteVisit visit) {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -427,15 +322,15 @@ class _FieldOperationsEnhancedScreenState
   }
 
   // Handle visit assignment
-  Future<void> _handleVisitAssigned(Visit visit) async {
+  Future<void> _handleVisitAssigned(SiteVisit visit) async {
     try {
       final updatedVisit = visit.copyWith(
-        status: VisitStatus.assigned,
-        assignedUserId: 'current-user-id', // In a real app, use actual user ID
+        status: VisitStatus.assigned.toString(),
+        assignedTo: _authService.currentUser?.id,
       );
 
-      // Update visit in repository
-      await _repository.saveVisit(updatedVisit);
+      // Update visit in Supabase
+      await _siteVisitService.updateSiteVisit(updatedVisit);
 
       // Reload visits and update UI
       await _loadVisits();
@@ -472,52 +367,19 @@ class _FieldOperationsEnhancedScreenState
     }
   }
 
-  // Toggle collector online/offline status
-  Future<void> _toggleOnlineStatus() async {
-    final newStatus = !_isOnline;
 
-    try {
-      // Save status to repository
-      await _repository.saveCollectorStatus(newStatus);
-
-      setState(() {
-        _isOnline = newStatus;
-      });
-
-      // If going online, try to sync
-      if (newStatus) {
-        _forceSyncData();
-      } else {
-        // If going offline, stop any active tracking
-        if (_locationService.isTrackingEnabled()) {
-          await _locationService.stopTracking();
-        }
-      }
-
-      // Show confirmation
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('You are now ${newStatus ? 'online' : 'offline'}'),
-            backgroundColor: newStatus
-                ? AppColors.accentGreen
-                : AppColors.accentRed,
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error changing status: $e')));
-      }
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.backgroundGray,
+      floatingActionButton: FloatingActionButton(
+        heroTag: 'addVisit',
+        onPressed: () => _showVisitAssignmentSheet(),
+        backgroundColor: AppColors.accentGreen,
+        child: const Icon(Icons.add),
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       body: Stack(
         children: [
           SafeArea(
@@ -606,41 +468,6 @@ class _FieldOperationsEnhancedScreenState
     return ModernAppHeader(
       title: 'Field Operations',
       actions: [
-        // Online/Offline toggle
-        Switch(
-          value: _isOnline,
-          onChanged: (value) => _toggleOnlineStatus(),
-          activeColor: AppColors.accentGreen,
-          activeTrackColor: AppColors.accentGreen.withOpacity(0.3),
-          inactiveThumbColor: AppColors.accentRed,
-          inactiveTrackColor: AppColors.accentRed.withOpacity(0.3),
-        ),
-
-        // Sync indicator
-        if (_isSyncing)
-          Container(
-            padding: const EdgeInsets.all(8),
-            child: CircularProgressIndicator(
-              strokeWidth: 2,
-              valueColor: AlwaysStoppedAnimation<Color>(AppColors.primaryBlue),
-            ),
-          )
-        else
-          HeaderActionButton(
-            icon: _isOnline ? Icons.cloud_done : Icons.cloud_off,
-            tooltip: _isOnline ? 'Sync Data' : 'Offline',
-            backgroundColor: _isOnline
-                ? AppColors.accentGreen.withOpacity(0.1)
-                : AppColors.accentRed.withOpacity(0.1),
-            color: _isOnline ? AppColors.accentGreen : AppColors.accentRed,
-            onPressed: () {
-              if (_isOnline) {
-                HapticFeedback.lightImpact();
-                _forceSyncData();
-              }
-            },
-          ),
-        const SizedBox(width: 8),
         HeaderActionButton(
           icon: Icons.refresh,
           tooltip: 'Refresh',
@@ -685,92 +512,6 @@ class _FieldOperationsEnhancedScreenState
       animationDuration: 500.ms,
       child: Column(
         children: [
-          // Connection status row
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: AppColors.backgroundGray,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Icon(
-                      _isOnline ? Icons.wifi_rounded : Icons.wifi_off_rounded,
-                      color: _isOnline
-                          ? AppColors.accentGreen
-                          : AppColors.accentRed,
-                      size: 18,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Text(
-                    'Connection',
-                    style: GoogleFonts.poppins(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textDark,
-                    ),
-                  ),
-                ],
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: _isOnline
-                      ? AppColors.accentGreen.withOpacity(0.1)
-                      : AppColors.accentRed.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(30),
-                  border: Border.all(
-                    color: _isOnline
-                        ? AppColors.accentGreen.withOpacity(0.3)
-                        : AppColors.accentRed.withOpacity(0.3),
-                    width: 1,
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                          width: 6,
-                          height: 6,
-                          decoration: BoxDecoration(
-                            color: _isOnline
-                                ? AppColors.accentGreen
-                                : AppColors.accentRed,
-                            shape: BoxShape.circle,
-                          ),
-                        )
-                        .animate(onPlay: (controller) => controller.repeat())
-                        .fadeOut(
-                          duration: 1.seconds,
-                          curve: Curves.easeInOutCirc,
-                        )
-                        .fadeIn(
-                          duration: 1.seconds,
-                          curve: Curves.easeInOutCirc,
-                        ),
-                    const SizedBox(width: 6),
-                    Text(
-                      _isOnline ? 'Online' : 'Offline',
-                      style: GoogleFonts.poppins(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                        color: _isOnline
-                            ? AppColors.accentGreen
-                            : AppColors.accentRed,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-
           const SizedBox(height: 12),
           const Divider(height: 1),
           const SizedBox(height: 12),
@@ -861,18 +602,16 @@ class _FieldOperationsEnhancedScreenState
           ),
         ),
         headerTitle: 'My Visits',
-        headerTrailing: _isOnline
-            ? TextButton(
-                onPressed: _showVisitAssignmentSheet,
-                child: Text(
-                  'Assign Visit',
-                  style: GoogleFonts.poppins(
-                    color: AppColors.primaryBlue,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              )
-            : null,
+        headerTrailing: TextButton(
+          onPressed: _showVisitAssignmentSheet,
+          child: Text(
+            'Assign Visit',
+            style: GoogleFonts.poppins(
+              color: AppColors.primaryBlue,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
         animationDelay: 200.ms,
         child: SizedBox(
           height: 120,
@@ -901,10 +640,11 @@ class _FieldOperationsEnhancedScreenState
     );
   }
 
-  Widget _buildVisitCard(Visit visit) {
+  Widget _buildVisitCard(SiteVisit visit) {
     // Determine color based on visit status
     Color statusColor;
-    switch (visit.status) {
+    final status = visitStatusFromString(visit.status);
+    switch (status) {
       case VisitStatus.assigned:
         statusColor = AppColors.primaryBlue;
         break;
@@ -936,7 +676,7 @@ class _FieldOperationsEnhancedScreenState
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  visit.title,
+                  visit.siteName ?? 'Unnamed Site',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.poppins(
@@ -947,7 +687,9 @@ class _FieldOperationsEnhancedScreenState
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  visit.location ?? 'No location',
+                  visit.locationString.isNotEmpty
+                      ? visit.locationString
+                      : 'No location',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.poppins(
@@ -987,22 +729,7 @@ class _FieldOperationsEnhancedScreenState
     );
   }
 
-  String _getStatusLabel(VisitStatus status) {
-    switch (status) {
-      case VisitStatus.pending:
-        return 'Pending';
-      case VisitStatus.available:
-        return 'Available';
-      case VisitStatus.assigned:
-        return 'Assigned';
-      case VisitStatus.inProgress:
-        return 'In Progress';
-      case VisitStatus.completed:
-        return 'Completed';
-      case VisitStatus.rejected:
-        return 'Rejected';
-      case VisitStatus.cancelled:
-        return 'Cancelled';
-    }
+  String _getStatusLabel(String status) {
+    return visitStatusFromString(status).label;
   }
 }
