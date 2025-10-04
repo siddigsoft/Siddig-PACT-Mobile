@@ -459,36 +459,18 @@ class _FieldOperationsEnhancedScreenState
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.backgroundGray,
-      floatingActionButton: Column(
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
-          FloatingActionButton(
-            heroTag: 'mmpFiles',
-            onPressed: () {
-              showModalBottomSheet(
-                context: context,
-                isScrollControlled: true,
-                backgroundColor: Colors.transparent,
-                builder: (context) => const MMPFilesSheet(),
-              );
-            },
-            backgroundColor: AppColors.accentBlue,
-            child: const Icon(Icons.folder_special),
-          ),
-          const SizedBox(height: 16),
-          FloatingActionButton(
-            heroTag: 'addVisit',
-            onPressed: () => _showVisitAssignmentSheet(),
-            backgroundColor: AppColors.accentGreen,
-            child: const Icon(Icons.add),
-          ),
-        ],
+      floatingActionButton: FloatingActionButton(
+        heroTag: 'addVisit',
+        onPressed: () => _showVisitAssignmentSheet(),
+        backgroundColor: AppColors.accentGreen,
+        child: const Icon(Icons.add),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       body: Stack(
         children: [
           SafeArea(
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 _buildHeader(),
                 Expanded(
@@ -573,52 +555,6 @@ class _FieldOperationsEnhancedScreenState
     return ModernAppHeader(
       title: 'Field Operations',
       actions: [
-        // Online/Offline indicator
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(
-            color: _isOnline
-                ? AppColors.accentGreen.withOpacity(0.1)
-                : AppColors.accentRed.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(30),
-            border: Border.all(
-              color: _isOnline
-                  ? AppColors.accentGreen.withOpacity(0.3)
-                  : AppColors.accentRed.withOpacity(0.3),
-              width: 1,
-            ),
-          ),
-          child: Row(
-            children: [
-              Container(
-                    width: 8,
-                    height: 8,
-                    decoration: BoxDecoration(
-                      color: _isOnline
-                          ? AppColors.accentGreen
-                          : AppColors.accentRed,
-                      shape: BoxShape.circle,
-                    ),
-                  )
-                  .animate(onPlay: (controller) => controller.repeat())
-                  .fade(duration: 1.seconds)
-                  .then()
-                  .fade(duration: 1.seconds, end: 0.2),
-              const SizedBox(width: 8),
-              Text(
-                _isOnline ? 'Online' : 'Offline',
-                style: GoogleFonts.poppins(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                  color: _isOnline
-                      ? AppColors.accentGreen
-                      : AppColors.accentRed,
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(width: 8),
         HeaderActionButton(
           icon: Icons.refresh,
           tooltip: 'Refresh',
