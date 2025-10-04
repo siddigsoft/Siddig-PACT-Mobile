@@ -184,16 +184,17 @@ class _FormsScreenState extends State<FormsScreen> {
     }
 
     try {
-      final urlStr = file.fileUrl!.trim();
+      String urlStr = file.fileUrl!.trim();
 
-      // Validate URL format
+      // Ensure the URL has a protocol
       if (!urlStr.startsWith('http://') && !urlStr.startsWith('https://')) {
-        throw FormatException('Invalid URL format');
+        urlStr = 'https://$urlStr';
       }
 
-      // Try to encode the URL properly
-      final uri = Uri.tryParse(urlStr);
-      if (uri == null) {
+      // Encode the URL properly
+      final encodedUrl = Uri.encodeFull(urlStr);
+      final uri = Uri.parse(encodedUrl);
+      if (!uri.hasScheme || !uri.hasAuthority) {
         throw FormatException('Could not parse URL');
       }
 
@@ -210,8 +211,23 @@ class _FormsScreenState extends State<FormsScreen> {
       );
     } catch (e) {
       if (mounted) {
+        String errorMessage = 'Could not open file';
+        if (e is FormatException) {
+          errorMessage = 'Invalid file URL format';
+        } else if (e is StateError) {
+          errorMessage = 'Error accessing file URL';
+        }
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not open file: ${e.toString()}')),
+          SnackBar(
+            content: Text(errorMessage),
+            duration: const Duration(seconds: 3),
+            action: SnackBarAction(
+              label: 'Dismiss',
+              onPressed: () {
+                ScaffoldMessenger.of(context).hideCurrentSnackBar();
+              },
+            ),
+          ),
         );
       }
     }
