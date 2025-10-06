@@ -6,6 +6,10 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_colors.dart';
 import '../widgets/modern_app_header.dart';
+import '../widgets/sos_button.dart';
+import 'safety_checklist_screen.dart';
+import 'incident_report_screen.dart';
+import 'helpline_screen.dart';
 
 class SafetyHubScreen extends StatelessWidget {
   const SafetyHubScreen({super.key});
@@ -45,22 +49,24 @@ class SafetyHubScreen extends StatelessWidget {
   }
 
   Widget _buildHeader() {
-    return ModernAppHeader(
-      title: 'Safety Hub',
-      showBackButton: true,
-      centerTitle: true,
-      onLeadingIconPressed: () {
-        HapticFeedback.lightImpact();
-        // Navigation logic would go here
-      },
-      actions: [
-        HeaderActionButton(
-          icon: Icons.info_outline_rounded,
-          tooltip: 'Information',
-          onPressed: () {},
-        ),
-      ],
-    ).animate().fadeIn(duration: 500.ms);
+    return Builder(
+      builder: (context) => ModernAppHeader(
+        title: 'Safety Hub',
+        showBackButton: true,
+        centerTitle: true,
+        onLeadingIconPressed: () {
+          HapticFeedback.lightImpact();
+          Navigator.pop(context);
+        },
+        actions: [
+          HeaderActionButton(
+            icon: Icons.info_outline_rounded,
+            tooltip: 'Information',
+            onPressed: () {},
+          ),
+        ],
+      ).animate().fadeIn(duration: 500.ms),
+    );
   }
 
   Widget _buildSectionTitle(String title) {
@@ -78,31 +84,37 @@ class SafetyHubScreen extends StatelessWidget {
   }
 
   Widget _buildQuickAccessItems() {
-    return Column(
-      children: [
-        _buildSafetyItem(
-          icon: Icons.checklist_rounded,
-          title: 'Safety Checklist',
-          iconBackgroundColor: AppColors.accentGreen.withOpacity(0.15),
-          iconColor: AppColors.accentGreen,
-        ),
-        _buildSafetyItem(
-          icon: Icons.warning_amber_rounded,
-          title: 'Incident Report',
-          iconBackgroundColor: AppColors.accentYellow.withOpacity(0.15),
-          iconColor: AppColors.accentYellow,
-        ),
-        _buildSafetyItem(
-          icon: Icons.phone,
-          title: 'Emergency Contacts',
-          iconBackgroundColor: AppColors.accentRed.withOpacity(0.15),
-          iconColor: AppColors.accentRed,
-        ),
-      ],
+    return Builder(
+      builder: (context) => Column(
+        children: [
+          _buildSafetyItem(
+            context: context,
+            icon: Icons.checklist_rounded,
+            title: 'Safety Checklist',
+            iconBackgroundColor: AppColors.accentGreen.withOpacity(0.15),
+            iconColor: AppColors.accentGreen,
+          ),
+          _buildSafetyItem(
+            context: context,
+            icon: Icons.warning_amber_rounded,
+            title: 'Incident Report',
+            iconBackgroundColor: AppColors.accentYellow.withOpacity(0.15),
+            iconColor: AppColors.accentYellow,
+          ),
+          _buildSafetyItem(
+            context: context,
+            icon: Icons.support_agent,
+            title: 'Regional Helplines',
+            iconBackgroundColor: AppColors.primaryOrange.withOpacity(0.15),
+            iconColor: AppColors.primaryOrange,
+          ),
+        ],
+      ),
     ).animate().fadeIn(duration: 400.ms, delay: 200.ms);
   }
 
   Widget _buildSafetyItem({
+    required BuildContext context,
     required IconData icon,
     required String title,
     required Color iconBackgroundColor,
@@ -128,7 +140,26 @@ class SafetyHubScreen extends StatelessWidget {
         child: InkWell(
           onTap: () {
             HapticFeedback.mediumImpact();
-            // Navigate to the selected safety feature
+            if (title == 'Safety Checklist') {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const SafetyChecklistScreen(),
+                ),
+              );
+            } else if (title == 'Incident Report') {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const IncidentReportScreen(),
+                ),
+              );
+            } else if (title == 'Regional Helplines') {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => HelplineScreen()),
+              );
+            }
           },
           borderRadius: BorderRadius.circular(16),
           child: Padding(
@@ -248,100 +279,12 @@ class SafetyHubScreen extends StatelessWidget {
   }
 
   Widget _buildEmergencyContact() {
-    return Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.05),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
-                spreadRadius: 0,
-              ),
-            ],
-            border: Border.all(
-              color: AppColors.accentRed.withOpacity(0.3),
-              width: 1.5,
-            ),
-          ),
-          child: Column(
-            children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: AppColors.accentRed.withOpacity(0.1),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.emergency,
-                      color: AppColors.accentRed,
-                      size: 28,
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Text(
-                      'Emergency Contact',
-                      style: GoogleFonts.poppins(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textDark,
-                      ),
-                    ),
-                  ),
-                  ElevatedButton(
-                    onPressed: () {
-                      HapticFeedback.mediumImpact();
-                      // Call emergency contact
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.accentRed,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.phone, color: Colors.white, size: 18),
-                        const SizedBox(width: 8),
-                        Text(
-                          'CALL',
-                          style: GoogleFonts.poppins(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildContactInfo('Site Supervisor', 'John Doe'),
-                  ),
-                  Expanded(
-                    child: _buildContactInfo(
-                      'Contact Number',
-                      '(123) 456-7890',
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
+    return const SOSButton(
+          emergencyContacts: [
+            'Local Police:999',
+            'PACT Emergency:+256700000000',
+            'Medical Emergency:911',
+          ],
         )
         .animate()
         .fadeIn(duration: 400.ms, delay: 400.ms)
