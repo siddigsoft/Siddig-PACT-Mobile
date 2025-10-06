@@ -4,10 +4,218 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../models/equipment.dart';
+import '../services/equipment_service.dart';
 import '../theme/app_colors.dart';
 
-class EquipmentScreen extends StatelessWidget {
+class EquipmentScreen extends StatefulWidget {
   const EquipmentScreen({super.key});
+
+  @override
+  State<EquipmentScreen> createState() => _EquipmentScreenState();
+}
+
+class _EquipmentScreenState extends State<EquipmentScreen> {
+  late EquipmentService _equipmentService;
+  List<Equipment> _equipment = [];
+  String _selectedFilter = 'All';
+  String _searchQuery = '';
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeService();
+  }
+
+  Future<void> _initializeService() async {
+    final prefs = await SharedPreferences.getInstance();
+    _equipmentService = EquipmentService(prefs);
+    _loadEquipment();
+  }
+
+  void _loadEquipment() {
+    setState(() {
+      _isLoading = true;
+    });
+
+    final equipment = _equipmentService.filterEquipment(
+      status: _selectedFilter == 'All' ? null : _selectedFilter,
+      searchQuery: _searchQuery,
+    );
+
+    setState(() {
+      _equipment = equipment;
+      _isLoading = false;
+    });
+  }
+
+  Future<void> _showAddEquipmentDialog() async {
+    final nameController = TextEditingController();
+    final maintenanceDateController = TextEditingController();
+    String selectedStatus = 'OK';
+
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(
+          'Add New Equipment',
+          style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameController,
+                decoration: const InputDecoration(
+                  labelText: 'Equipment Name',
+                  hintText: 'Enter equipment name',
+                ),
+              ),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                value: selectedStatus,
+                items: ['OK', 'Needs Service']
+                    .map(
+                      (status) =>
+                          DropdownMenuItem(value: status, child: Text(status)),
+                    )
+                    .toList(),
+                onChanged: (value) {
+                  selectedStatus = value!;
+                },
+                decoration: const InputDecoration(labelText: 'Status'),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: maintenanceDateController,
+                decoration: const InputDecoration(
+                  labelText: 'Next Maintenance Date',
+                  hintText: 'YYYY-MM-DD',
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              if (nameController.text.isNotEmpty &&
+                  maintenanceDateController.text.isNotEmpty) {
+                final newEquipment = Equipment(
+                  id: DateTime.now().millisecondsSinceEpoch.toString(),
+                  name: nameController.text,
+                  status: selectedStatus,
+                  isCheckedIn: true,
+                  nextMaintenance: maintenanceDateController.text,
+                );
+
+                await _equipmentService.addEquipment(newEquipment);
+                _loadEquipment();
+                if (mounted) Navigator.pop(context);
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primaryOrange,
+            ),
+            child: const Text('Add'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showInspectionDialog(Equipment? equipment) async {
+    if (equipment == null) return;
+
+    final conditionController = TextEditingController();
+    final concernsController = TextEditingController();
+    final recommendationsController = TextEditingController();
+
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(
+          'Inspection Form',
+          style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                equipment.name,
+                style: GoogleFonts.poppins(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: conditionController,
+                decoration: const InputDecoration(
+                  labelText: 'Condition',
+                  hintText: 'Enter current condition',
+                ),
+                maxLines: 2,
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: concernsController,
+                decoration: const InputDecoration(
+                  labelText: 'Concerns',
+                  hintText: 'Enter any concerns',
+                ),
+                maxLines: 3,
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: recommendationsController,
+                decoration: const InputDecoration(
+                  labelText: 'Recommendations',
+                  hintText: 'Enter recommendations',
+                ),
+                maxLines: 3,
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              if (conditionController.text.isNotEmpty) {
+                final inspection = Inspection(
+                  id: DateTime.now().millisecondsSinceEpoch.toString(),
+                  date: DateTime.now().toIso8601String(),
+                  condition: conditionController.text,
+                  concerns: concernsController.text,
+                  recommendations: recommendationsController.text,
+                );
+
+                await _equipmentService.addInspection(equipment.id, inspection);
+                _loadEquipment();
+                if (mounted) Navigator.pop(context);
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primaryOrange,
+            ),
+            child: const Text('Submit'),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -18,47 +226,83 @@ class EquipmentScreen extends StatelessWidget {
           children: [
             _buildHeader(),
             Expanded(
-              child: SingleChildScrollView(
-                physics: const BouncingScrollPhysics(),
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildFilterChips(),
-                      const SizedBox(height: 16),
-                      _buildEquipmentItem(
-                        name: 'Generator 1',
-                        status: 'OK',
-                        isCheckedIn: true,
-                        nextMaintenance: '2024-07-15',
-                        statusColor: AppColors.accentGreen,
-                      ),
-                      _buildEquipmentItem(
-                        name: 'Pump 2',
-                        status: 'Needs Service',
-                        isCheckedIn: false,
-                        nextMaintenance: '2024-08-20',
-                        statusColor: AppColors.accentRed,
-                      ),
-                      _buildEquipmentItem(
-                        name: 'Compressor 3',
-                        status: 'OK',
-                        isCheckedIn: true,
-                        nextMaintenance: '2024-09-05',
-                        statusColor: AppColors.accentGreen,
-                      ),
-                      _buildEquipmentItem(
-                        name: 'Welder 4',
-                        status: 'OK',
-                        isCheckedIn: false,
-                        nextMaintenance: '2024-10-10',
-                        statusColor: AppColors.accentGreen,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+              child: _isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : ListView(
+                      physics: const BouncingScrollPhysics(),
+                      padding: const EdgeInsets.all(16.0),
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildFilterChips(),
+                            const SizedBox(height: 16),
+                            if (_equipment.isNotEmpty)
+                              ...List.generate(
+                                _equipment.length,
+                                (index) => _buildEquipmentItem(
+                                  name: _equipment[index].name,
+                                  status: _equipment[index].status,
+                                  isCheckedIn: _equipment[index].isCheckedIn,
+                                  nextMaintenance:
+                                      _equipment[index].nextMaintenance,
+                                  statusColor: _equipment[index].status == 'OK'
+                                      ? AppColors.accentGreen
+                                      : AppColors.accentRed,
+                                  onCheckedChanged: (value) async {
+                                    final updatedEquipment = Equipment(
+                                      id: _equipment[index].id,
+                                      name: _equipment[index].name,
+                                      status: _equipment[index].status,
+                                      isCheckedIn: value,
+                                      nextMaintenance:
+                                          _equipment[index].nextMaintenance,
+                                      inspections:
+                                          _equipment[index].inspections,
+                                    );
+                                    await _equipmentService.updateEquipment(
+                                      updatedEquipment,
+                                    );
+                                    _loadEquipment();
+                                  },
+                                  onTap: () =>
+                                      _showInspectionDialog(_equipment[index]),
+                                ),
+                              ),
+                            if (_equipment.isEmpty)
+                              Center(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.inventory_2_outlined,
+                                      size: 64,
+                                      color: AppColors.textLight,
+                                    ),
+                                    const SizedBox(height: 16),
+                                    Text(
+                                      'No equipment found',
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w500,
+                                        color: AppColors.textLight,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      'Tap the + button to add equipment',
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 14,
+                                        color: AppColors.textLight,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                          ],
+                        ),
+                      ],
+                    ),
             ),
           ],
         ),
@@ -66,7 +310,7 @@ class EquipmentScreen extends StatelessWidget {
       floatingActionButton: FloatingActionButton(
         onPressed: () {
           HapticFeedback.mediumImpact();
-          // Add new equipment
+          _showAddEquipmentDialog();
         },
         backgroundColor: AppColors.primaryOrange,
         child: const Icon(Icons.add, color: Colors.white),
@@ -122,8 +366,28 @@ class EquipmentScreen extends StatelessWidget {
           const Spacer(),
           IconButton(
             onPressed: () {
+              // Show bottom sheet with filter options
               HapticFeedback.lightImpact();
-              // Filter functionality
+              showModalBottomSheet(
+                context: context,
+                builder: (context) => Container(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Filter Equipment',
+                        style: GoogleFonts.poppins(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      _buildFilterChips(),
+                    ],
+                  ),
+                ),
+              );
             },
             icon: Icon(
               Icons.filter_list,
@@ -133,8 +397,33 @@ class EquipmentScreen extends StatelessWidget {
           ),
           IconButton(
             onPressed: () {
+              // Show search dialog
               HapticFeedback.lightImpact();
-              // Search functionality
+              showDialog(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: Text(
+                    'Search Equipment',
+                    style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+                  ),
+                  content: TextField(
+                    onChanged: (value) {
+                      _searchQuery = value;
+                      _loadEquipment();
+                    },
+                    decoration: const InputDecoration(
+                      hintText: 'Enter equipment name',
+                      prefixIcon: Icon(Icons.search),
+                    ),
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Close'),
+                    ),
+                  ],
+                ),
+              );
             },
             icon: Icon(Icons.search, color: AppColors.primaryOrange, size: 28),
           ),
@@ -180,7 +469,10 @@ class EquipmentScreen extends StatelessWidget {
           ),
         ),
         onSelected: (value) {
-          // Update filter selection
+          setState(() {
+            _selectedFilter = label;
+          });
+          _loadEquipment();
         },
       ),
     );
@@ -192,8 +484,83 @@ class EquipmentScreen extends StatelessWidget {
     required bool isCheckedIn,
     required String nextMaintenance,
     required Color statusColor,
+    required Function(bool) onCheckedChanged,
+    required VoidCallback onTap,
   }) {
-    return Container(
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 16),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    name,
+                    style: GoogleFonts.poppins(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: statusColor.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          status,
+                          style: GoogleFonts.poppins(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: statusColor,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Next: $nextMaintenance',
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          color: AppColors.textLight,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            Switch(
+              value: isCheckedIn,
+              onChanged: onCheckedChanged,
+              activeColor: AppColors.primaryOrange,
+            ),
+          ],
+        ),
+      ),
+    ).animate().fadeIn(duration: 300.ms);
+    child:
+    Container(
           margin: const EdgeInsets.only(bottom: 16),
           decoration: BoxDecoration(
             color: Colors.white,

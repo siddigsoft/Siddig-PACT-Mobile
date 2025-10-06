@@ -36,6 +36,7 @@ dependencies:
   geolocator: ^11.0.0        # For GPS tracking
   workmanager: ^0.5.2        # For background tasks
   hive: ^2.2.3              # Secure NoSQL database
+  shared_preferences: ^2.2.2  # For local storage
   hive_flutter: ^1.1.0       # Hive Flutter integration
   flutter_secure_storage: ^9.0.0 # For storing encryption keys
   connectivity_plus: ^7.0.0  # For network connectivity

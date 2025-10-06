@@ -220,8 +220,8 @@ class _LoginScreenState extends State<LoginScreen>
 
                     // Company Logo/Icon Section
                     Container(
-                          width: 130,
-                          height: 130,
+                          width: 150,
+                          height: 150,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             gradient: LinearGradient(
@@ -258,7 +258,7 @@ class _LoginScreenState extends State<LoginScreen>
                             child: ClipOval(
                               child: Image.asset(
                                 'assets/images/pact_consultancy_pact_cover.jpg',
-                                fit: BoxFit.cover,
+                                fit: BoxFit.contain,
                               ),
                             ),
                           ),

@@ -416,8 +416,8 @@ class _RegisterScreenState extends State<RegisterScreen>
 
                           // Welcome illustration/logo
                           Container(
-                                width: 120,
-                                height: 120,
+                                width: 140,
+                                height: 140,
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
                                   gradient: LinearGradient(
@@ -453,7 +453,7 @@ class _RegisterScreenState extends State<RegisterScreen>
                                   child: ClipOval(
                                     child: Image.asset(
                                       'assets/images/pact_consultancy_pact_cover.jpg',
-                                      fit: BoxFit.cover,
+                                      fit: BoxFit.contain,
                                     ),
                                   ),
                                 ),
