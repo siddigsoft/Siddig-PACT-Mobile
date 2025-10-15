@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_colors.dart';
+import '../services/auth_service.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -35,6 +36,108 @@ class _RegisterScreenState extends State<RegisterScreen>
   bool _isConfirmPasswordVisible = false;
   bool _isLoading = false;
   bool _acceptTerms = false;
+
+  // Services
+  final _authService = AuthService();
+
+  // Build social sign in section
+  Widget _buildSocialSignIn() {
+    return Column(
+      children: [
+        const SizedBox(height: 20),
+        Row(
+          children: [
+            Expanded(child: Divider(color: Colors.grey[300])),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Text(
+                'Or sign up with',
+                style: GoogleFonts.poppins(
+                  fontSize: 14,
+                  color: Colors.grey[600],
+                ),
+              ),
+            ),
+            Expanded(child: Divider(color: Colors.grey[300])),
+          ],
+        ),
+        const SizedBox(height: 20),
+        Container(
+          width: 60,
+          height: 60,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.03),
+                blurRadius: 15,
+                spreadRadius: -8,
+                offset: const Offset(0, 8),
+              ),
+            ],
+            border: Border.all(
+              color: AppColors.borderColor.withOpacity(0.1),
+              width: 1,
+            ),
+          ),
+          child: Material(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(20),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(20),
+              onTap: () async {
+                HapticFeedback.lightImpact();
+                try {
+                  setState(() => _isLoading = true);
+                  final success = await _authService.signInWithGoogle();
+                  if (mounted && success) {
+                    Navigator.pushReplacementNamed(context, '/home');
+                  } else if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Failed to sign in with Google'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Error signing in with Google: ${e.toString()}'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                } finally {
+                  if (mounted) {
+                    setState(() => _isLoading = false);
+                  }
+                }
+              },
+              child: const Padding(
+                padding: EdgeInsets.all(12.0),
+                child: Center(
+                  child: Icon(
+                    Icons.g_mobiledata,
+                    size: 32,
+                    color: Color(0xFFDB4437), // Google red
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ).animate()
+        .fadeIn(duration: 600.ms, delay: 950.ms)
+        .scale(
+          begin: const Offset(0.9, 0.9),
+          end: const Offset(1, 1),
+          curve: Curves.easeOutBack,
+        ),
+      ],
+    );
+  }
 
   @override
   void initState() {
@@ -969,6 +1072,11 @@ class _RegisterScreenState extends State<RegisterScreen>
                                       duration: 500.ms,
                                       curve: Curves.easeOutQuint,
                                     ),
+
+                                const SizedBox(height: 30),
+
+                                // Social sign in section
+                                _buildSocialSignIn(),
 
                                 const SizedBox(height: 30),
 

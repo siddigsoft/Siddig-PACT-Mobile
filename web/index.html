@@ -7,6 +7,19 @@
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
   <meta name="description" content="Pact Consultancy Mobile App">
 
+  <!-- Security headers -->
+  <meta http-equiv="Content-Security-Policy" 
+        content="default-src 'self' https: 'unsafe-inline' 'unsafe-eval'; 
+                 connect-src 'self' wss: https: http://localhost:* https://*.supabase.co https://accounts.google.com;
+                 img-src 'self' data: https: http: blob:;
+                 frame-src 'self' https: http://localhost:* https://*.google.com https://*.supabase.co;
+                 frame-ancestors 'self';
+                 form-action 'self' https://accounts.google.com https://*.supabase.co;">
+  
+  <!-- Additional security headers -->
+  <meta http-equiv="X-Frame-Options" content="SAMEORIGIN">
+  <meta http-equiv="Cross-Origin-Opener-Policy" content="same-origin">
+
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
@@ -27,25 +40,42 @@
        https://developers.google.com/web/fundamentals/primers/service-workers -->
   <script src="flutter.js" defer></script>
   <script>
-    // Define serviceWorkerVersion for development
-    var serviceWorkerVersion = null;
-    
-    window.addEventListener('load', function() {
-      // Attach flutter-platform-initialize listener first
-      window.addEventListener('flutter-platform-initialize', function () {
-        window.flutterWebRenderer = "html";
-      });
-      
-      // Load entry point for the app
-      _flutter.loader.loadEntrypoint({
-        serviceWorker: {
-          serviceWorkerVersion: serviceWorkerVersion,
-        },
-        onEntrypointLoaded: async function(engineInitializer) {
-          let appRunner = await engineInitializer.initializeEngine();
-          await appRunner.runApp();
+    window.addEventListener('load', function(ev) {
+      // Initialize Flutter Web
+      _flutter = {
+        loader: {
+          loadEntrypoint: function(options) {
+            return new Promise(function(resolve, reject) {
+              try {
+                const scriptTag = document.createElement('script');
+                scriptTag.src = 'main.dart.js';
+                scriptTag.type = 'application/javascript';
+                document.body.append(scriptTag);
+
+                scriptTag.addEventListener('load', function() {
+                  if (options.onEntrypointLoaded) {
+                    options.onEntrypointLoaded({
+                      initializeEngine: async function() {
+                        return {
+                          runApp: function() {
+                            // Remove loading indicator when app is ready
+                            const loading = document.querySelector('#loading');
+                            if (loading) {
+                              loading.remove();
+                            }
+                          }
+                        };
+                      }
+                    });
+                  }
+                });
+              } catch (err) {
+                reject(err);
+              }
+            });
+          }
         }
-      });
+      };
     });
   </script>
 </head>

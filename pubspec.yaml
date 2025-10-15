@@ -19,7 +19,8 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 version: 1.0.0+1
 
 environment:
-  sdk: ^3.8.1
+  sdk: '>=3.0.0 <4.0.0'
+  flutter: ">=3.0.0"
 
 # Dependencies specify other packages that your package needs in order to work.
 # To automatically upgrade your package dependencies to the latest versions
@@ -39,6 +40,7 @@ dependencies:
   shared_preferences: ^2.2.2  # For local storage
   hive_flutter: ^1.1.0       # Hive Flutter integration
   flutter_secure_storage: ^9.0.0 # For storing encryption keys
+  flutter_local_notifications: ^16.3.2 # For local notifications
   connectivity_plus: ^7.0.0  # For network connectivity
   uuid: ^4.4.0              # For generating unique IDs
   encrypt: ^5.0.3           # For encryption
@@ -51,7 +53,7 @@ dependencies:
   flutter_map: ^6.1.0       # Alternative map provider
   # Using flutter_map_marker_cluster for clustering with flutter_map
   flutter_map_marker_cluster: ^1.3.1 # For marker clustering
-  url_launcher: ^6.3.2      # For launching URLs and files
+  url_launcher: ^6.3.2      # For launching URLs and emails
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
@@ -62,20 +64,21 @@ dependencies:
   google_fonts: ^6.3.1        # For modern typography
   flutter_animate: ^4.5.2     # For modern animations
   cached_network_image: ^3.4.1 # For efficient image loading and caching
+  open_file: ^3.5.10
+  file_picker: ^10.3.3
+  rxdart: ^0.28.0
+  background_fetch: ^1.4.0
+  sqflite: ^2.4.2
+  path: ^1.9.1
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-
-  # The "flutter_lints" package below contains a set of recommended lints to
-  # encourage good coding practices. The lint set provided by the package is
-  # activated in the `analysis_options.yaml` file located at the root of your
-  # package. See that file for information about deactivating specific lint
-  # rules and activating additional ones.
   flutter_lints: ^5.0.0
-  
-  # App icon generator
+  mocktail: ^1.0.3
+  build_runner: ^2.4.8
   flutter_launcher_icons: ^0.14.4
+  test: ^1.24.9
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

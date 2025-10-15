@@ -19,6 +19,8 @@ import '../theme/app_colors.dart';
 import '../widgets/app_menu_overlay.dart';
 import '../widgets/modern_app_header.dart';
 import '../widgets/modern_card.dart';
+import '../widgets/custom_drawer_menu.dart';
+import '../services/notification_service.dart';
 import 'components/report_form_sheet.dart';
 import 'components/visit_assignment_sheet.dart';
 import 'components/visit_details_sheet.dart';
@@ -65,6 +67,10 @@ class _FieldOperationsEnhancedScreenState
   final AuthService _authService = AuthService();
   final MMPFileService _mmpFileService = MMPFileService();
   final SyncManager _syncManager = SyncManager();
+  
+  // Listen for new MMP files
+  StreamSubscription? _mmpFileSubscription;
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   // Location
   LatLng _currentLocation = const LatLng(
@@ -83,6 +89,19 @@ class _FieldOperationsEnhancedScreenState
     _connectivitySubscription = _connectivity.onConnectivityChanged.listen(
       _updateConnectionStatus,
     );
+    
+    // Initialize notifications
+    NotificationService.initialize();
+    
+    // Listen for new MMP files
+    _mmpFileSubscription = _mmpFileService.onNewFiles.listen((files) {
+      if (files.isNotEmpty) {
+        NotificationService.showMMPFileNotification(
+          title: 'New MMP Files',
+          body: '${files.length} new MMP files have been uploaded',
+        );
+      }
+    });
 
     // Initialize location tracking
     _initializeLocationTracking();
@@ -101,6 +120,7 @@ class _FieldOperationsEnhancedScreenState
   @override
   void dispose() {
     _connectivitySubscription.cancel();
+    _mmpFileSubscription?.cancel();
     super.dispose();
   }
 
@@ -482,7 +502,12 @@ class _FieldOperationsEnhancedScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      key: _scaffoldKey,
       backgroundColor: AppColors.backgroundGray,
+      drawer: CustomDrawerMenu(
+        currentUser: _authService.currentUser,
+        onClose: () => _scaffoldKey.currentState?.closeDrawer(),
+      ),
       floatingActionButton: FloatingActionButton(
         heroTag: 'addVisit',
         onPressed: () => _showVisitAssignmentSheet(),
@@ -600,9 +625,7 @@ class _FieldOperationsEnhancedScreenState
           color: AppColors.primaryBlue,
           onPressed: () {
             HapticFeedback.mediumImpact();
-            setState(() {
-              _showMenu = true;
-            });
+            _scaffoldKey.currentState?.openDrawer();
           },
         ),
       ],

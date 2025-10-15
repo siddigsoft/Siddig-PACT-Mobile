@@ -1,12 +1,19 @@
 // Web-specific configuration implementations
-// No imports needed since we're using the default configuration
+import 'package:flutter_web_plugins/flutter_web_plugins.dart';
+import 'package:flutter/foundation.dart';
 
 /// Configure app-specific settings for web platform
 void configureApp() {
-  // Using the default URL strategy (hash-based) which is more compatible
-  // and doesn't require special server configuration
-  // Not calling setUrlStrategy() at all will use the default hash (#) strategy
+  // Enable better error reporting for web
+  if (kDebugMode) {
+    FlutterError.onError = (FlutterErrorDetails details) {
+      FlutterError.dumpErrorToConsole(details);
+    };
+  }
+
+  // Use path URL strategy for better OAuth compatibility
+  setUrlStrategy(PathUrlStrategy());
 
   // Log configuration
-  print('🌐 Web platform detected: Using default URL strategy');
+  debugPrint('🌐 Web platform detected: Path URL strategy configured');
 }

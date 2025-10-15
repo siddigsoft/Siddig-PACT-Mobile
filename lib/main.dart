@@ -13,6 +13,7 @@ import 'utils/environment.dart';
 import 'services/auth_service.dart';
 import 'services/storage_service.dart';
 import 'services/data_sync_service.dart';
+import 'services/app_config_service.dart';
 
 // Conditionally import web plugins only when needed
 // This prevents errors on non-web platforms
@@ -27,21 +28,15 @@ void main() async {
 
   // Initialize Supabase
   await Supabase.initialize(
-    url: Environment.supabaseUrl,
-    anonKey: Environment.supabaseAnonKey,
+    url: 'https://abznugnirnlrqnnfkein.supabase.co',
+    anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFiem51Z25pcm5scnFubmZrZWluIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTkxMzU2OTEsImV4cCI6MjA3NDcxMTY5MX0.eAX9yrtgr05OVjAn_Wr2Koi92rMaV32EFj70DFfIgdM',
     authOptions: const FlutterAuthClientOptions(
       authFlowType: AuthFlowType.pkce,
+      autoRefreshToken: true,
     ),
   );
 
-  // Initialize services
-  AuthService();
-  StorageService();
-  DataSyncService();
-  // Ensures Flutter widgets are initialized before running the app
-  WidgetsFlutterBinding.ensureInitialized();
-
-  // Configure URL strategy for web platform only
+  // Initialize web-specific configuration and URL strategy
   configureApp();
 
   // Debug log - helpful for troubleshooting routing
@@ -84,8 +79,31 @@ class MyApp extends StatelessWidget {
       // Removes the debug banner in the top-right corner
       debugShowCheckedModeBanner: false,
 
-      // Use the centralized theme from AppColors
-      theme: AppColors.themeData,
+      // Define theme using AppColors
+      theme: ThemeData(
+        primaryColor: AppColors.primaryOrange,
+        useMaterial3: true,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: AppColors.primaryOrange,
+          primary: AppColors.primaryOrange,
+          secondary: AppColors.primaryBlue,
+          surface: AppColors.primaryWhite,
+          background: AppColors.backgroundGray,
+          brightness: Brightness.light,
+        ),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          centerTitle: true,
+          iconTheme: IconThemeData(color: AppColors.textDark),
+          titleTextStyle: TextStyle(
+            color: AppColors.textDark,
+            fontSize: 22,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.5,
+          ),
+        ),
+      ),
 
       // Set up routing for proper URL display
       // Do not set home when using initialRoute

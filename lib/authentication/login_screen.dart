@@ -33,6 +33,9 @@ class _LoginScreenState extends State<LoginScreen>
   // Boolean to track loading state
   bool _isLoading = false;
 
+  // Services
+  final _authService = AuthService();
+
   @override
   void initState() {
     super.initState();
@@ -691,9 +694,38 @@ class _LoginScreenState extends State<LoginScreen>
                                           borderRadius: BorderRadius.circular(
                                             20,
                                           ),
-                                          onTap: () {
+                                          onTap: () async {
                                             HapticFeedback.lightImpact();
-                                            // TODO: Implement Google login
+                                            try {
+                                              setState(() => _isLoading = true);
+                                              final success = await _authService.signInWithGoogle();
+                                              if (mounted && success) {
+                                                Navigator.pushReplacementNamed(
+                                                  context,
+                                                  '/home',
+                                                );
+                                              } else if (mounted) {
+                                                ScaffoldMessenger.of(context).showSnackBar(
+                                                  const SnackBar(
+                                                    content: Text('Failed to sign in with Google'),
+                                                    backgroundColor: Colors.red,
+                                                  ),
+                                                );
+                                              }
+                                            } catch (e) {
+                                              if (mounted) {
+                                                ScaffoldMessenger.of(context).showSnackBar(
+                                                  SnackBar(
+                                                    content: Text('Error signing in with Google: ${e.toString()}'),
+                                                    backgroundColor: Colors.red,
+                                                  ),
+                                                );
+                                              }
+                                            } finally {
+                                              if (mounted) {
+                                                setState(() => _isLoading = false);
+                                              }
+                                            }
                                           },
                                           child: const Padding(
                                             padding: EdgeInsets.all(12.0),
