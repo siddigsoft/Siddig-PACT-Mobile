@@ -3,7 +3,8 @@ import 'package:uuid/uuid.dart';
 
 class LocationLog {
   final String id;
-  final String visitId;
+  final String? visitId;
+  final String? userId;
   final double latitude;
   final double longitude;
   final DateTime timestamp;
@@ -15,7 +16,8 @@ class LocationLog {
 
   LocationLog({
     String? id,
-    required this.visitId,
+    this.visitId,
+    this.userId,
     required this.latitude,
     required this.longitude,
     DateTime? timestamp,
@@ -32,6 +34,7 @@ class LocationLog {
     return {
       'id': id,
       'visitId': visitId,
+      'userId': userId,
       'latitude': latitude,
       'longitude': longitude,
       'timestamp': timestamp.toIso8601String(),
@@ -48,6 +51,7 @@ class LocationLog {
     return LocationLog(
       id: map['id'],
       visitId: map['visitId'],
+      userId: map['userId'],
       latitude: map['latitude'],
       longitude: map['longitude'],
       timestamp: DateTime.parse(map['timestamp']),

@@ -1,5 +1,6 @@
 import 'distance_helper.dart';
 import '../models/site_visit.dart';
+import 'nearest_site_visits.dart';
 
 /// Optimizes routes for multiple site visits using a nearest neighbor approach
 class RouteOptimizer {

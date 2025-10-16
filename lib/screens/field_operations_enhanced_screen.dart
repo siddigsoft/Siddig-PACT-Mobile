@@ -15,6 +15,12 @@ import '../services/auth_service.dart';
 import '../services/location_tracking_service.dart';
 import '../services/sync_manager.dart';
 import '../services/mmp_file_service.dart';
+import '../services/geographical_task_service.dart';
+import '../services/task_assignment_service.dart';
+import '../services/journey_service.dart';
+import '../services/staff_tracking_service.dart';
+import '../widgets/task_dashboard.dart';
+import '../algorithms/nearest_site_visits.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_menu_overlay.dart';
 import '../widgets/modern_app_header.dart';
@@ -67,6 +73,9 @@ class _FieldOperationsEnhancedScreenState
   final AuthService _authService = AuthService();
   final MMPFileService _mmpFileService = MMPFileService();
   final SyncManager _syncManager = SyncManager();
+  late final GeographicalTaskService _geographicalTaskService;
+  late final TaskAssignmentService _taskAssignmentService;
+  late final JourneyService _journeyService;
   
   // Listen for new MMP files
   StreamSubscription? _mmpFileSubscription;
@@ -81,6 +90,12 @@ class _FieldOperationsEnhancedScreenState
   // Visit data
   List<SiteVisit> _availableVisits = [];
   List<SiteVisit> _myVisits = [];
+
+  // Task data
+  List<SiteVisitWithDistance> _nearbyTasks = [];
+  List<SiteVisit> _acceptedTasks = [];
+  bool _isLoadingTasks = false;
+  bool _showTaskDashboard = true; // Show dashboard by default
 
   @override
   void initState() {
@@ -174,6 +189,14 @@ class _FieldOperationsEnhancedScreenState
   Future<void> _initializeServices() async {
     try {
       await _syncManager.initialize();
+
+      // Initialize new task services
+      _geographicalTaskService = GeographicalTaskService(_siteVisitService);
+      _taskAssignmentService = TaskAssignmentService(_siteVisitService.supabase, _siteVisitService);
+      _journeyService = JourneyService(_locationService, StaffTrackingService(_siteVisitService.supabase));
+
+      // Load initial tasks
+      await _loadNearbyTasks();
     } catch (e) {
       debugPrint('Error initializing services: $e');
     }
@@ -430,6 +453,122 @@ class _FieldOperationsEnhancedScreenState
     }
   }
 
+  // Load nearby tasks using geographical algorithm
+  Future<void> _loadNearbyTasks() async {
+    if (!mounted) return;
+
+    setState(() {
+      _isLoadingTasks = true;
+    });
+
+    try {
+      final tasks = await _geographicalTaskService.getNearbyAvailableTasks();
+      setState(() {
+        _nearbyTasks = tasks;
+        _isLoadingTasks = false;
+      });
+    } catch (e) {
+      setState(() {
+        _isLoadingTasks = false;
+      });
+      debugPrint('Error loading nearby tasks: $e');
+    }
+  }
+
+  // Handle task acceptance
+  Future<void> _handleTaskAccepted(SiteVisit task) async {
+    final userId = _authService.currentUser?.id;
+    if (userId == null) return;
+
+    try {
+      final response = await _taskAssignmentService.acceptTask(
+        taskId: task.id,
+        userId: userId,
+      );
+
+      if (response.result == TaskAssignmentResult.success) {
+        // Start journey tracking
+        await _startJourneyForTask(task);
+
+        // Remove from nearby tasks
+        setState(() {
+          _nearbyTasks.removeWhere((t) => t.visit.id == task.id);
+        });
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Task accepted successfully')),
+          );
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(response.message ?? 'Failed to accept task')),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error accepting task: $e')),
+        );
+      }
+    }
+  }
+
+  // Handle task decline
+  Future<void> _handleTaskDeclined(SiteVisit task) async {
+    final userId = _authService.currentUser?.id;
+    if (userId == null) return;
+
+    try {
+      final response = await _taskAssignmentService.declineTask(
+        taskId: task.id,
+        userId: userId,
+      );
+
+      // Remove from nearby tasks
+      setState(() {
+        _nearbyTasks.removeWhere((t) => t.visit.id == task.id);
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Task declined')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error declining task: $e')),
+        );
+      }
+    }
+  }
+
+  // Start journey tracking for accepted task
+  Future<void> _startJourneyForTask(SiteVisit task) async {
+    try {
+      final journeyWaypoints = await _journeyService.startJourney(
+        assignedTasks: [task],
+        startPosition: _currentLocation,
+      );
+
+      // Update UI to show journey mode
+      setState(() {
+        _acceptedTasks.add(task);
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Journey started - location tracking active')),
+        );
+      }
+    } catch (e) {
+      debugPrint('Error starting journey: $e');
+    }
+  }
+
   // Force sync data
   Future<void> _forceSyncData() async {
     setState(() => _isSyncing = true);
@@ -508,7 +647,7 @@ class _FieldOperationsEnhancedScreenState
         currentUser: _authService.currentUser,
         onClose: () => _scaffoldKey.currentState?.closeDrawer(),
       ),
-      floatingActionButton: FloatingActionButton(
+      floatingActionButton: _showTaskDashboard ? null : FloatingActionButton(
         heroTag: 'addVisit',
         onPressed: () => _showVisitAssignmentSheet(),
         backgroundColor: AppColors.accentGreen,
@@ -552,6 +691,10 @@ class _FieldOperationsEnhancedScreenState
   }
 
   Widget _buildContent() {
+    return _showTaskDashboard ? _buildTaskDashboardView() : _buildMapView();
+  }
+
+  Widget _buildMapView() {
     return Stack(
       children: [
         // Map
@@ -603,10 +746,37 @@ class _FieldOperationsEnhancedScreenState
     );
   }
 
+  Widget _buildTaskDashboardView() {
+    return TaskDashboard(
+      availableTasks: _nearbyTasks,
+      onTaskAccepted: _handleTaskAccepted,
+      onTaskDeclined: _handleTaskDeclined,
+      isLoading: _isLoadingTasks,
+    );
+  }
+
   Widget _buildHeader() {
     return ModernAppHeader(
-      title: 'Field Operations',
+      title: _showTaskDashboard ? 'Available Tasks' : 'Field Operations',
       actions: [
+        HeaderActionButton(
+          icon: _showTaskDashboard ? Icons.map : Icons.assignment,
+          tooltip: _showTaskDashboard ? 'Show Map' : 'Show Tasks',
+          backgroundColor: Colors.white,
+          color: AppColors.primaryBlue,
+          onPressed: () {
+            HapticFeedback.lightImpact();
+            setState(() {
+              _showTaskDashboard = !_showTaskDashboard;
+            });
+            if (_showTaskDashboard) {
+              _loadNearbyTasks();
+            } else {
+              _loadVisits();
+            }
+          },
+        ),
+        const SizedBox(width: 8),
         HeaderActionButton(
           icon: Icons.refresh,
           tooltip: 'Refresh',
@@ -614,7 +784,11 @@ class _FieldOperationsEnhancedScreenState
           color: AppColors.primaryBlue,
           onPressed: () {
             HapticFeedback.lightImpact();
-            _loadVisits();
+            if (_showTaskDashboard) {
+              _loadNearbyTasks();
+            } else {
+              _loadVisits();
+            }
           },
         ),
         const SizedBox(width: 8),

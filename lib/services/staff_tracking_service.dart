@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer' as developer;
 import 'package:geolocator/geolocator.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/location_log_model.dart';
@@ -71,7 +72,7 @@ class StaffTrackingService {
     try {
       // Take a batch of logs
       final logsToUpload = _pendingLogs.take(_batchSize).toList();
-      final logData = logsToUpload.map((log) => log.toJson()).toList();
+      final logData = logsToUpload.map((log) => log.toMap()).toList();
 
       // Upload to Supabase
       final response = await _supabase.rpc(
@@ -79,16 +80,12 @@ class StaffTrackingService {
         params: {
           'log_data': logData,
         },
-      ).execute();
-
-      if (response.error != null) {
-        throw response.error!;
-      }
+      );
 
       // Remove uploaded logs from pending
       _pendingLogs.removeRange(0, logsToUpload.length);
     } catch (e) {
-      debugPrint('Error uploading location logs: $e');
+      developer.log('Error uploading location logs: $e');
       // Implement exponential backoff here if needed
     }
   }
@@ -109,12 +106,11 @@ class StaffTrackingService {
             'accuracy': position.accuracy,
             'recorded_at': DateTime.now().toIso8601String(),
             'notes': notes,
-          })
-          .execute();
+          });
 
-      return response.error == null;
+      return true;
     } catch (e) {
-      debugPrint('Error recording site location: $e');
+      developer.log('Error recording site location: $e');
       return false;
     }
   }

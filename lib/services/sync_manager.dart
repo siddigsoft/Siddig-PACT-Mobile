@@ -169,10 +169,11 @@ class SyncManager {
       // Group logs by visit ID for efficiency
       final Map<String, List<LocationLog>> groupedLogs = {};
       for (final log in logs) {
-        if (!groupedLogs.containsKey(log.visitId)) {
-          groupedLogs[log.visitId] = [];
+        final key = log.visitId ?? log.userId ?? 'unknown';
+        if (!groupedLogs.containsKey(key)) {
+          groupedLogs[key] = [];
         }
-        groupedLogs[log.visitId]!.add(log);
+        groupedLogs[key]!.add(log);
       }
 
       // Sync each group
