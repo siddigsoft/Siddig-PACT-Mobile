@@ -208,14 +208,13 @@ class LocationTrackingService {
       initialDelay: const Duration(seconds: 10),
       frequency: const Duration(minutes: 15),
       constraints: Constraints(
-        networkType: NetworkType.not_required,
         requiresBatteryNotLow: false,
         requiresCharging: false,
         requiresDeviceIdle: false,
         requiresStorageNotLow: false,
       ),
       inputData: {'visitId': _currentVisitId},
-      existingWorkPolicy: ExistingWorkPolicy.replace,
+      existingWorkPolicy: ExistingPeriodicWorkPolicy.replace,
     );
 
     debugPrint('Background location tracking task registered');

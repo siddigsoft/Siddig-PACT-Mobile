@@ -35,12 +35,12 @@ dependencies:
   google_maps_flutter: ^2.5.0
   location: ^5.0.3
   geolocator: ^11.0.0        # For GPS tracking
-  workmanager: ^0.5.2        # For background tasks
+  workmanager: ^0.9.0+3        # For background tasks
   hive: ^2.2.3              # Secure NoSQL database
   shared_preferences: ^2.2.2  # For local storage
   hive_flutter: ^1.1.0       # Hive Flutter integration
   flutter_secure_storage: ^9.0.0 # For storing encryption keys
-  flutter_local_notifications: ^16.3.2 # For local notifications
+  flutter_local_notifications: ^19.4.2 # For local notifications
   connectivity_plus: ^7.0.0  # For network connectivity
   uuid: ^4.4.0              # For generating unique IDs
   encrypt: ^5.0.3           # For encryption
@@ -114,6 +114,7 @@ flutter:
     - assets/images/pact_consultancy_pact_cover.jpg
     - assets/images/placeholders/
     - assets/icons/
+    - shorebird.yaml
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
