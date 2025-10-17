@@ -165,9 +165,9 @@ class _FieldOperationsEnhancedScreenState
     // Update collector status
     if (_authService.currentUser != null) {
       await _authService.supabase
-          .from('profiles')
+          .from('Users')
           .update({'status': hasConnectivity ? 'online' : 'offline'})
-          .eq('id', _authService.currentUser!.id);
+          .eq('UID', _authService.currentUser!.id);
     }
   }
 
@@ -600,9 +600,9 @@ class _FieldOperationsEnhancedScreenState
     try {
       // Save status to Supabase
       await _authService.supabase
-          .from('profiles')
+          .from('Users')
           .update({'status': newStatus ? 'online' : 'offline'})
-          .eq('id', _authService.currentUser!.id);
+          .eq('UID', _authService.currentUser!.id);
 
       setState(() {
         _isOnline = newStatus;

@@ -182,10 +182,11 @@ class _FormsScreenState extends State<FormsScreen> {
   Widget _buildHeader() {
     return ModernAppHeader(
       title: 'Forms',
+      centerTitle: true,
       showBackButton: true,
       onLeadingIconPressed: () {
         HapticFeedback.lightImpact();
-        // Navigation logic would go here
+        Navigator.pop(context);
       },
       actions: [
         HeaderActionButton(

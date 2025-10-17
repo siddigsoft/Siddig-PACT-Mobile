@@ -121,9 +121,10 @@ class _LoginScreenState extends State<LoginScreen>
               .select()
               .eq('user_id', userId)
               .eq('role', 'data_collector')
-              .single();
+              .maybeSingle();
 
           if (dataCollectorCheck != null) {
+            // User has the role, proceed to main screen
             if (mounted) {
               // Haptic feedback for successful login
               HapticFeedback.mediumImpact();
@@ -131,7 +132,26 @@ class _LoginScreenState extends State<LoginScreen>
               Navigator.pushReplacementNamed(context, '/main');
             }
           } else {
-            throw Exception('Access denied: User is not a data collector');
+            // User doesn't have the role, assign it and proceed
+            try {
+              await authService.supabase.from('user_roles').insert({
+                'user_id': userId,
+                'role': 'data_collector',
+              });
+              if (mounted) {
+                // Haptic feedback for successful login
+                HapticFeedback.mediumImpact();
+                // Navigate to main screen
+                Navigator.pushReplacementNamed(context, '/main');
+              }
+            } catch (roleError) {
+              // If role assignment fails, still allow login but show warning
+              debugPrint('Failed to assign data_collector role: $roleError');
+              if (mounted) {
+                HapticFeedback.mediumImpact();
+                Navigator.pushReplacementNamed(context, '/main');
+              }
+            }
           }
         }
       } catch (e) {

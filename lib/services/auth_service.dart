@@ -35,21 +35,45 @@ class AuthService {
     if (user == null) return;
 
     try {
-      // Check if user profile exists
+      // Check if user profile exists in Users table
       final profile = await supabase
-          .from('profiles')
+          .from('Users')
           .select()
-          .eq('id', user.id)
+          .eq('UID', user.id)
           .maybeSingle();
 
       if (profile == null) {
-        // Create new profile if doesn't exist
-        await supabase.from('profiles').insert({
-          'id': user.id,
-          'email': user.email,
-          'full_name': user.userMetadata?['full_name'] ?? user.email?.split('@')[0],
-          'avatar_url': user.userMetadata?['avatar_url'],
+        // Create new user profile if doesn't exist
+        await supabase.from('Users').insert({
+          'UID': user.id,
+          'Display name': user.userMetadata?['full_name'] ?? user.email?.split('@')[0] ?? 'User',
+          'Email': user.email,
+          'phone': user.userMetadata?['phone'],
+          'Providers': ['email'],
+          'Provider type': 'email',
+          'Created at': DateTime.now().toIso8601String(),
+          'Last sign in at': DateTime.now().toIso8601String(),
           'status': 'online',
+        });
+      } else {
+        // Update last sign in time
+        await supabase.from('Users').update({
+          'Last sign in at': DateTime.now().toIso8601String(),
+        }).eq('UID', user.id);
+      }
+
+      // Ensure user has data_collector role
+      final role = await supabase
+          .from('user_roles')
+          .select()
+          .eq('user_id', user.id)
+          .eq('role', 'data_collector')
+          .maybeSingle();
+
+      if (role == null) {
+        await supabase.from('user_roles').insert({
+          'user_id': user.id,
+          'role': 'data_collector',
         });
       }
     } catch (e) {
@@ -88,15 +112,16 @@ class AuthService {
     }
   }
 
-  // Sign up with email and password
   Future<AuthResponse> signUp({
     required String email,
     required String password,
+    String? name,
   }) async {
     try {
       final response = await supabase.auth.signUp(
         email: email,
         password: password,
+        data: name != null ? {'full_name': name} : null,
       );
       return response;
     } on AuthException catch (e) {

@@ -30,6 +30,25 @@ class ModernAppHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final titleWidget = Text(
+      title,
+      textAlign: centerTitle ? TextAlign.center : TextAlign.left,
+      style: GoogleFonts.poppins(
+        fontSize: 22,
+        fontWeight: FontWeight.w600,
+        color: textColor ?? AppColors.textDark,
+        letterSpacing: 0.2,
+        height: 1.2,
+      ),
+      overflow: TextOverflow.ellipsis,
+      maxLines: 1,
+    ).animate().fadeIn(duration: 400.ms).slideY(
+          begin: 0.2,
+          end: 0,
+          duration: 400.ms,
+          curve: Curves.easeOutQuad,
+        );
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
@@ -50,41 +69,21 @@ class ModernAppHeader extends StatelessWidget {
       child: SafeArea(
         bottom: false,
         child: Row(
-          mainAxisAlignment: centerTitle
-              ? MainAxisAlignment.center
+          mainAxisAlignment: centerTitle 
+              ? MainAxisAlignment.center 
               : MainAxisAlignment.spaceBetween,
-          children: [
+          children: <Widget>[
             if (showBackButton || leadingIcon != null)
               _buildLeadingButton(context)
             else if (centerTitle)
               const Spacer(flex: 1),
-
             Expanded(
               flex: 4,
-              child:
-                  Text(
-                        title,
-                        textAlign: centerTitle
-                            ? TextAlign.center
-                            : TextAlign.left,
-                        style: GoogleFonts.poppins(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w600,
-                          color: textColor ?? AppColors.textDark,
-                          letterSpacing: 0.5,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      )
-                      .animate()
-                      .fadeIn(duration: 400.ms)
-                      .slideY(
-                        begin: 0.2,
-                        end: 0,
-                        duration: 400.ms,
-                        curve: Curves.easeOutQuad,
-                      ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: titleWidget,
+              ),
             ),
-
             if (actions != null)
               Row(
                 mainAxisSize: MainAxisSize.min,
@@ -96,7 +95,7 @@ class ModernAppHeader extends StatelessWidget {
                 }).toList(),
               )
             else if (centerTitle)
-              const Spacer(flex: 1),
+              const Spacer(flex: 1)
           ],
         ),
       ),
