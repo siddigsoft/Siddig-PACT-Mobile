@@ -277,11 +277,13 @@ class _RegisterScreenState extends State<RegisterScreen>
                   children: [
                     const Icon(Icons.check_circle, color: Colors.white),
                     const SizedBox(width: 12),
-                    Text(
-                      'Registration successful! Please check your email to confirm your account.',
-                      style: GoogleFonts.poppins(
-                        fontWeight: FontWeight.w500,
-                        fontSize: 14,
+                    Expanded(
+                      child: Text(
+                        'Registration successful! Please check your email to confirm your account.',
+                        style: GoogleFonts.poppins(
+                          fontWeight: FontWeight.w500,
+                          fontSize: 14,
+                        ),
                       ),
                     ),
                   ],
