@@ -7,6 +7,9 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:geocoding/geocoding.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 import '../models/site_visit.dart';
 import '../models/visit_status.dart';
@@ -15,6 +18,8 @@ import '../services/auth_service.dart';
 import '../services/location_tracking_service.dart';
 import '../services/sync_manager.dart';
 import '../services/mmp_file_service.dart';
+import '../l10n/app_localizations.dart';
+import '../widgets/language_switcher.dart';
 import '../services/geographical_task_service.dart';
 import '../services/task_assignment_service.dart';
 import '../services/journey_service.dart';
@@ -47,6 +52,7 @@ class _FieldOperationsEnhancedScreenState
   bool _showMenu = false;
   bool _isLoading = true;
   bool _isSyncing = false;
+  bool _showTaskDashboard = true; // true = Tasks, false = Map
 
   // Map controller
   // Google Map controller for map operations
@@ -95,7 +101,6 @@ class _FieldOperationsEnhancedScreenState
   List<SiteVisitWithDistance> _nearbyTasks = [];
   List<SiteVisit> _acceptedTasks = [];
   bool _isLoadingTasks = false;
-  bool _showTaskDashboard = true; // Show dashboard by default
 
   @override
   void initState() {
@@ -307,12 +312,28 @@ class _FieldOperationsEnhancedScreenState
       }
 
       final visitData = await _siteVisitService.getAssignedSiteVisits(userId);
-      final visits = visitData.map((data) => SiteVisit.fromJson(data)).toList();
+      final allVisits = visitData.map((data) => SiteVisit.fromJson(data)).toList();
+
+      // Filter visits by current location if on mobile
+      List<SiteVisit> filteredVisits;
+      if (!kIsWeb) {
+        final currentCity = await _getCurrentCity();
+        if (currentCity != null) {
+          // Filter visits where site_code matches current city
+          filteredVisits = allVisits.where((visit) => visit.siteCode == currentCity).toList();
+        } else {
+          // If location not available, show all visits
+          filteredVisits = allVisits;
+        }
+      } else {
+        // On web, show all visits (location filtering not reliable)
+        filteredVisits = allVisits;
+      }
 
       if (mounted) {
         setState(() {
-          _availableVisits = visits;
-          _myVisits = visits.where((v) => v.assignedTo == userId).toList();
+          _availableVisits = filteredVisits;
+          _myVisits = filteredVisits.where((v) => v.assignedTo == userId).toList();
           _isLoading = false;
         });
       }
@@ -340,6 +361,27 @@ class _FieldOperationsEnhancedScreenState
   Future<void> _generateExampleVisits() async {
     // Implementation removed as we now use real data from Supabase
     await _loadVisits();
+  }
+
+  Future<String?> _getCurrentCity() async {
+    if (kIsWeb) {
+      // On web, we can't reliably get location without user interaction
+      // Return null to show all visits
+      return null;
+    }
+    try {
+      Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+      List<Placemark> placemarks = await placemarkFromCoordinates(
+        position.latitude,
+        position.longitude,
+      );
+      return placemarks.first.locality; // e.g., "Kampala"
+    } catch (e) {
+      debugPrint('Error getting current city: $e');
+      return null;
+    }
   }
 
   // Select a visit
@@ -640,18 +682,15 @@ class _FieldOperationsEnhancedScreenState
 
   @override
   Widget build(BuildContext context) {
+    final screenHeight = MediaQuery.of(context).size.height;
+    final orientation = MediaQuery.of(context).orientation;
+    
     return Scaffold(
       key: _scaffoldKey,
       backgroundColor: AppColors.backgroundGray,
       drawer: CustomDrawerMenu(
         currentUser: _authService.currentUser,
         onClose: () => _scaffoldKey.currentState?.closeDrawer(),
-      ),
-      floatingActionButton: _showTaskDashboard ? null : FloatingActionButton(
-        heroTag: 'addVisit',
-        onPressed: () => _showVisitAssignmentSheet(),
-        backgroundColor: AppColors.accentGreen,
-        child: const Icon(Icons.add),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       body: Stack(
@@ -660,7 +699,18 @@ class _FieldOperationsEnhancedScreenState
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _buildHeader(),
+                // Make header height responsive to screen size and orientation
+                ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxHeight: orientation == Orientation.portrait 
+                      ? screenHeight * 0.12  // Max 12% of screen height in portrait
+                      : screenHeight * 0.18, // Max 18% in landscape
+                    minHeight: orientation == Orientation.portrait
+                      ? 60.0  // Minimum height for usability
+                      : 50.0,
+                  ),
+                  child: _buildHeader(),
+                ),
                 Expanded(
                   child: _isLoading
                       ? const Center(child: CircularProgressIndicator())
@@ -757,7 +807,7 @@ class _FieldOperationsEnhancedScreenState
 
   Widget _buildHeader() {
     return ModernAppHeader(
-      title: _showTaskDashboard ? 'Available Tasks' : 'Field Operations',
+      title: _showTaskDashboard ? AppLocalizations.of(context)!.availableTasks : AppLocalizations.of(context)!.fieldOperations,
       actions: [
         HeaderActionButton(
           icon: _showTaskDashboard ? Icons.map : Icons.assignment,
@@ -802,6 +852,8 @@ class _FieldOperationsEnhancedScreenState
             _scaffoldKey.currentState?.openDrawer();
           },
         ),
+        const SizedBox(width: 8),
+        const LanguageSwitcher(),
       ],
     );
   }

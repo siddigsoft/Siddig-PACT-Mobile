@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../theme/app_colors.dart';
+import '../../l10n/app_localizations.dart';
 
 class CustomBottomNavigationBar extends StatelessWidget {
   final int currentIndex;
@@ -69,11 +70,11 @@ class CustomBottomNavigationBar extends StatelessWidget {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
-                  _buildNavItem(0, 'Home', Icons.home_outlined),
-                  _buildNavItem(1, 'Forms', Icons.article_outlined),
-                  _buildNavItem(2, 'Equipment', Icons.build_outlined),
-                  _buildNavItem(3, 'Safety', Icons.shield_outlined),
-                  _buildNavItem(4, 'Chat', Icons.chat_bubble_outline),
+                  _buildNavItem(0, AppLocalizations.of(context)!.home, Icons.home_outlined),
+                  _buildNavItem(1, AppLocalizations.of(context)!.forms, Icons.article_outlined),
+                  _buildNavItem(2, AppLocalizations.of(context)!.equipment, Icons.build_outlined),
+                  _buildNavItem(3, AppLocalizations.of(context)!.safety, Icons.shield_outlined),
+                  _buildNavItem(4, AppLocalizations.of(context)!.chat, Icons.chat_bubble_outline),
                 ],
               ),
             ),

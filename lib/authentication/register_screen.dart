@@ -6,6 +6,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_colors.dart';
 import '../services/auth_service.dart';
+import '../l10n/app_localizations.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -498,7 +499,7 @@ class _RegisterScreenState extends State<RegisterScreen>
                     Expanded(
                       child:
                           Text(
-                                'Create Account',
+                                AppLocalizations.of(context)!.createAccount,
                                 textAlign: TextAlign.center,
                                 style: GoogleFonts.poppins(
                                   fontSize: 24,
@@ -1056,8 +1057,8 @@ class _RegisterScreenState extends State<RegisterScreen>
                                                 mainAxisAlignment:
                                                     MainAxisAlignment.center,
                                                 children: [
-                                                  const Text(
-                                                    'CREATE ACCOUNT',
+                                                  Text(
+                                                    AppLocalizations.of(context)!.createAccountCaps,
                                                     style: TextStyle(
                                                       fontSize: 16,
                                                       fontWeight:
@@ -1114,7 +1115,7 @@ class _RegisterScreenState extends State<RegisterScreen>
                                             MainAxisAlignment.center,
                                         children: [
                                           Text(
-                                            'Already have an account?',
+                                            AppLocalizations.of(context)!.alreadyHaveAccount,
                                             style: GoogleFonts.poppins(
                                               color: AppColors.textLight,
                                               fontSize: 14,

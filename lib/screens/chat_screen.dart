@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../l10n/app_localizations.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key});
@@ -65,7 +66,7 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
           const SizedBox(width: 8),
           Text(
-            'Chat',
+            AppLocalizations.of(context)!.chat,
             style: GoogleFonts.poppins(
               fontSize: 18,
               fontWeight: FontWeight.w600,
@@ -117,26 +118,26 @@ class _ChatScreenState extends State<ChatScreen> {
 
         // Sample messages
         _buildReceivedMessage(
-          'Hi there! How can I help you today?',
-          'PACT Support',
+          AppLocalizations.of(context)!.hiHowCanIHelp,
+          AppLocalizations.of(context)!.pactSupport,
           DateTime.now().subtract(const Duration(hours: 1)),
         ),
         _buildSentMessage(
-          'I need information about equipment maintenance.',
+          AppLocalizations.of(context)!.needEquipmentInfo,
           DateTime.now().subtract(const Duration(minutes: 45)),
         ),
         _buildReceivedMessage(
-          'Sure! I can help with that. What specific equipment are you asking about?',
-          'PACT Support',
+          AppLocalizations.of(context)!.sureWhatEquipment,
+          AppLocalizations.of(context)!.pactSupport,
           DateTime.now().subtract(const Duration(minutes: 40)),
         ),
         _buildSentMessage(
-          'The excavator on site B.',
+          AppLocalizations.of(context)!.excavatorSiteB,
           DateTime.now().subtract(const Duration(minutes: 38)),
         ),
         _buildReceivedMessage(
-          'I\'ve pulled up the maintenance schedule for that excavator. Its next maintenance is due on September 20. Would you like me to send you the full maintenance details?',
-          'PACT Support',
+          AppLocalizations.of(context)!.maintenanceScheduleResponse,
+          AppLocalizations.of(context)!.pactSupport,
           DateTime.now().subtract(const Duration(minutes: 35)),
         ),
       ],
@@ -174,7 +175,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      'Safety Alert',
+                      AppLocalizations.of(context)!.safetyAlert,
                       style: GoogleFonts.poppins(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
@@ -183,7 +184,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Severe weather warning for Site A. All personnel should follow safety protocols and stay informed of updates.',
+                      AppLocalizations.of(context)!.weatherWarningSiteA,
                       style: GoogleFonts.poppins(
                         fontSize: 14,
                         fontWeight: FontWeight.w400,
@@ -393,8 +394,8 @@ class _ChatScreenState extends State<ChatScreen> {
                 ),
                 child: TextField(
                   controller: _messageController,
-                  decoration: const InputDecoration(
-                    hintText: 'Type a message...',
+                  decoration: InputDecoration(
+                    hintText: AppLocalizations.of(context)!.typeAMessage,
                     border: InputBorder.none,
                     isDense: true,
                     contentPadding: EdgeInsets.symmetric(vertical: 8),

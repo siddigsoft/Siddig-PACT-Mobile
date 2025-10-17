@@ -10,6 +10,7 @@ import '../services/auth_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/modern_app_header.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../l10n/app_localizations.dart';
 
 class FormsScreen extends StatefulWidget {
   const FormsScreen({super.key});
@@ -129,7 +130,7 @@ class _FormsScreenState extends State<FormsScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _buildSectionTitle('MMP Files'),
+                      _buildSectionTitle(AppLocalizations.of(context)!.mmpFiles),
                       const SizedBox(height: 12),
                       if (_isLoading)
                         const Center(child: CircularProgressIndicator())
@@ -139,7 +140,7 @@ class _FormsScreenState extends State<FormsScreen> {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Text(
-                                'Please log in to view MMP files',
+                                AppLocalizations.of(context)!.pleaseLogInToViewMMPFiles,
                                 style: GoogleFonts.poppins(
                                   fontSize: 16,
                                   color: AppColors.textLight,
@@ -151,7 +152,7 @@ class _FormsScreenState extends State<FormsScreen> {
                                   // Navigate to login screen
                                   Navigator.pushNamed(context, '/login');
                                 },
-                                child: const Text('Log In'),
+                                child: Text(AppLocalizations.of(context)!.logIn),
                               ),
                             ],
                           ),
@@ -159,7 +160,7 @@ class _FormsScreenState extends State<FormsScreen> {
                       else if (_mmpFiles.isEmpty)
                         Center(
                           child: Text(
-                            'No MMP files available',
+                            AppLocalizations.of(context)!.noMMPFilesAvailable,
                             style: GoogleFonts.poppins(
                               fontSize: 16,
                               color: AppColors.textLight,
@@ -254,7 +255,7 @@ class _FormsScreenState extends State<FormsScreen> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(const SnackBar(content: Text('No file URL available')));
+        ).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context)!.noFileUrlAvailable)));
       }
       return;
     }
@@ -287,18 +288,18 @@ class _FormsScreenState extends State<FormsScreen> {
       );
     } catch (e) {
       if (mounted) {
-        String errorMessage = 'Could not open file';
+        String errorMessage = AppLocalizations.of(context)!.couldNotOpenFile;
         if (e is FormatException) {
-          errorMessage = 'Invalid file URL format';
+          errorMessage = AppLocalizations.of(context)!.invalidFileUrlFormat;
         } else if (e is StateError) {
-          errorMessage = 'Error accessing file URL';
+          errorMessage = AppLocalizations.of(context)!.errorAccessingFileUrl;
         }
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(errorMessage),
             duration: const Duration(seconds: 3),
             action: SnackBarAction(
-              label: 'Dismiss',
+              label: AppLocalizations.of(context)!.dismiss,
               onPressed: () {
                 ScaffoldMessenger.of(context).hideCurrentSnackBar();
               },

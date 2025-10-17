@@ -30,11 +30,23 @@ class ModernAppHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final screenHeight = MediaQuery.of(context).size.height;
+    
+    // Responsive font size based on screen width
+    final titleFontSize = screenWidth < 360 ? 18.0 : 
+                        screenWidth < 480 ? 20.0 : 22.0;
+    
+    // Responsive padding based on screen size
+    final horizontalPadding = screenWidth < 360 ? 12.0 : 
+                             screenWidth < 480 ? 16.0 : 20.0;
+    final verticalPadding = screenHeight < 600 ? 12.0 : 16.0;
+
     final titleWidget = Text(
       title,
       textAlign: centerTitle ? TextAlign.center : TextAlign.left,
       style: GoogleFonts.poppins(
-        fontSize: 22,
+        fontSize: titleFontSize,
         fontWeight: FontWeight.w600,
         color: textColor ?? AppColors.textDark,
         letterSpacing: 0.2,
@@ -51,7 +63,7 @@ class ModernAppHeader extends StatelessWidget {
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      padding: EdgeInsets.symmetric(horizontal: horizontalPadding, vertical: verticalPadding),
       decoration: BoxDecoration(
         color: backgroundColor ?? Colors.white,
         borderRadius: const BorderRadius.only(
@@ -68,35 +80,72 @@ class ModernAppHeader extends StatelessWidget {
       ),
       child: SafeArea(
         bottom: false,
-        child: Row(
-          mainAxisAlignment: centerTitle 
-              ? MainAxisAlignment.center 
-              : MainAxisAlignment.spaceBetween,
-          children: <Widget>[
-            if (showBackButton || leadingIcon != null)
-              _buildLeadingButton(context)
-            else if (centerTitle)
-              const Spacer(flex: 1),
-            Expanded(
-              flex: 4,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                child: titleWidget,
-              ),
-            ),
-            if (actions != null)
-              Row(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final availableWidth = constraints.maxWidth;
+            final hasLeading = showBackButton || leadingIcon != null;
+            final hasActions = actions != null && actions!.isNotEmpty;
+            
+            // Calculate flexible layout based on available space
+            if (availableWidth < 320) {
+              // Very small screens - stack vertically or minimize
+              return Column(
                 mainAxisSize: MainAxisSize.min,
-                children: actions!.map((action) {
-                  return Padding(
-                    padding: const EdgeInsets.only(left: 8),
-                    child: action,
-                  );
-                }).toList(),
-              )
-            else if (centerTitle)
-              const Spacer(flex: 1)
-          ],
+                children: [
+                  if (hasLeading) _buildLeadingButton(context),
+                  const SizedBox(height: 8),
+                  titleWidget,
+                  if (hasActions) ...[
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: actions!.map((action) {
+                        return Padding(
+                          padding: const EdgeInsets.only(left: 4),
+                          child: action,
+                        );
+                      }).toList(),
+                    ),
+                  ],
+                ],
+              );
+            } else {
+              // Normal layout with responsive flex
+              final titleFlex = hasLeading && hasActions ? 3 : 
+                               hasLeading || hasActions ? 4 : 1;
+              
+              return Row(
+                mainAxisAlignment: centerTitle 
+                    ? MainAxisAlignment.center 
+                    : MainAxisAlignment.spaceBetween,
+                children: <Widget>[
+                  if (hasLeading)
+                    _buildLeadingButton(context)
+                  else if (centerTitle)
+                    const Spacer(flex: 1),
+                  Expanded(
+                    flex: titleFlex,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      child: titleWidget,
+                    ),
+                  ),
+                  if (hasActions)
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: actions!.map((action) {
+                        return Padding(
+                          padding: const EdgeInsets.only(left: 4),
+                          child: action,
+                        );
+                      }).toList(),
+                    )
+                  else if (centerTitle)
+                    const Spacer(flex: 1)
+                ],
+              );
+            }
+          },
         ),
       ),
     );
@@ -173,7 +222,16 @@ class HeaderActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    
+    // Responsive sizing for action buttons
+    final buttonSize = screenWidth < 360 ? 36.0 : 44.0;
+    final iconSize = screenWidth < 360 ? 18.0 : 22.0;
+    final padding = screenWidth < 360 ? 6.0 : 10.0;
+
     return Container(
+          width: buttonSize,
+          height: buttonSize,
           decoration: BoxDecoration(
             color: backgroundColor ?? AppColors.backgroundGray,
             borderRadius: BorderRadius.circular(14),
@@ -198,11 +256,11 @@ class HeaderActionButton extends StatelessWidget {
               child: Tooltip(
                 message: tooltip ?? '',
                 child: Padding(
-                  padding: const EdgeInsets.all(10),
+                  padding: EdgeInsets.all(padding),
                   child: Icon(
                     icon,
                     color: color ?? AppColors.textDark,
-                    size: 22,
+                    size: iconSize,
                   ),
                 ),
               ),

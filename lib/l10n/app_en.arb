@@ -1,0 +1,439 @@
+{
+  "@@locale": "en",
+  "appTitle": "PACT Mobile",
+  "@appTitle": {
+    "description": "The title of the application"
+  },
+  "availableTasks": "Available Tasks",
+  "@availableTasks": {
+    "description": "Title for the available tasks screen"
+  },
+  "fieldOperations": "Field Operations",
+  "@fieldOperations": {
+    "description": "Title for the field operations screen"
+  },
+  "tasksInArea": "tasks in your area",
+  "@tasksInArea": {
+    "description": "Subtitle showing number of tasks in area"
+  },
+  "accept": "Accept",
+  "@accept": {
+    "description": "Button text for accepting a task"
+  },
+  "decline": "Decline",
+  "@decline": {
+    "description": "Button text for declining a task"
+  },
+  "noTasksAvailable": "No tasks available",
+  "@noTasksAvailable": {
+    "description": "Message when no tasks are available"
+  },
+  "checkBackLater": "Check back later for new tasks in your area",
+  "@checkBackLater": {
+    "description": "Message encouraging user to check back later"
+  },
+  "login": "Login",
+  "@login": {
+    "description": "Login button text"
+  },
+  "register": "Register",
+  "@register": {
+    "description": "Register button text"
+  },
+  "email": "Email",
+  "@email": {
+    "description": "Email field label"
+  },
+  "password": "Password",
+  "@password": {
+    "description": "Password field label"
+  },
+  "confirmPassword": "Confirm Password",
+  "@confirmPassword": {
+    "description": "Confirm password field label"
+  },
+  "fullName": "Full Name",
+  "@fullName": {
+    "description": "Full name field label"
+  },
+  "phoneNumber": "Phone Number",
+  "@phoneNumber": {
+    "description": "Phone number field label"
+  },
+  "welcome": "Welcome",
+  "@welcome": {
+    "description": "Welcome message"
+  },
+  "welcomeBack": "Welcome Back",
+  "@welcomeBack": {
+    "description": "Welcome back message"
+  },
+  "signInToContinue": "Sign in to continue",
+  "@signInToContinue": {
+    "description": "Sign in prompt"
+  },
+  "createAccount": "Create Account",
+  "@createAccount": {
+    "description": "Create account prompt"
+  },
+  "showMap": "Show Map",
+  "@showMap": {
+    "description": "Button to show map view"
+  },
+  "showTasks": "Show Tasks",
+  "@showTasks": {
+    "description": "Button to show tasks view"
+  },
+  "refresh": "Refresh",
+  "@refresh": {
+    "description": "Refresh button text"
+  },
+  "menu": "Menu",
+  "@menu": {
+    "description": "Menu button text"
+  },
+  "logout": "Logout",
+  "@logout": {
+    "description": "Logout button text"
+  },
+  "settings": "Settings",
+  "@settings": {
+    "description": "Settings menu item"
+  },
+  "language": "Language",
+  "@language": {
+    "description": "Language setting"
+  },
+  "english": "English",
+  "@english": {
+    "description": "English language name"
+  },
+  "arabic": "العربية",
+  "@arabic": {
+    "description": "Arabic language name"
+  },
+  "high": "HIGH",
+  "@high": {
+    "description": "High priority label"
+  },
+  "medium": "MEDIUM",
+  "@medium": {
+    "description": "Medium priority label"
+  },
+  "low": "LOW",
+  "@low": {
+    "description": "Low priority label"
+  },
+  "due": "Due",
+  "@due": {
+    "description": "Due date prefix"
+  },
+  "kmAway": "km away",
+  "@kmAway": {
+    "description": "Distance suffix"
+  },
+  "home": "Home",
+  "@home": {
+    "description": "Home navigation tab"
+  },
+  "forms": "Forms",
+  "@forms": {
+    "description": "Forms navigation tab"
+  },
+  "equipment": "Equipment",
+  "@equipment": {
+    "description": "Equipment navigation tab"
+  },
+  "safety": "Safety",
+  "@safety": {
+    "description": "Safety navigation tab"
+  },
+  "chat": "Chat",
+  "@chat": {
+    "description": "Chat navigation tab"
+  },
+  "forgotPassword": "Forgot Password?",
+  "@forgotPassword": {
+    "description": "Forgot password link text"
+  },
+  "dontHaveAccount": "Don't have an account?",
+  "@dontHaveAccount": {
+    "description": "Prompt to register"
+  },
+  "alreadyHaveAccount": "Already have an account?",
+  "@alreadyHaveAccount": {
+    "description": "Prompt to login"
+  },
+  "signIn": "Sign In",
+  "@signIn": {
+    "description": "Sign in button text"
+  },
+  "signUp": "Sign Up",
+  "@signUp": {
+    "description": "Sign up button text"
+  },
+  "signInToAccount": "Sign in to your Pact Consultancy account",
+  "@signInToAccount": {
+    "description": "Login screen subtitle"
+  },
+  "signInCaps": "SIGN IN",
+  "@signInCaps": {
+    "description": "Sign in button text in caps"
+  },
+  "createAccount": "Create Account",
+  "@createAccount": {
+    "description": "Create account title"
+  },
+  "createAccountCaps": "CREATE ACCOUNT",
+  "@createAccountCaps": {
+    "description": "Create account button text in caps"
+  },
+  "mmpFiles": "MMP Files",
+  "@mmpFiles": {
+    "description": "Section title for MMP files"
+  },
+  "pleaseLogInToViewMMPFiles": "Please log in to view MMP files",
+  "@pleaseLogInToViewMMPFiles": {
+    "description": "Message when user needs to log in to view MMP files"
+  },
+  "logIn": "Log In",
+  "@logIn": {
+    "description": "Log in button text"
+  },
+  "noMMPFilesAvailable": "No MMP files available",
+  "@noMMPFilesAvailable": {
+    "description": "Message when no MMP files are available"
+  },
+  "noFileUrlAvailable": "No file URL available",
+  "@noFileUrlAvailable": {
+    "description": "Error message when file URL is not available"
+  },
+  "couldNotOpenFile": "Could not open file",
+  "@couldNotOpenFile": {
+    "description": "Error message when file cannot be opened"
+  },
+  "invalidFileUrlFormat": "Invalid file URL format",
+  "@invalidFileUrlFormat": {
+    "description": "Error message for invalid URL format"
+  },
+  "errorAccessingFileUrl": "Error accessing file URL",
+  "@errorAccessingFileUrl": {
+    "description": "Error message when accessing file URL fails"
+  },
+  "dismiss": "Dismiss",
+  "@dismiss": {
+    "description": "Dismiss button text for snackbar"
+  },
+  "addNewEquipment": "Add New Equipment",
+  "@addNewEquipment": {
+    "description": "Dialog title for adding new equipment"
+  },
+  "equipmentName": "Equipment Name",
+  "@equipmentName": {
+    "description": "Equipment name field label"
+  },
+  "enterEquipmentName": "Enter equipment name",
+  "@enterEquipmentName": {
+    "description": "Equipment name field hint"
+  },
+  "status": "Status",
+  "@status": {
+    "description": "Status field label"
+  },
+  "nextMaintenanceDate": "Next Maintenance Date",
+  "@nextMaintenanceDate": {
+    "description": "Next maintenance date field label"
+  },
+  "yyyyMmDd": "YYYY-MM-DD",
+  "@yyyyMmDd": {
+    "description": "Date format hint"
+  },
+  "cancel": "Cancel",
+  "@cancel": {
+    "description": "Cancel button text"
+  },
+  "add": "Add",
+  "@add": {
+    "description": "Add button text"
+  },
+  "inspectionForm": "Inspection Form",
+  "@inspectionForm": {
+    "description": "Inspection form dialog title"
+  },
+  "condition": "Condition",
+  "@condition": {
+    "description": "Condition field label"
+  },
+  "enterCurrentCondition": "Enter current condition",
+  "@enterCurrentCondition": {
+    "description": "Condition field hint"
+  },
+  "concerns": "Concerns",
+  "@concerns": {
+    "description": "Concerns field label"
+  },
+  "enterAnyConcerns": "Enter any concerns",
+  "@enterAnyConcerns": {
+    "description": "Concerns field hint"
+  },
+  "recommendations": "Recommendations",
+  "@recommendations": {
+    "description": "Recommendations field label"
+  },
+  "enterRecommendations": "Enter recommendations",
+  "@enterRecommendations": {
+    "description": "Recommendations field hint"
+  },
+  "submit": "Submit",
+  "@submit": {
+    "description": "Submit button text"
+  },
+  "equipment": "Equipment",
+  "@equipment": {
+    "description": "Equipment screen title"
+  },
+  "filterEquipment": "Filter Equipment",
+  "@filterEquipment": {
+    "description": "Filter equipment bottom sheet title"
+  },
+  "searchEquipment": "Search Equipment",
+  "@searchEquipment": {
+    "description": "Search equipment dialog title"
+  },
+  "enterEquipmentNameSearch": "Enter equipment name",
+  "@enterEquipmentNameSearch": {
+    "description": "Search equipment field hint"
+  },
+  "close": "Close",
+  "@close": {
+    "description": "Close button text"
+  },
+  "all": "All",
+  "@all": {
+    "description": "All filter option"
+  },
+  "available": "Available",
+  "@available": {
+    "description": "Available filter option"
+  },
+  "inUse": "In Use",
+  "@inUse": {
+    "description": "In Use filter option"
+  },
+  "needsMaintenance": "Needs Maintenance",
+  "@needsMaintenance": {
+    "description": "Needs Maintenance filter option"
+  },
+  "noEquipmentFound": "No equipment found",
+  "@noEquipmentFound": {
+    "description": "Empty state message for no equipment"
+  },
+  "tapPlusButtonToAddEquipment": "Tap the + button to add equipment",
+  "@tapPlusButtonToAddEquipment": {
+    "description": "Empty state instruction for adding equipment"
+  },
+  "next": "Next",
+  "@next": {
+    "description": "Next prefix for maintenance date"
+  },
+  "checkedIn": "Checked-in",
+  "@checkedIn": {
+    "description": "Checked-in status text"
+  },
+  "checkedOut": "Checked-out",
+  "@checkedOut": {
+    "description": "Checked-out status text"
+  },
+  "nextMaintenance": "Next Maintenance",
+  "@nextMaintenance": {
+    "description": "Next maintenance label"
+  },
+  "safetyHub": "Safety Hub",
+  "@safetyHub": {
+    "description": "Safety hub screen title"
+  },
+  "information": "Information",
+  "@information": {
+    "description": "Information tooltip"
+  },
+  "quickAccess": "Quick Access",
+  "@quickAccess": {
+    "description": "Quick access section title"
+  },
+  "safetyChecklist": "Safety Checklist",
+  "@safetyChecklist": {
+    "description": "Safety checklist item title"
+  },
+  "incidentReport": "Incident Report",
+  "@incidentReport": {
+    "description": "Incident report item title"
+  },
+  "regionalHelplines": "Regional Helplines",
+  "@regionalHelplines": {
+    "description": "Regional helplines item title"
+  },
+  "safetyTipOfTheDay": "Safety Tip of the Day",
+  "@safetyTipOfTheDay": {
+    "description": "Safety tip of the day title"
+  },
+  "ladderInspectionTip": "Always inspect your ladder before use. Check for damage, missing parts, and proper functioning of all components.",
+  "@ladderInspectionTip": {
+    "description": "Safety tip content about ladder inspection"
+  },
+  "viewMoreTips": "View More Tips",
+  "@viewMoreTips": {
+    "description": "View more tips button text"
+  },
+  "localPolice": "Local Police:999",
+  "@localPolice": {
+    "description": "Local police emergency contact"
+  },
+  "pactEmergency": "PACT Emergency:+256700000000",
+  "@pactEmergency": {
+    "description": "PACT emergency contact"
+  },
+  "medicalEmergency": "Medical Emergency:911",
+  "@medicalEmergency": {
+    "description": "Medical emergency contact"
+  },
+  "chat": "Chat",
+  "@chat": {
+    "description": "Chat screen title"
+  },
+  "hiHowCanIHelp": "Hi there! How can I help you today?",
+  "@hiHowCanIHelp": {
+    "description": "Chat greeting message"
+  },
+  "pactSupport": "PACT Support",
+  "@pactSupport": {
+    "description": "Support sender name"
+  },
+  "needEquipmentInfo": "I need information about equipment maintenance.",
+  "@needEquipmentInfo": {
+    "description": "Sample chat message about equipment"
+  },
+  "sureWhatEquipment": "Sure! I can help with that. What specific equipment are you asking about?",
+  "@sureWhatEquipment": {
+    "description": "Support response asking for equipment details"
+  },
+  "excavatorSiteB": "The excavator on site B.",
+  "@excavatorSiteB": {
+    "description": "Sample message specifying equipment"
+  },
+  "maintenanceScheduleResponse": "I've pulled up the maintenance schedule for that excavator. Its next maintenance is due on September 20. Would you like me to send you the full maintenance details?",
+  "@maintenanceScheduleResponse": {
+    "description": "Support response with maintenance information"
+  },
+  "safetyAlert": "Safety Alert",
+  "@safetyAlert": {
+    "description": "Safety alert title"
+  },
+  "weatherWarningSiteA": "Severe weather warning for Site A. All personnel should follow safety protocols and stay informed of updates.",
+  "@weatherWarningSiteA": {
+    "description": "Weather warning alert content"
+  },
+  "typeAMessage": "Type a message...",
+  "@typeAMessage": {
+    "description": "Message input hint text"
+  }
+}

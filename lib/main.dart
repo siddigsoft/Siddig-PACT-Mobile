@@ -3,6 +3,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:provider/provider.dart';
 import 'authentication/login_screen.dart';
 import 'authentication/register_screen.dart';
 import 'authentication/forgot_password_screen.dart';
@@ -10,10 +14,13 @@ import 'screens/main_screen.dart';
 import 'screens/field_operations_enhanced_screen.dart';
 import 'theme/app_colors.dart';
 import 'utils/environment.dart';
+import 'l10n/app_localizations.dart';
+import 'providers/locale_provider.dart';
 import 'services/auth_service.dart';
 import 'services/storage_service.dart';
 import 'services/data_sync_service.dart';
 import 'services/app_config_service.dart';
+import 'l10n/app_localizations.dart';
 
 // Conditionally import web plugins only when needed
 // This prevents errors on non-web platforms
@@ -23,8 +30,24 @@ import 'utils/web_config.dart'
 // Global navigator key to use for navigation from anywhere
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
+Future<void> _requestLocationPermission() async {
+  if (!kIsWeb) {
+    var status = await Permission.location.request();
+    if (status.isGranted) {
+      debugPrint('Location permission granted');
+    } else {
+      debugPrint('Location permission denied');
+    }
+  } else {
+    debugPrint('Running on web - location permissions not requested');
+  }
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Request location permission
+  await _requestLocationPermission();
 
   // Initialize Supabase
   await Supabase.initialize(
@@ -62,7 +85,12 @@ void main() async {
   };
 
   // Runs the main application
-  runApp(MyApp(routeObserver: routeObserver));
+  runApp(
+    ChangeNotifierProvider(
+      create: (context) => LocaleProvider(),
+      child: MyApp(routeObserver: routeObserver),
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {
@@ -72,12 +100,29 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      // App title shown in task switcher
-      title: 'Pact Consultancy',
+    return Consumer<LocaleProvider>(
+      builder: (context, localeProvider, child) {
+        return MaterialApp(
+          // App title shown in task switcher
+          title: 'Pact Consultancy',
 
-      // Removes the debug banner in the top-right corner
-      debugShowCheckedModeBanner: false,
+          // Removes the debug banner in the top-right corner
+          debugShowCheckedModeBanner: false,
+
+          // Reactive locale from provider
+          locale: localeProvider.locale,
+
+          // Localization support
+          localizationsDelegates: [
+            AppLocalizations.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          supportedLocales: const [
+            Locale('en', ''), // English
+            Locale('ar', ''), // Arabic
+          ],
 
       // Define theme using AppColors
       theme: ThemeData(
@@ -111,12 +156,12 @@ class MyApp extends StatelessWidget {
 
       // Define routes for navigation throughout the app
       routes: {
-        '/': (_) => const LoginScreen(),
-        '/login': (_) => const LoginScreen(),
-        '/register': (_) => const RegisterScreen(),
-        '/forgot-password': (_) => const ForgotPasswordScreen(),
-        '/main': (_) => const MainScreen(),
-        '/field-operations': (_) => const FieldOperationsEnhancedScreen(),
+        '/': (_) => LoginScreen(),
+        '/login': (_) => LoginScreen(),
+        '/register': (_) => RegisterScreen(),
+        '/forgot-password': (_) => ForgotPasswordScreen(),
+        '/main': (_) => MainScreen(),
+        '/field-operations': (_) => FieldOperationsEnhancedScreen(),
       },
 
       // Backup with onGenerateRoute for dynamic routes and better debugging
@@ -133,11 +178,11 @@ class MyApp extends StatelessWidget {
             // These should be handled by the routes map above
             // Just a fallback
             final routeBuilders = {
-              '/': (_) => const LoginScreen(),
-              '/login': (_) => const LoginScreen(),
-              '/register': (_) => const RegisterScreen(),
-              '/forgot-password': (_) => const ForgotPasswordScreen(),
-              '/main': (_) => const MainScreen(),
+              '/': (_) => LoginScreen(),
+              '/login': (_) => LoginScreen(),
+              '/register': (_) => RegisterScreen(),
+              '/forgot-password': (_) => ForgotPasswordScreen(),
+              '/main': (_) => MainScreen(),
             };
 
             final builder = routeBuilders[settings.name];
@@ -174,6 +219,8 @@ class MyApp extends StatelessWidget {
 
       // Use global navigator key for navigation
       navigatorKey: navigatorKey,
+    );
+      },
     );
   }
 }

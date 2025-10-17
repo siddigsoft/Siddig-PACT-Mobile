@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/equipment.dart';
 import '../services/equipment_service.dart';
 import '../theme/app_colors.dart';
+import '../l10n/app_localizations.dart';
 
 class EquipmentScreen extends StatefulWidget {
   const EquipmentScreen({super.key});
@@ -60,7 +61,7 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: Text(
-          'Add New Equipment',
+          AppLocalizations.of(context)!.addNewEquipment,
           style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
         ),
         content: SingleChildScrollView(
@@ -69,9 +70,9 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
             children: [
               TextField(
                 controller: nameController,
-                decoration: const InputDecoration(
-                  labelText: 'Equipment Name',
-                  hintText: 'Enter equipment name',
+                decoration: InputDecoration(
+                  labelText: AppLocalizations.of(context)!.equipmentName,
+                  hintText: AppLocalizations.of(context)!.enterEquipmentName,
                 ),
               ),
               const SizedBox(height: 16),
@@ -86,14 +87,14 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
                 onChanged: (value) {
                   selectedStatus = value!;
                 },
-                decoration: const InputDecoration(labelText: 'Status'),
+                decoration: InputDecoration(labelText: AppLocalizations.of(context)!.status),
               ),
               const SizedBox(height: 16),
               TextField(
                 controller: maintenanceDateController,
-                decoration: const InputDecoration(
-                  labelText: 'Next Maintenance Date',
-                  hintText: 'YYYY-MM-DD',
+                decoration: InputDecoration(
+                  labelText: AppLocalizations.of(context)!.nextMaintenanceDate,
+                  hintText: AppLocalizations.of(context)!.yyyyMmDd,
                 ),
               ),
             ],
@@ -102,7 +103,7 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: Text(AppLocalizations.of(context)!.cancel),
           ),
           ElevatedButton(
             onPressed: () async {
@@ -124,7 +125,7 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primaryOrange,
             ),
-            child: const Text('Add'),
+            child: Text(AppLocalizations.of(context)!.add),
           ),
         ],
       ),
@@ -142,7 +143,7 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: Text(
-          'Inspection Form',
+          AppLocalizations.of(context)!.inspectionForm,
           style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
         ),
         content: SingleChildScrollView(
@@ -159,27 +160,27 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
               const SizedBox(height: 16),
               TextField(
                 controller: conditionController,
-                decoration: const InputDecoration(
-                  labelText: 'Condition',
-                  hintText: 'Enter current condition',
+                decoration: InputDecoration(
+                  labelText: AppLocalizations.of(context)!.condition,
+                  hintText: AppLocalizations.of(context)!.enterCurrentCondition,
                 ),
                 maxLines: 2,
               ),
               const SizedBox(height: 16),
               TextField(
                 controller: concernsController,
-                decoration: const InputDecoration(
-                  labelText: 'Concerns',
-                  hintText: 'Enter any concerns',
+                decoration: InputDecoration(
+                  labelText: AppLocalizations.of(context)!.concerns,
+                  hintText: AppLocalizations.of(context)!.enterAnyConcerns,
                 ),
                 maxLines: 3,
               ),
               const SizedBox(height: 16),
               TextField(
                 controller: recommendationsController,
-                decoration: const InputDecoration(
-                  labelText: 'Recommendations',
-                  hintText: 'Enter recommendations',
+                decoration: InputDecoration(
+                  labelText: AppLocalizations.of(context)!.recommendations,
+                  hintText: AppLocalizations.of(context)!.enterRecommendations,
                 ),
                 maxLines: 3,
               ),
@@ -189,7 +190,7 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: Text(AppLocalizations.of(context)!.cancel),
           ),
           ElevatedButton(
             onPressed: () async {
@@ -210,7 +211,7 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primaryOrange,
             ),
-            child: const Text('Submit'),
+            child: Text(AppLocalizations.of(context)!.submit),
           ),
         ],
       ),
@@ -281,7 +282,7 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
                                     ),
                                     const SizedBox(height: 16),
                                     Text(
-                                      'No equipment found',
+                                      AppLocalizations.of(context)!.noEquipmentFound,
                                       style: GoogleFonts.poppins(
                                         fontSize: 18,
                                         fontWeight: FontWeight.w500,
@@ -290,7 +291,7 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
                                     ),
                                     const SizedBox(height: 8),
                                     Text(
-                                      'Tap the + button to add equipment',
+                                      AppLocalizations.of(context)!.tapPlusButtonToAddEquipment,
                                       style: GoogleFonts.poppins(
                                         fontSize: 14,
                                         color: AppColors.textLight,
@@ -356,7 +357,7 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
           ),
           const SizedBox(width: 16),
           Text(
-            'Equipment',
+            AppLocalizations.of(context)!.equipment,
             style: GoogleFonts.poppins(
               fontSize: 24,
               fontWeight: FontWeight.w600,
@@ -376,7 +377,7 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        'Filter Equipment',
+                        AppLocalizations.of(context)!.filterEquipment,
                         style: GoogleFonts.poppins(
                           fontSize: 20,
                           fontWeight: FontWeight.w600,
@@ -403,7 +404,7 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
                 context: context,
                 builder: (context) => AlertDialog(
                   title: Text(
-                    'Search Equipment',
+                    AppLocalizations.of(context)!.searchEquipment,
                     style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
                   ),
                   content: TextField(
@@ -411,15 +412,15 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
                       _searchQuery = value;
                       _loadEquipment();
                     },
-                    decoration: const InputDecoration(
-                      hintText: 'Enter equipment name',
+                    decoration: InputDecoration(
+                      hintText: AppLocalizations.of(context)!.enterEquipmentNameSearch,
                       prefixIcon: Icon(Icons.search),
                     ),
                   ),
                   actions: [
                     TextButton(
                       onPressed: () => Navigator.pop(context),
-                      child: const Text('Close'),
+                      child: Text(AppLocalizations.of(context)!.close),
                     ),
                   ],
                 ),
@@ -438,10 +439,10 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
       physics: const BouncingScrollPhysics(),
       child: Row(
         children: [
-          _buildFilterChip('All', true),
-          _buildFilterChip('Available', false),
-          _buildFilterChip('In Use', false),
-          _buildFilterChip('Needs Maintenance', false),
+          _buildFilterChip(AppLocalizations.of(context)!.all, true),
+          _buildFilterChip(AppLocalizations.of(context)!.available, false),
+          _buildFilterChip(AppLocalizations.of(context)!.inUse, false),
+          _buildFilterChip(AppLocalizations.of(context)!.needsMaintenance, false),
         ],
       ),
     ).animate().fadeIn(duration: 500.ms, delay: 100.ms);
@@ -539,7 +540,7 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
                       ),
                       const SizedBox(width: 8),
                       Text(
-                        'Next: $nextMaintenance',
+                        '${AppLocalizations.of(context)!.next}: $nextMaintenance',
                         style: GoogleFonts.poppins(
                           fontSize: 12,
                           color: AppColors.textLight,
@@ -657,7 +658,7 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
                         children: [
                           Flexible(
                             child: Text(
-                              isCheckedIn ? 'Checked-in' : 'Checked-out',
+                              isCheckedIn ? AppLocalizations.of(context)!.checkedIn : AppLocalizations.of(context)!.checkedOut,
                               style: GoogleFonts.poppins(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w500,
@@ -697,7 +698,7 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
                       MainAxisSize.min, // Prevent unnecessary stretching
                   children: [
                     Text(
-                      'Next Maintenance: ',
+                      '${AppLocalizations.of(context)!.nextMaintenance}: ',
                       style: GoogleFonts.poppins(
                         fontSize: 14,
                         fontWeight: FontWeight.w500,

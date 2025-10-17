@@ -10,6 +10,7 @@ import '../widgets/sos_button.dart';
 import 'safety_checklist_screen.dart';
 import 'incident_report_screen.dart';
 import 'helpline_screen.dart';
+import '../l10n/app_localizations.dart';
 
 class SafetyHubScreen extends StatelessWidget {
   const SafetyHubScreen({super.key});
@@ -30,7 +31,7 @@ class SafetyHubScreen extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _buildSectionTitle('Quick Access'),
+                      _buildSectionTitle(AppLocalizations.of(context)!.quickAccess),
                       const SizedBox(height: 16),
                       _buildQuickAccessItems(),
                       const SizedBox(height: 24),
@@ -51,7 +52,7 @@ class SafetyHubScreen extends StatelessWidget {
   Widget _buildHeader() {
     return Builder(
       builder: (context) => ModernAppHeader(
-        title: 'Safety Hub',
+        title: AppLocalizations.of(context)!.safetyHub,
         showBackButton: true,
         centerTitle: true,
         onLeadingIconPressed: () {
@@ -61,7 +62,7 @@ class SafetyHubScreen extends StatelessWidget {
         actions: [
           HeaderActionButton(
             icon: Icons.info_outline_rounded,
-            tooltip: 'Information',
+            tooltip: AppLocalizations.of(context)!.information,
             onPressed: () {},
           ),
         ],
@@ -90,21 +91,21 @@ class SafetyHubScreen extends StatelessWidget {
           _buildSafetyItem(
             context: context,
             icon: Icons.checklist_rounded,
-            title: 'Safety Checklist',
+            title: AppLocalizations.of(context)!.safetyChecklist,
             iconBackgroundColor: AppColors.accentGreen.withOpacity(0.15),
             iconColor: AppColors.accentGreen,
           ),
           _buildSafetyItem(
             context: context,
             icon: Icons.warning_amber_rounded,
-            title: 'Incident Report',
+            title: AppLocalizations.of(context)!.incidentReport,
             iconBackgroundColor: AppColors.accentYellow.withOpacity(0.15),
             iconColor: AppColors.accentYellow,
           ),
           _buildSafetyItem(
             context: context,
             icon: Icons.support_agent,
-            title: 'Regional Helplines',
+            title: AppLocalizations.of(context)!.regionalHelplines,
             iconBackgroundColor: AppColors.primaryOrange.withOpacity(0.15),
             iconColor: AppColors.primaryOrange,
           ),
@@ -140,21 +141,21 @@ class SafetyHubScreen extends StatelessWidget {
         child: InkWell(
           onTap: () {
             HapticFeedback.mediumImpact();
-            if (title == 'Safety Checklist') {
+            if (title == AppLocalizations.of(context)!.safetyChecklist) {
               Navigator.push(
                 context,
                 MaterialPageRoute(
                   builder: (context) => const SafetyChecklistScreen(),
                 ),
               );
-            } else if (title == 'Incident Report') {
+            } else if (title == AppLocalizations.of(context)!.incidentReport) {
               Navigator.push(
                 context,
                 MaterialPageRoute(
                   builder: (context) => const IncidentReportScreen(),
                 ),
               );
-            } else if (title == 'Regional Helplines') {
+            } else if (title == AppLocalizations.of(context)!.regionalHelplines) {
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (context) => HelplineScreen()),
@@ -195,7 +196,8 @@ class SafetyHubScreen extends StatelessWidget {
   }
 
   Widget _buildSafetyTips() {
-    return Container(
+    return Builder(
+      builder: (context) => Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
             gradient: LinearGradient(
@@ -228,7 +230,7 @@ class SafetyHubScreen extends StatelessWidget {
                   ),
                   const SizedBox(width: 12),
                   Text(
-                    'Safety Tip of the Day',
+                    AppLocalizations.of(context)!.safetyTipOfTheDay,
                     style: GoogleFonts.poppins(
                       fontSize: 18,
                       fontWeight: FontWeight.w600,
@@ -239,7 +241,7 @@ class SafetyHubScreen extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               Text(
-                'Always inspect your ladder before use. Check for damage, missing parts, and proper functioning of all components.',
+                AppLocalizations.of(context)!.ladderInspectionTip,
                 style: GoogleFonts.poppins(fontSize: 15, color: Colors.white),
               ),
               const SizedBox(height: 16),
@@ -261,7 +263,7 @@ class SafetyHubScreen extends StatelessWidget {
                     ),
                   ),
                   child: Text(
-                    'View More Tips',
+                    AppLocalizations.of(context)!.viewMoreTips,
                     style: GoogleFonts.poppins(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
@@ -275,20 +277,20 @@ class SafetyHubScreen extends StatelessWidget {
         )
         .animate()
         .fadeIn(duration: 400.ms, delay: 300.ms)
-        .slideY(begin: 0.2, end: 0, duration: 400.ms);
+        .slideY(begin: 0.2, end: 0, duration: 400.ms)
+    );
   }
 
   Widget _buildEmergencyContact() {
-    return const SOSButton(
-          emergencyContacts: [
-            'Local Police:999',
-            'PACT Emergency:+256700000000',
-            'Medical Emergency:911',
-          ],
-        )
-        .animate()
-        .fadeIn(duration: 400.ms, delay: 400.ms)
-        .slideY(begin: 0.2, end: 0, duration: 400.ms);
+    return Builder(
+      builder: (context) => SOSButton(
+        emergencyContacts: [
+          AppLocalizations.of(context)!.localPolice,
+          AppLocalizations.of(context)!.pactEmergency,
+          AppLocalizations.of(context)!.medicalEmergency,
+        ],
+      ),
+    );
   }
 
   Widget _buildContactInfo(String label, String value) {

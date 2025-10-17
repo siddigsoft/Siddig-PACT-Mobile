@@ -6,6 +6,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_colors.dart';
 import '../services/auth_service.dart';
+import '../l10n/app_localizations.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -304,7 +305,7 @@ class _LoginScreenState extends State<LoginScreen>
 
                     // Welcome Text
                     Text(
-                          'Welcome Back!',
+                          AppLocalizations.of(context)!.welcomeBack,
                           style: GoogleFonts.poppins(
                             fontSize: 34,
                             fontWeight: FontWeight.w700,
@@ -335,7 +336,7 @@ class _LoginScreenState extends State<LoginScreen>
                             borderRadius: BorderRadius.circular(20),
                           ),
                           child: Text(
-                            'Sign in to your Pact Consultancy account',
+                            AppLocalizations.of(context)!.signInToAccount,
                             style: GoogleFonts.poppins(
                               fontSize: 15,
                               fontWeight: FontWeight.w500,
@@ -507,7 +508,7 @@ class _LoginScreenState extends State<LoginScreen>
                                 foregroundColor: AppColors.primaryOrange,
                               ),
                               child: Text(
-                                'Forgot Password?',
+                                AppLocalizations.of(context)!.forgotPassword,
                                 style: GoogleFonts.poppins(
                                   fontWeight: FontWeight.w500,
                                   fontSize: 14,
@@ -573,7 +574,7 @@ class _LoginScreenState extends State<LoginScreen>
                                               MainAxisAlignment.center,
                                           children: [
                                             Text(
-                                              'SIGN IN',
+                                              AppLocalizations.of(context)!.signInCaps,
                                               style: GoogleFonts.poppins(
                                                 fontSize: 16,
                                                 fontWeight: FontWeight.w600,
@@ -895,7 +896,7 @@ class _LoginScreenState extends State<LoginScreen>
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
                                 Text(
-                                  "Don't have an account?",
+                                  AppLocalizations.of(context)!.dontHaveAccount,
                                   style: GoogleFonts.poppins(
                                     color: AppColors.textLight,
                                     fontSize: 15,
@@ -918,7 +919,7 @@ class _LoginScreenState extends State<LoginScreen>
                                     foregroundColor: AppColors.primaryOrange,
                                   ),
                                   child: Text(
-                                    'Sign Up',
+                                    AppLocalizations.of(context)!.signUp,
                                     style: GoogleFonts.poppins(
                                       color: AppColors.primaryOrange,
                                       fontWeight: FontWeight.w600,

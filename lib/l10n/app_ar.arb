@@ -1,0 +1,439 @@
+{
+  "@@locale": "ar",
+  "appTitle": "PACT المحمول",
+  "@appTitle": {
+    "description": "The title of the application"
+  },
+  "availableTasks": "المهام المتاحة",
+  "@availableTasks": {
+    "description": "Title for the available tasks screen"
+  },
+  "fieldOperations": "عمليات الميدان",
+  "@fieldOperations": {
+    "description": "Title for the field operations screen"
+  },
+  "tasksInArea": "مهام في منطقتك",
+  "@tasksInArea": {
+    "description": "Subtitle showing number of tasks in area"
+  },
+  "accept": "قبول",
+  "@accept": {
+    "description": "Button text for accepting a task"
+  },
+  "decline": "رفض",
+  "@decline": {
+    "description": "Button text for declining a task"
+  },
+  "noTasksAvailable": "لا توجد مهام متاحة",
+  "@noTasksAvailable": {
+    "description": "Message when no tasks are available"
+  },
+  "checkBackLater": "تحقق لاحقاً من المهام الجديدة في منطقتك",
+  "@checkBackLater": {
+    "description": "Message encouraging user to check back later"
+  },
+  "login": "تسجيل الدخول",
+  "@login": {
+    "description": "Login button text"
+  },
+  "register": "التسجيل",
+  "@register": {
+    "description": "Register button text"
+  },
+  "email": "البريد الإلكتروني",
+  "@email": {
+    "description": "Email field label"
+  },
+  "password": "كلمة المرور",
+  "@password": {
+    "description": "Password field label"
+  },
+  "confirmPassword": "تأكيد كلمة المرور",
+  "@confirmPassword": {
+    "description": "Confirm password field label"
+  },
+  "fullName": "الاسم الكامل",
+  "@fullName": {
+    "description": "Full name field label"
+  },
+  "phoneNumber": "رقم الهاتف",
+  "@phoneNumber": {
+    "description": "Phone number field label"
+  },
+  "welcome": "مرحباً",
+  "@welcome": {
+    "description": "Welcome message"
+  },
+  "welcomeBack": "مرحباً بعودتك",
+  "@welcomeBack": {
+    "description": "Welcome back message"
+  },
+  "signInToContinue": "سجل الدخول للمتابعة",
+  "@signInToContinue": {
+    "description": "Sign in prompt"
+  },
+  "createAccount": "إنشاء حساب",
+  "@createAccount": {
+    "description": "Create account prompt"
+  },
+  "showMap": "عرض الخريطة",
+  "@showMap": {
+    "description": "Button to show map view"
+  },
+  "showTasks": "عرض المهام",
+  "@showTasks": {
+    "description": "Button to show tasks view"
+  },
+  "refresh": "تحديث",
+  "@refresh": {
+    "description": "Refresh button text"
+  },
+  "menu": "القائمة",
+  "@menu": {
+    "description": "Menu button text"
+  },
+  "logout": "تسجيل الخروج",
+  "@logout": {
+    "description": "Logout button text"
+  },
+  "settings": "الإعدادات",
+  "@settings": {
+    "description": "Settings menu item"
+  },
+  "language": "اللغة",
+  "@language": {
+    "description": "Language setting"
+  },
+  "english": "English",
+  "@english": {
+    "description": "English language name"
+  },
+  "arabic": "العربية",
+  "@arabic": {
+    "description": "Arabic language name"
+  },
+  "high": "عالي",
+  "@high": {
+    "description": "High priority label"
+  },
+  "medium": "متوسط",
+  "@medium": {
+    "description": "Medium priority label"
+  },
+  "low": "منخفض",
+  "@low": {
+    "description": "Low priority label"
+  },
+  "due": "مستحق",
+  "@due": {
+    "description": "Due date prefix"
+  },
+  "kmAway": "كم بعيداً",
+  "@kmAway": {
+    "description": "Distance suffix"
+  },
+  "home": "الرئيسية",
+  "@home": {
+    "description": "Home navigation tab"
+  },
+  "forms": "النماذج",
+  "@forms": {
+    "description": "Forms navigation tab"
+  },
+  "equipment": "المعدات",
+  "@equipment": {
+    "description": "Equipment navigation tab"
+  },
+  "safety": "السلامة",
+  "@safety": {
+    "description": "Safety navigation tab"
+  },
+  "chat": "الدردشة",
+  "@chat": {
+    "description": "Chat navigation tab"
+  },
+  "forgotPassword": "نسيت كلمة المرور؟",
+  "@forgotPassword": {
+    "description": "Forgot password link text"
+  },
+  "dontHaveAccount": "ليس لديك حساب؟",
+  "@dontHaveAccount": {
+    "description": "Prompt to register"
+  },
+  "alreadyHaveAccount": "لديك حساب بالفعل؟",
+  "@alreadyHaveAccount": {
+    "description": "Prompt to login"
+  },
+  "signIn": "تسجيل الدخول",
+  "@signIn": {
+    "description": "Sign in button text"
+  },
+  "signUp": "إنشاء حساب",
+  "@signUp": {
+    "description": "Sign up button text"
+  },
+  "signInToAccount": "سجل الدخول إلى حسابك في شركة باكت للاستشارات",
+  "@signInToAccount": {
+    "description": "Login screen subtitle"
+  },
+  "signInCaps": "تسجيل الدخول",
+  "@signInCaps": {
+    "description": "Sign in button text in caps"
+  },
+  "createAccount": "إنشاء حساب",
+  "@createAccount": {
+    "description": "Create account title"
+  },
+  "createAccountCaps": "إنشاء حساب",
+  "@createAccountCaps": {
+    "description": "Create account button text in caps"
+  },
+  "mmpFiles": "ملفات MMP",
+  "@mmpFiles": {
+    "description": "Section title for MMP files"
+  },
+  "pleaseLogInToViewMMPFiles": "يرجى تسجيل الدخول لعرض ملفات MMP",
+  "@pleaseLogInToViewMMPFiles": {
+    "description": "Message when user needs to log in to view MMP files"
+  },
+  "logIn": "تسجيل الدخول",
+  "@logIn": {
+    "description": "Log in button text"
+  },
+  "noMMPFilesAvailable": "لا توجد ملفات MMP متاحة",
+  "@noMMPFilesAvailable": {
+    "description": "Message when no MMP files are available"
+  },
+  "noFileUrlAvailable": "لا يوجد رابط ملف متاح",
+  "@noFileUrlAvailable": {
+    "description": "Error message when file URL is not available"
+  },
+  "couldNotOpenFile": "لا يمكن فتح الملف",
+  "@couldNotOpenFile": {
+    "description": "Error message when file cannot be opened"
+  },
+  "invalidFileUrlFormat": "تنسيق رابط الملف غير صحيح",
+  "@invalidFileUrlFormat": {
+    "description": "Error message for invalid URL format"
+  },
+  "errorAccessingFileUrl": "خطأ في الوصول إلى رابط الملف",
+  "@errorAccessingFileUrl": {
+    "description": "Error message when accessing file URL fails"
+  },
+  "dismiss": "إغلاق",
+  "@dismiss": {
+    "description": "Dismiss button text for snackbar"
+  },
+  "addNewEquipment": "إضافة معدات جديدة",
+  "@addNewEquipment": {
+    "description": "Dialog title for adding new equipment"
+  },
+  "equipmentName": "اسم المعدات",
+  "@equipmentName": {
+    "description": "Equipment name field label"
+  },
+  "enterEquipmentName": "أدخل اسم المعدات",
+  "@enterEquipmentName": {
+    "description": "Equipment name field hint"
+  },
+  "status": "الحالة",
+  "@status": {
+    "description": "Status field label"
+  },
+  "nextMaintenanceDate": "تاريخ الصيانة التالية",
+  "@nextMaintenanceDate": {
+    "description": "Next maintenance date field label"
+  },
+  "yyyyMmDd": "YYYY-MM-DD",
+  "@yyyyMmDd": {
+    "description": "Date format hint"
+  },
+  "cancel": "إلغاء",
+  "@cancel": {
+    "description": "Cancel button text"
+  },
+  "add": "إضافة",
+  "@add": {
+    "description": "Add button text"
+  },
+  "inspectionForm": "نموذج الفحص",
+  "@inspectionForm": {
+    "description": "Inspection form dialog title"
+  },
+  "condition": "الحالة",
+  "@condition": {
+    "description": "Condition field label"
+  },
+  "enterCurrentCondition": "أدخل الحالة الحالية",
+  "@enterCurrentCondition": {
+    "description": "Condition field hint"
+  },
+  "concerns": "الملاحظات",
+  "@concerns": {
+    "description": "Concerns field label"
+  },
+  "enterAnyConcerns": "أدخل أي ملاحظات",
+  "@enterAnyConcerns": {
+    "description": "Concerns field hint"
+  },
+  "recommendations": "التوصيات",
+  "@recommendations": {
+    "description": "Recommendations field label"
+  },
+  "enterRecommendations": "أدخل التوصيات",
+  "@enterRecommendations": {
+    "description": "Recommendations field hint"
+  },
+  "submit": "إرسال",
+  "@submit": {
+    "description": "Submit button text"
+  },
+  "equipment": "المعدات",
+  "@equipment": {
+    "description": "Equipment screen title"
+  },
+  "filterEquipment": "تصفية المعدات",
+  "@filterEquipment": {
+    "description": "Filter equipment bottom sheet title"
+  },
+  "searchEquipment": "البحث في المعدات",
+  "@searchEquipment": {
+    "description": "Search equipment dialog title"
+  },
+  "enterEquipmentNameSearch": "أدخل اسم المعدات",
+  "@enterEquipmentNameSearch": {
+    "description": "Search equipment field hint"
+  },
+  "close": "إغلاق",
+  "@close": {
+    "description": "Close button text"
+  },
+  "all": "الكل",
+  "@all": {
+    "description": "All filter option"
+  },
+  "available": "متاح",
+  "@available": {
+    "description": "Available filter option"
+  },
+  "inUse": "قيد الاستخدام",
+  "@inUse": {
+    "description": "In Use filter option"
+  },
+  "needsMaintenance": "يحتاج صيانة",
+  "@needsMaintenance": {
+    "description": "Needs Maintenance filter option"
+  },
+  "noEquipmentFound": "لم يتم العثور على معدات",
+  "@noEquipmentFound": {
+    "description": "Empty state message for no equipment"
+  },
+  "tapPlusButtonToAddEquipment": "اضغط على زر + لإضافة معدات",
+  "@tapPlusButtonToAddEquipment": {
+    "description": "Empty state instruction for adding equipment"
+  },
+  "next": "التالي",
+  "@next": {
+    "description": "Next prefix for maintenance date"
+  },
+  "checkedIn": "تم التحقق",
+  "@checkedIn": {
+    "description": "Checked-in status text"
+  },
+  "checkedOut": "تم الخروج",
+  "@checkedOut": {
+    "description": "Checked-out status text"
+  },
+  "nextMaintenance": "الصيانة التالية",
+  "@nextMaintenance": {
+    "description": "Next maintenance label"
+  },
+  "safetyHub": "مركز السلامة",
+  "@safetyHub": {
+    "description": "Safety hub screen title"
+  },
+  "information": "معلومات",
+  "@information": {
+    "description": "Information tooltip"
+  },
+  "quickAccess": "وصول سريع",
+  "@quickAccess": {
+    "description": "Quick access section title"
+  },
+  "safetyChecklist": "قائمة السلامة",
+  "@safetyChecklist": {
+    "description": "Safety checklist item title"
+  },
+  "incidentReport": "تقرير الحادث",
+  "@incidentReport": {
+    "description": "Incident report item title"
+  },
+  "regionalHelplines": "خطوط المساعدة الإقليمية",
+  "@regionalHelplines": {
+    "description": "Regional helplines item title"
+  },
+  "safetyTipOfTheDay": "نصيحة السلامة اليومية",
+  "@safetyTipOfTheDay": {
+    "description": "Safety tip of the day title"
+  },
+  "ladderInspectionTip": "افحص دائماً سلمك قبل الاستخدام. تحقق من التلف، الأجزاء المفقودة، ووظيفة جميع المكونات بشكل صحيح.",
+  "@ladderInspectionTip": {
+    "description": "Safety tip content about ladder inspection"
+  },
+  "viewMoreTips": "عرض المزيد من النصائح",
+  "@viewMoreTips": {
+    "description": "View more tips button text"
+  },
+  "localPolice": "الشرطة المحلية:999",
+  "@localPolice": {
+    "description": "Local police emergency contact"
+  },
+  "pactEmergency": "طوارئ باكت:+256700000000",
+  "@pactEmergency": {
+    "description": "PACT emergency contact"
+  },
+  "medicalEmergency": "طوارئ طبية:911",
+  "@medicalEmergency": {
+    "description": "Medical emergency contact"
+  },
+  "chat": "الدردشة",
+  "@chat": {
+    "description": "Chat screen title"
+  },
+  "hiHowCanIHelp": "مرحباً! كيف يمكنني مساعدتك اليوم؟",
+  "@hiHowCanIHelp": {
+    "description": "Chat greeting message"
+  },
+  "pactSupport": "دعم باكت",
+  "@pactSupport": {
+    "description": "Support sender name"
+  },
+  "needEquipmentInfo": "أحتاج معلومات حول صيانة المعدات.",
+  "@needEquipmentInfo": {
+    "description": "Sample chat message about equipment"
+  },
+  "sureWhatEquipment": "بالتأكيد! يمكنني مساعدتك في ذلك. ما المعدات المحددة التي تسأل عنها؟",
+  "@sureWhatEquipment": {
+    "description": "Support response asking for equipment details"
+  },
+  "excavatorSiteB": "الحفار في الموقع ب.",
+  "@excavatorSiteB": {
+    "description": "Sample message specifying equipment"
+  },
+  "maintenanceScheduleResponse": "لقد استخرجت جدول الصيانة لهذا الحفار. الصيانة التالية مستحقة في 20 سبتمبر. هل تريد مني إرسال تفاصيل الصيانة الكاملة؟",
+  "@maintenanceScheduleResponse": {
+    "description": "Support response with maintenance information"
+  },
+  "safetyAlert": "تنبيه السلامة",
+  "@safetyAlert": {
+    "description": "Safety alert title"
+  },
+  "weatherWarningSiteA": "تحذير طقس شديد للموقع أ. يجب على جميع الموظفين اتباع بروتوكولات السلامة والبقاء على اطلاع بالتحديثات.",
+  "@weatherWarningSiteA": {
+    "description": "Weather warning alert content"
+  },
+  "typeAMessage": "اكتب رسالة...",
+  "@typeAMessage": {
+    "description": "Message input hint text"
+  }
+}
