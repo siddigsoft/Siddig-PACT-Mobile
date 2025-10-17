@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/incident_report.dart';
 import '../services/safety_service.dart';
 import '../theme/app_colors.dart';
+import '../l10n/app_localizations.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 
@@ -68,7 +69,7 @@ class _IncidentReportScreenState extends State<IncidentReportScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: Text(
-          'Report Incident',
+          AppLocalizations.of(context)!.reportIncident,
           style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
         ),
         content: SingleChildScrollView(
@@ -143,6 +144,7 @@ class _IncidentReportScreenState extends State<IncidentReportScreen> {
                       label: const Text('Add Photo'),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.primaryOrange,
+                        foregroundColor: Colors.white, // Ensure text is visible
                       ),
                     ),
                     if (_selectedImages.isNotEmpty)
@@ -186,7 +188,7 @@ class _IncidentReportScreenState extends State<IncidentReportScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: Text(AppLocalizations.of(context)!.cancel),
           ),
           ElevatedButton(
             onPressed: () async {
@@ -218,8 +220,9 @@ class _IncidentReportScreenState extends State<IncidentReportScreen> {
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primaryOrange,
+              foregroundColor: Colors.white, // Ensure text is visible
             ),
-            child: const Text('Submit'),
+            child: Text(AppLocalizations.of(context)!.submit),
           ),
         ],
       ),

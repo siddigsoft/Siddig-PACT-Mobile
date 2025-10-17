@@ -98,12 +98,13 @@ class AppLocalizations {
   String get add => translate('add');
   String get inspectionForm => translate('inspectionForm');
   String get condition => translate('condition');
+  String get submit => translate('submit');
+  String get safetyChecklist => translate('safetyChecklist');
   String get enterCurrentCondition => translate('enterCurrentCondition');
   String get concerns => translate('concerns');
   String get enterAnyConcerns => translate('enterAnyConcerns');
   String get recommendations => translate('recommendations');
   String get enterRecommendations => translate('enterRecommendations');
-  String get submit => translate('submit');
   String get filterEquipment => translate('filterEquipment');
   String get searchEquipment => translate('searchEquipment');
   String get enterEquipmentNameSearch => translate('enterEquipmentNameSearch');
@@ -121,8 +122,8 @@ class AppLocalizations {
   String get safetyHub => translate('safetyHub');
   String get information => translate('information');
   String get quickAccess => translate('quickAccess');
-  String get safetyChecklist => translate('safetyChecklist');
   String get incidentReport => translate('incidentReport');
+  String get reportIncident => translate('reportIncident');
   String get regionalHelplines => translate('regionalHelplines');
   String get safetyTipOfTheDay => translate('safetyTipOfTheDay');
   String get ladderInspectionTip => translate('ladderInspectionTip');

@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/safety_checklist.dart';
 import '../services/safety_service.dart';
 import '../theme/app_colors.dart';
+import '../l10n/app_localizations.dart';
 
 class SafetyChecklistScreen extends StatefulWidget {
   const SafetyChecklistScreen({super.key});
@@ -55,7 +56,7 @@ class _SafetyChecklistScreenState extends State<SafetyChecklistScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: Text(
-          'Safety Checklist',
+          AppLocalizations.of(context)!.safetyChecklist,
           style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
         ),
         content: SingleChildScrollView(
@@ -179,8 +180,9 @@ class _SafetyChecklistScreenState extends State<SafetyChecklistScreen> {
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primaryOrange,
+              foregroundColor: Colors.white, // Ensure text is white for visibility
             ),
-            child: const Text('Submit'),
+            child: Text(AppLocalizations.of(context)!.submit),
           ),
         ],
       ),

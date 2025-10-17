@@ -124,6 +124,7 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primaryOrange,
+              foregroundColor: Colors.white, // Ensure text is visible
             ),
             child: Text(AppLocalizations.of(context)!.add),
           ),
