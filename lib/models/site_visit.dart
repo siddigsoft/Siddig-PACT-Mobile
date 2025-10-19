@@ -11,8 +11,16 @@ class SiteVisit {
   final String notes;
   final String mainActivity;
   final Map<String, dynamic>? location;
-  double? get latitude => location?['latitude'] as double?;
-  double? get longitude => location?['longitude'] as double?;
+  double? get latitude {
+    final lat = location?['latitude'];
+    if (lat == null) return null;
+    return lat is int ? lat.toDouble() : lat as double;
+  }
+  double? get longitude {
+    final lng = location?['longitude'];
+    if (lng == null) return null;
+    return lng is int ? lng.toDouble() : lng as double;
+  }
   String get locationString => location?['description'] as String? ?? '';
   final Map<String, dynamic>? fees;
   final Map<String, dynamic>? visitData;

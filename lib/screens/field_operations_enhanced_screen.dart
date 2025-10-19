@@ -52,7 +52,6 @@ class _FieldOperationsEnhancedScreenState
   bool _showMenu = false;
   bool _isLoading = true;
   bool _isSyncing = false;
-  bool _showTaskDashboard = true; // true = Tasks, false = Map
 
   // Map controller
   // Google Map controller for map operations
@@ -741,7 +740,7 @@ class _FieldOperationsEnhancedScreenState
   }
 
   Widget _buildContent() {
-    return _showTaskDashboard ? _buildTaskDashboardView() : _buildMapView();
+    return _buildMapView();
   }
 
   Widget _buildMapView() {
@@ -796,36 +795,10 @@ class _FieldOperationsEnhancedScreenState
     );
   }
 
-  Widget _buildTaskDashboardView() {
-    return TaskDashboard(
-      availableTasks: _nearbyTasks,
-      onTaskAccepted: _handleTaskAccepted,
-      onTaskDeclined: _handleTaskDeclined,
-      isLoading: _isLoadingTasks,
-    );
-  }
-
   Widget _buildHeader() {
     return ModernAppHeader(
-      title: _showTaskDashboard ? AppLocalizations.of(context)!.availableTasks : AppLocalizations.of(context)!.fieldOperations,
+      title: 'Field Ops',
       actions: [
-        HeaderActionButton(
-          icon: _showTaskDashboard ? Icons.map : Icons.assignment,
-          tooltip: _showTaskDashboard ? 'Show Map' : 'Show Tasks',
-          backgroundColor: Colors.white,
-          color: AppColors.primaryBlue,
-          onPressed: () {
-            HapticFeedback.lightImpact();
-            setState(() {
-              _showTaskDashboard = !_showTaskDashboard;
-            });
-            if (_showTaskDashboard) {
-              _loadNearbyTasks();
-            } else {
-              _loadVisits();
-            }
-          },
-        ),
         const SizedBox(width: 8),
         HeaderActionButton(
           icon: Icons.refresh,
@@ -834,11 +807,7 @@ class _FieldOperationsEnhancedScreenState
           color: AppColors.primaryBlue,
           onPressed: () {
             HapticFeedback.lightImpact();
-            if (_showTaskDashboard) {
-              _loadNearbyTasks();
-            } else {
-              _loadVisits();
-            }
+            _loadVisits();
           },
         ),
         const SizedBox(width: 8),
