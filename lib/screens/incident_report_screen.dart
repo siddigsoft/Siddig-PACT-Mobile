@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import '../models/incident_report.dart';
-import '../services/safety_service.dart';
+import 'package:provider/provider.dart';
+import '../models/safety_report.dart';
+import '../services/local_storage_service.dart';
+import '../providers/sync_provider.dart';
 import '../theme/app_colors.dart';
 import '../l10n/app_localizations.dart';
 import 'dart:io';
@@ -18,8 +19,8 @@ class IncidentReportScreen extends StatefulWidget {
 }
 
 class _IncidentReportScreenState extends State<IncidentReportScreen> {
-  late SafetyService _safetyService;
-  List<IncidentReport> _reports = [];
+  late LocalStorageService _localStorage;
+  List<SafetyReport> _reports = [];
   bool _isLoading = true;
   final _imagePicker = ImagePicker();
   List<String> _selectedImages = [];
@@ -31,14 +32,19 @@ class _IncidentReportScreenState extends State<IncidentReportScreen> {
   }
 
   Future<void> _initializeService() async {
-    final prefs = await SharedPreferences.getInstance();
-    _safetyService = SafetyService(prefs);
+    _localStorage = LocalStorageService();
     _loadReports();
+
+    // Trigger sync when screen loads if online
+    final syncProvider = Provider.of<SyncProvider>(context, listen: false);
+    if (syncProvider.isOnline) {
+      syncProvider.syncSafetyReports();
+    }
   }
 
   Future<void> _loadReports() async {
     setState(() => _isLoading = true);
-    final reports = await _safetyService.getIncidentReports();
+    final reports = _localStorage.getAllSafetyReports();
     setState(() {
       _reports = reports;
       _isLoading = false;
@@ -61,7 +67,7 @@ class _IncidentReportScreenState extends State<IncidentReportScreen> {
     final descriptionController = TextEditingController();
     final witnessesController = TextEditingController();
     final actionController = TextEditingController();
-    IncidentType selectedType = IncidentType.other;
+    String selectedType = 'other';
     bool requiresImmediate = false;
     _selectedImages = [];
 
@@ -76,13 +82,13 @@ class _IncidentReportScreenState extends State<IncidentReportScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              DropdownButtonFormField<IncidentType>(
+              DropdownButtonFormField<String>(
                 value: selectedType,
-                items: IncidentType.values
+                items: ['harassment', 'theft', 'accident', 'medicalEmergency', 'naturalDisaster', 'other']
                     .map(
                       (type) => DropdownMenuItem(
                         value: type,
-                        child: Text(type.toString().split('.').last),
+                        child: Text(type),
                       ),
                     )
                     .toList(),
@@ -194,26 +200,30 @@ class _IncidentReportScreenState extends State<IncidentReportScreen> {
             onPressed: () async {
               if (locationController.text.isNotEmpty &&
                   descriptionController.text.isNotEmpty) {
-                final report = IncidentReport(
+                final report = SafetyReport(
                   id: DateTime.now().millisecondsSinceEpoch.toString(),
-                  date: DateTime.now(),
-                  type: selectedType,
+                  title: 'Incident Report - ${selectedType}',
                   description: descriptionController.text,
+                  status: 'submitted',
+                  createdAt: DateTime.now(),
+                  submittedAt: DateTime.now(),
                   location: locationController.text,
+                  hazards: [selectedType], // Using incident type as hazard
+                  recommendations: actionController.text.isNotEmpty ? [actionController.text] : [],
+                  incidentType: selectedType,
+                  incidentDate: DateTime.now(),
                   witnesses: witnessesController.text
                       .split(',')
                       .map((e) => e.trim())
                       .where((e) => e.isNotEmpty)
                       .toList(),
                   requiresImmediate: requiresImmediate,
-                  actionTaken: actionController.text.isNotEmpty
-                      ? actionController.text
-                      : null,
+                  actionTaken: actionController.text.isNotEmpty ? actionController.text : null,
                   mediaUrls: _selectedImages,
                   reportedBy: 'Current User', // Replace with actual user
                 );
 
-                await _safetyService.addIncidentReport(report);
+                await _localStorage.saveSafetyReport(report);
                 _loadReports();
                 if (mounted) Navigator.pop(context);
               }
@@ -234,12 +244,16 @@ class _IncidentReportScreenState extends State<IncidentReportScreen> {
     return Scaffold(
       backgroundColor: AppColors.backgroundGray,
       appBar: AppBar(
-        title: Text(
-          'Incident Reports',
-          style: GoogleFonts.poppins(
-            fontWeight: FontWeight.w600,
-            color: AppColors.textDark,
-          ),
+        title: Row(
+          children: [
+            Text(
+              'Incident Reports',
+              style: GoogleFonts.poppins(
+                fontWeight: FontWeight.w600,
+                color: AppColors.textDark,
+              ),
+            ),
+          ],
         ),
         backgroundColor: Colors.white,
         elevation: 0,
@@ -260,7 +274,7 @@ class _IncidentReportScreenState extends State<IncidentReportScreen> {
                   margin: const EdgeInsets.only(bottom: 16),
                   child: ListTile(
                     title: Text(
-                      report.type.toString().split('.').last,
+                      report.incidentType ?? 'Incident Report',
                       style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
                     ),
                     subtitle: Column(
@@ -271,12 +285,12 @@ class _IncidentReportScreenState extends State<IncidentReportScreen> {
                           style: GoogleFonts.poppins(),
                         ),
                         Text(
-                          'Date: ${report.date.toString().split('.')[0]}',
+                          'Date: ${report.incidentDate?.toString().split('.')[0] ?? report.createdAt.toString().split('.')[0]}',
                           style: GoogleFonts.poppins(),
                         ),
                       ],
                     ),
-                    trailing: report.requiresImmediate
+                    trailing: report.requiresImmediate == true
                         ? Icon(Icons.warning, color: AppColors.accentRed)
                         : null,
                     onTap: () {
@@ -285,7 +299,7 @@ class _IncidentReportScreenState extends State<IncidentReportScreen> {
                         context: context,
                         builder: (context) => AlertDialog(
                           title: Text(
-                            report.type.toString().split('.').last,
+                            report.incidentType ?? 'Incident Report',
                             style: GoogleFonts.poppins(
                               fontWeight: FontWeight.w600,
                             ),
@@ -298,7 +312,7 @@ class _IncidentReportScreenState extends State<IncidentReportScreen> {
                                 _buildDetailItem('Location', report.location),
                                 _buildDetailItem(
                                   'Date',
-                                  report.date.toString().split('.')[0],
+                                  report.incidentDate?.toString().split('.')[0] ?? report.createdAt.toString().split('.')[0],
                                 ),
                                 _buildDetailItem(
                                   'Description',
@@ -317,7 +331,7 @@ class _IncidentReportScreenState extends State<IncidentReportScreen> {
                                   ),
                                 _buildDetailItem(
                                   'Immediate Attention',
-                                  report.requiresImmediate ? 'Yes' : 'No',
+                                  report.requiresImmediate == true ? 'Yes' : 'No',
                                 ),
                                 if (report.mediaUrls != null &&
                                     report.mediaUrls!.isNotEmpty)

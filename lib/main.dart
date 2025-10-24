@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
@@ -17,11 +18,10 @@ import 'theme/app_colors.dart';
 import 'utils/environment.dart';
 import 'l10n/app_localizations.dart';
 import 'providers/locale_provider.dart';
-import 'services/auth_service.dart';
-import 'services/storage_service.dart';
-import 'services/data_sync_service.dart';
-import 'services/app_config_service.dart';
-import 'l10n/app_localizations.dart';
+import 'providers/sync_provider.dart';
+import 'services/connectivity_service.dart';
+import 'services/local_storage_service.dart';
+import 'services/data_migration_service.dart';
 
 // Conditionally import web plugins only when needed
 // This prevents errors on non-web platforms
@@ -63,6 +63,18 @@ void main() async {
 
   // Initialize Hive for local storage
   await Hive.initFlutter();
+  // Open boxes for offline data storage
+  await Hive.openBox('tasks');
+  await Hive.openBox('equipments');
+  await Hive.openBox('safetyReports');
+  await Hive.openBox('userProfiles');
+  await Hive.openBox('appSettings');
+  await Hive.openBox('mapData');
+  // Open sync status boxes
+  await Hive.openBox('tasks_sync');
+  await Hive.openBox('equipments_sync');
+  await Hive.openBox('safetyReports_sync');
+  await Hive.openBox('userProfiles_sync');
 
   // Initialize web-specific configuration and URL strategy
   configureApp();
@@ -89,10 +101,28 @@ void main() async {
     FlutterError.presentError(details);
   };
 
+  // Initialize services
+  final localStorageService = LocalStorageService();
+  final connectivityService = ConnectivityService(Connectivity());
+  await connectivityService.initialize();
+
+  // Migrate data from SharedPreferences to Hive
+  final migrationService = DataMigrationService(localStorageService);
+  await migrationService.migrateAllData();
+
   // Runs the main application
   runApp(
-    ChangeNotifierProvider(
-      create: (context) => LocaleProvider(),
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (context) => LocaleProvider()),
+        ChangeNotifierProvider(
+          create: (context) => SyncProvider(
+            Supabase.instance.client,
+            localStorageService,
+            connectivityService,
+          ),
+        ),
+      ],
       child: MyApp(routeObserver: routeObserver),
     ),
   );

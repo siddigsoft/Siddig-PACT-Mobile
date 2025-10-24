@@ -4,8 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../theme/app_colors.dart';
+import '../providers/sync_provider.dart';
 
 class AppMenuOverlay extends StatelessWidget {
   final Function() onClose;
@@ -107,6 +109,17 @@ class AppMenuOverlay extends StatelessWidget {
           ),
           _buildMenuItem(
             context,
+            'Sync Data',
+            Icons.sync_rounded,
+            AppColors.primaryBlue,
+            onTap: () async {
+              HapticFeedback.mediumImpact();
+              await _performSync(context);
+              onClose();
+            },
+          ),
+          _buildMenuItem(
+            context,
             'About PACT',
             Icons.info_outline_rounded,
             AppColors.textLight,
@@ -184,6 +197,47 @@ class AppMenuOverlay extends StatelessWidget {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Unable to open email app. Please check if you have an email app installed.'),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _performSync(BuildContext context) async {
+    final syncProvider = Provider.of<SyncProvider>(context, listen: false);
+
+    try {
+      // Show initial sync message
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Starting data synchronization...'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+
+      // Perform full sync
+      await syncProvider.performFullSync();
+
+      // Show success message
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Data synchronization completed successfully!'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      // Show error message
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Sync failed: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 4),
           ),
         );
       }

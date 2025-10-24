@@ -4,9 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:provider/provider.dart';
 import '../models/equipment.dart';
-import '../services/equipment_service.dart';
+import '../services/local_storage_service.dart';
+import '../providers/sync_provider.dart';
 import '../theme/app_colors.dart';
 import '../l10n/app_localizations.dart';
 
@@ -18,7 +19,7 @@ class EquipmentScreen extends StatefulWidget {
 }
 
 class _EquipmentScreenState extends State<EquipmentScreen> {
-  late EquipmentService _equipmentService;
+  late LocalStorageService _localStorage;
   List<Equipment> _equipment = [];
   String _selectedFilter = 'All';
   String _searchQuery = '';
@@ -31,9 +32,14 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
   }
 
   Future<void> _initializeService() async {
-    final prefs = await SharedPreferences.getInstance();
-    _equipmentService = EquipmentService(prefs);
+    _localStorage = LocalStorageService();
     _loadEquipment();
+
+    // Trigger sync when screen loads if online
+    final syncProvider = Provider.of<SyncProvider>(context, listen: false);
+    if (syncProvider.isOnline) {
+      syncProvider.syncEquipment();
+    }
   }
 
   void _loadEquipment() {
@@ -41,13 +47,20 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
       _isLoading = true;
     });
 
-    final equipment = _equipmentService.filterEquipment(
-      status: _selectedFilter == 'All' ? null : _selectedFilter,
-      searchQuery: _searchQuery,
-    );
+    final allEquipment = _localStorage.getAllEquipments();
+
+    // Apply filters
+    List<Equipment> filteredEquipment = allEquipment;
+    if (_selectedFilter != 'All') {
+      filteredEquipment = filteredEquipment.where((eq) => eq.status == _selectedFilter).toList();
+    }
+    if (_searchQuery.isNotEmpty) {
+      filteredEquipment = filteredEquipment.where((eq) =>
+        eq.name.toLowerCase().contains(_searchQuery.toLowerCase())).toList();
+    }
 
     setState(() {
-      _equipment = equipment;
+      _equipment = filteredEquipment;
       _isLoading = false;
     });
   }
@@ -117,7 +130,7 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
                   nextMaintenance: maintenanceDateController.text,
                 );
 
-                await _equipmentService.addEquipment(newEquipment);
+                await _localStorage.saveEquipment(newEquipment);
                 _loadEquipment();
                 if (mounted) Navigator.pop(context);
               }
@@ -204,7 +217,23 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
                   recommendations: recommendationsController.text,
                 );
 
-                await _equipmentService.addInspection(equipment.id, inspection);
+                // Get current equipment and add inspection
+                final currentEquipment = _localStorage.getEquipment(equipment.id);
+                if (currentEquipment != null) {
+                  final updatedInspections = List<Inspection>.from(currentEquipment.inspections ?? []);
+                  updatedInspections.add(inspection);
+
+                  final updatedEquipment = Equipment(
+                    id: currentEquipment.id,
+                    name: currentEquipment.name,
+                    status: currentEquipment.status,
+                    isCheckedIn: currentEquipment.isCheckedIn,
+                    nextMaintenance: currentEquipment.nextMaintenance,
+                    inspections: updatedInspections,
+                  );
+
+                  await _localStorage.saveEquipment(updatedEquipment);
+                }
                 _loadEquipment();
                 if (mounted) Navigator.pop(context);
               }
@@ -262,9 +291,7 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
                                       inspections:
                                           _equipment[index].inspections,
                                     );
-                                    await _equipmentService.updateEquipment(
-                                      updatedEquipment,
-                                    );
+                                    await _localStorage.saveEquipment(updatedEquipment);
                                     _loadEquipment();
                                   },
                                   onTap: () =>

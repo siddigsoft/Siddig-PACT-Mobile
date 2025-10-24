@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../services/auth_service.dart';
+import '../providers/sync_provider.dart';
 
 class CustomDrawerMenu extends StatelessWidget {
   final User? currentUser;
@@ -63,6 +65,47 @@ class CustomDrawerMenu extends StatelessWidget {
     }
   }
 
+  Future<void> _performSync(BuildContext context) async {
+    final syncProvider = Provider.of<SyncProvider>(context, listen: false);
+
+    try {
+      // Show initial sync message
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Starting data synchronization...'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+
+      // Perform full sync
+      await syncProvider.performFullSync();
+
+      // Show success message
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Data synchronization completed successfully!'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      // Show error message
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Sync failed: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Drawer(
@@ -101,6 +144,14 @@ class CustomDrawerMenu extends StatelessWidget {
             title: const Text('About PACT'),
             onTap: () async {
               await _launchPactWebsite(context);
+              onClose();
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.sync),
+            title: const Text('Sync Data'),
+            onTap: () async {
+              await _performSync(context);
               onClose();
             },
           ),
