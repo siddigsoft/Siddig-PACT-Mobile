@@ -13,14 +13,28 @@ class CustomDrawerMenu extends StatelessWidget {
     required this.onClose,
   }) : super(key: key);
 
-  Future<void> _launchPactWebsite() async {
+  Future<void> _launchPactWebsite(BuildContext context) async {
     final url = Uri.parse('https://pactorg1.com/about/');
-    if (await canLaunchUrl(url)) {
-      await launchUrl(url);
+    try {
+      if (await canLaunchUrl(url)) {
+        await launchUrl(url, mode: LaunchMode.externalApplication);
+      } else {
+        // Fallback: try without checking
+        await launchUrl(url, mode: LaunchMode.externalApplication);
+      }
+    } catch (e) {
+      // Show error message to user
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Unable to open website. Please check your internet connection.'),
+          ),
+        );
+      }
     }
   }
 
-  Future<void> _sendFeedback() async {
+  Future<void> _sendFeedback(BuildContext context) async {
     final Uri emailLaunchUri = Uri(
       scheme: 'mailto',
       path: 'francis.b.kaz@gmail.com',
@@ -30,8 +44,22 @@ class CustomDrawerMenu extends StatelessWidget {
       },
     );
 
-    if (await canLaunchUrl(emailLaunchUri)) {
-      await launchUrl(emailLaunchUri);
+    try {
+      if (await canLaunchUrl(emailLaunchUri)) {
+        await launchUrl(emailLaunchUri);
+      } else {
+        // Fallback: try without checking
+        await launchUrl(emailLaunchUri);
+      }
+    } catch (e) {
+      // Show error message to user
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Unable to open email app. Please check if you have an email app installed.'),
+          ),
+        );
+      }
     }
   }
 
@@ -71,16 +99,16 @@ class CustomDrawerMenu extends StatelessWidget {
           ListTile(
             leading: const Icon(Icons.info_outline),
             title: const Text('About PACT'),
-            onTap: () {
-              _launchPactWebsite();
+            onTap: () async {
+              await _launchPactWebsite(context);
               onClose();
             },
           ),
           ListTile(
             leading: const Icon(Icons.help_outline),
             title: const Text('Help & Support'),
-            onTap: () {
-              _sendFeedback();
+            onTap: () async {
+              await _sendFeedback(context);
               onClose();
             },
           ),

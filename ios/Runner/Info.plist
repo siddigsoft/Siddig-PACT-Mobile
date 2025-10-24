@@ -45,6 +45,12 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>https</string>
+		<string>http</string>
+		<string>mailto</string>
+	</array>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>This app needs access to location to show your position on the map.</string>
 	<key>NSLocationAlwaysUsageDescription</key>

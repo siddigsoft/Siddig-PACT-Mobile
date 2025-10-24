@@ -6,10 +6,14 @@ import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart' as latlong;
+import 'package:location/location.dart' as location_package;
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 
 import '../models/site_visit.dart';
 import '../models/visit_status.dart';
@@ -54,26 +58,15 @@ class _FieldOperationsEnhancedScreenState
   bool _isSyncing = false;
 
   // Map controller
-  // Google Map controller for map operations
-  final Completer<GoogleMapController> _mapController =
-      Completer<GoogleMapController>();
-  GoogleMapController?
-  _controller; // Direct reference to controller for immediate access
+  late final MapController _mapController; // flutter_map controller
 
-  // Method to safely get the map controller
-  Future<GoogleMapController?> _getMapController() async {
-    if (_controller != null) return _controller;
-    if (!_mapController.isCompleted) return null;
-    _controller = await _mapController.future;
-    return _controller;
-  }
-
-  Set<Marker> _markers = {};
+  Set<Marker> _markers = {}; // flutter_map markers
+  Set<Polyline> _journeyPolylines = {}; // flutter_map polylines
 
   // Services
   late StreamSubscription<List<ConnectivityResult>> _connectivitySubscription;
   final Connectivity _connectivity = Connectivity();
-  final LocationTrackingService _locationService = LocationTrackingService();
+  late final location_package.Location _locationService;
   final SiteVisitService _siteVisitService = SiteVisitService();
   final AuthService _authService = AuthService();
   final MMPFileService _mmpFileService = MMPFileService();
@@ -81,13 +74,15 @@ class _FieldOperationsEnhancedScreenState
   late final GeographicalTaskService _geographicalTaskService;
   late final TaskAssignmentService _taskAssignmentService;
   late final JourneyService _journeyService;
-  
+  late final LocationTrackingService _locationTrackingService;
+
   // Listen for new MMP files
   StreamSubscription? _mmpFileSubscription;
+  StreamSubscription<Position>? _locationStreamSubscription;
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   // Location
-  LatLng _currentLocation = const LatLng(
+  latlong.LatLng _currentLocation = const latlong.LatLng(
     12.8628,
     30.2176,
   ); // Default center on Sudan
@@ -101,17 +96,29 @@ class _FieldOperationsEnhancedScreenState
   List<SiteVisit> _acceptedTasks = [];
   bool _isLoadingTasks = false;
 
+  // Journey tracking state
+  bool _isTrackingJourney = false;
+  latlong.LatLng? _journeyStartPosition;
+  List<latlong.LatLng> _journeyPath = [];
+  SiteVisit? _currentTrackedTask;
+  StreamSubscription<location_package.LocationData>?
+      _journeyProgressSubscription;
+
+  // OSRM routing state
+  Set<Polyline> _routePolylines = {}; // For OSRM directions
+
   @override
   void initState() {
     super.initState();
+    _mapController = MapController(); // Initialize flutter_map controller
     _initConnectivity();
     _connectivitySubscription = _connectivity.onConnectivityChanged.listen(
       _updateConnectionStatus,
     );
-    
+
     // Initialize notifications
     NotificationService.initialize();
-    
+
     // Listen for new MMP files
     _mmpFileSubscription = _mmpFileService.onNewFiles.listen((files) {
       if (files.isNotEmpty) {
@@ -140,6 +147,11 @@ class _FieldOperationsEnhancedScreenState
   void dispose() {
     _connectivitySubscription.cancel();
     _mmpFileSubscription?.cancel();
+    _locationStreamSubscription?.cancel();
+    _journeyProgressSubscription?.cancel();
+    if (_isTrackingJourney) {
+      _journeyService.stopJourney();
+    }
     super.dispose();
   }
 
@@ -157,8 +169,7 @@ class _FieldOperationsEnhancedScreenState
 
   // Update connection status based on connectivity changes
   Future<void> _updateConnectionStatus(List<ConnectivityResult> results) async {
-    final hasConnectivity =
-        results.contains(ConnectivityResult.mobile) ||
+    final hasConnectivity = results.contains(ConnectivityResult.mobile) ||
         results.contains(ConnectivityResult.wifi) ||
         results.contains(ConnectivityResult.ethernet);
 
@@ -170,16 +181,35 @@ class _FieldOperationsEnhancedScreenState
     if (_authService.currentUser != null) {
       await _authService.supabase
           .from('Users')
-          .update({'status': hasConnectivity ? 'online' : 'offline'})
-          .eq('UID', _authService.currentUser!.id);
+          .update({'status': hasConnectivity ? 'online' : 'offline'}).eq(
+              'UID', _authService.currentUser!.id);
     }
   }
 
   // Initialize location tracking
   Future<void> _initializeLocationTracking() async {
+    _locationService =
+        location_package.Location(); // Initialize location service
+
     try {
-      await _locationService.initialize();
+      bool serviceEnabled = await _locationService.serviceEnabled();
+      if (!serviceEnabled) {
+        serviceEnabled = await _locationService.requestService();
+        if (!serviceEnabled) return;
+      }
+
+      location_package.PermissionStatus permissionGranted =
+          await _locationService.hasPermission();
+      if (permissionGranted == location_package.PermissionStatus.denied) {
+        permissionGranted = await _locationService.requestPermission();
+        if (permissionGranted != location_package.PermissionStatus.granted)
+          return;
+      }
+
       _getCurrentLocation();
+
+      // Start continuous location updates for better accuracy
+      _startLocationStream();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -196,8 +226,11 @@ class _FieldOperationsEnhancedScreenState
 
       // Initialize new task services
       _geographicalTaskService = GeographicalTaskService(_siteVisitService);
-      _taskAssignmentService = TaskAssignmentService(_siteVisitService.supabase, _siteVisitService);
-      _journeyService = JourneyService(_locationService, StaffTrackingService(_siteVisitService.supabase));
+      _taskAssignmentService =
+          TaskAssignmentService(_siteVisitService.supabase, _siteVisitService);
+      _journeyService = JourneyService(LocationTrackingService(),
+          StaffTrackingService(_siteVisitService.supabase));
+      _locationTrackingService = LocationTrackingService();
 
       // Load initial tasks
       await _loadNearbyTasks();
@@ -209,42 +242,154 @@ class _FieldOperationsEnhancedScreenState
   // Get current location
   Future<void> _getCurrentLocation() async {
     try {
-      final position = await _locationService.getCurrentPosition();
+      // First, try to get the last known position for instant feedback
+      Position? lastKnown;
+      try {
+        lastKnown = await Geolocator.getLastKnownPosition();
+        if (lastKnown != null && mounted) {
+          setState(() {
+            _currentLocation =
+                latlong.LatLng(lastKnown!.latitude, lastKnown.longitude);
+          });
+          _updateMapCamera();
+          _updateMarkers();
+          debugPrint(
+              'Using last known location: ${lastKnown.latitude}, ${lastKnown.longitude}');
+        }
+      } catch (e) {
+        debugPrint('No last known position: $e');
+      }
 
-      setState(() {
-        _currentLocation = LatLng(position.latitude, position.longitude);
-      });
+      // Now get fresh, accurate position
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.best,
+        forceAndroidLocationManager:
+            false, // Use FusedLocationProvider on Android for better accuracy
+      );
 
-      _updateMapCamera();
-      _updateMarkers();
+      debugPrint(
+          'Fresh GPS location: ${position.latitude}, ${position.longitude}, accuracy: ${position.accuracy}m');
+
+      if (mounted) {
+        setState(() {
+          _currentLocation =
+              latlong.LatLng(position.latitude, position.longitude);
+        });
+
+        _updateMapCamera();
+        _updateMarkers();
+      }
     } catch (e) {
       debugPrint('Error getting current location: $e');
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+                'Location error: ${e.toString()}. Using default location.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
     }
   }
 
-  // Update map camera
-  Future<void> _updateMapCamera() async {
-    final controller = await _getMapController();
-    if (controller == null) return;
-
-    await controller.animateCamera(
-      CameraUpdate.newLatLngZoom(_currentLocation, 15),
+  // Start continuous location stream for real-time updates
+  void _startLocationStream() {
+    const locationSettings = LocationSettings(
+      accuracy:
+          LocationAccuracy.bestForNavigation, // Best accuracy for navigation
+      distanceFilter: 5, // Update every 5 meters for better tracking
     );
+
+    _locationStreamSubscription = Geolocator.getPositionStream(
+      locationSettings: locationSettings,
+    ).listen(
+      (Position position) {
+        if (mounted) {
+          debugPrint(
+              'Location stream update: ${position.latitude}, ${position.longitude}, accuracy: ${position.accuracy}m');
+          setState(() {
+            _currentLocation =
+                latlong.LatLng(position.latitude, position.longitude);
+          });
+          // Update markers when location changes
+          _updateMarkers();
+        }
+      },
+      onError: (error) {
+        debugPrint('Location stream error: $error');
+      },
+    );
+  }
+
+  // Update map camera
+  void _updateMapCamera() {
+    _mapController.move(_currentLocation,
+        17.0); // Higher zoom for better accuracy visualization
   }
 
   // Update map markers
   void _updateMarkers() {
     final markers = <Marker>{};
 
-    // Add current location marker
+    // Add current location marker (with custom icon if tracking)
     markers.add(
       Marker(
-        markerId: const MarkerId('currentLocation'),
-        position: _currentLocation,
-        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
-        infoWindow: const InfoWindow(
-          title: 'Your Location',
-          snippet: 'You are here',
+        width: 200,
+        height: 90,
+        point: _currentLocation,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Location icon
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: _isTrackingJourney
+                    ? AppColors.primaryOrange
+                    : AppColors.primaryBlue,
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white, width: 3),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.3),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: const Icon(Icons.radio_button_checked,
+                  color: Colors.white, size: 24),
+            ),
+            const SizedBox(height: 4),
+            // Location label below
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.primaryBlue, width: 1.5),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.2),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: const Text(
+                'You are here',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -254,16 +399,94 @@ class _FieldOperationsEnhancedScreenState
       if (visit.latitude != null && visit.longitude != null) {
         markers.add(
           Marker(
-            markerId: MarkerId(visit.id),
-            position: LatLng(visit.latitude!, visit.longitude!),
-            icon: _getMarkerIcon(visit.status),
-            infoWindow: InfoWindow(
-              title: visit.siteName ?? 'Unnamed Site',
-              snippet: visit.locationString.isNotEmpty
-                  ? visit.locationString
-                  : 'No location specified',
+            width: 180,
+            height: 120,
+            point: latlong.LatLng(visit.latitude!, visit.longitude!),
+            child: GestureDetector(
+              onTap: () => _selectVisit(visit),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Visit icon
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: _getMarkerColor(visit.status),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 3),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.3),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: const Icon(Icons.radio_button_checked,
+                        color: Colors.white, size: 22),
+                  ),
+                  const SizedBox(height: 4),
+                  // Visit label below icon
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                          color: _getMarkerColor(visit.status), width: 2),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.25),
+                          blurRadius: 6,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          visit.siteName,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black87,
+                          ),
+                          textAlign: TextAlign.center,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 2),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 6,
+                              height: 6,
+                              decoration: BoxDecoration(
+                                color: _getPriorityColor(visit.priority),
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              visit.priority.toUpperCase(),
+                              style: TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.w600,
+                                color: _getPriorityColor(visit.priority),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
-            onTap: () => _selectVisit(visit),
           ),
         );
       }
@@ -274,25 +497,35 @@ class _FieldOperationsEnhancedScreenState
     });
   }
 
-  // Get marker icon based on visit status
-  BitmapDescriptor _getMarkerIcon(String status) {
+  // Get marker color based on visit status
+  Color _getMarkerColor(String status) {
     switch (visitStatusFromString(status)) {
       case VisitStatus.pending:
       case VisitStatus.available:
-        return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed);
+        return Colors.red;
       case VisitStatus.assigned:
-        return BitmapDescriptor.defaultMarkerWithHue(
-          BitmapDescriptor.hueViolet,
-        );
+        return Colors.purple;
       case VisitStatus.inProgress:
-        return BitmapDescriptor.defaultMarkerWithHue(
-          BitmapDescriptor.hueOrange,
-        );
+        return AppColors.primaryOrange;
       case VisitStatus.completed:
-        return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen);
+        return AppColors.accentGreen;
       case VisitStatus.rejected:
       case VisitStatus.cancelled:
-        return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRose);
+        return Colors.grey;
+    }
+  }
+
+  // Get priority color for labels
+  Color _getPriorityColor(String priority) {
+    switch (priority.toLowerCase()) {
+      case 'high':
+        return Colors.red;
+      case 'medium':
+        return Colors.orange;
+      case 'low':
+        return Colors.green;
+      default:
+        return Colors.grey;
     }
   }
 
@@ -311,7 +544,8 @@ class _FieldOperationsEnhancedScreenState
       }
 
       final visitData = await _siteVisitService.getAssignedSiteVisits(userId);
-      final allVisits = visitData.map((data) => SiteVisit.fromJson(data)).toList();
+      final allVisits =
+          visitData.map((data) => SiteVisit.fromJson(data)).toList();
 
       // Filter visits by current location if on mobile
       List<SiteVisit> filteredVisits;
@@ -319,7 +553,9 @@ class _FieldOperationsEnhancedScreenState
         final currentCity = await _getCurrentCity();
         if (currentCity != null) {
           // Filter visits where site_code matches current city
-          filteredVisits = allVisits.where((visit) => visit.siteCode == currentCity).toList();
+          filteredVisits = allVisits
+              .where((visit) => visit.siteCode == currentCity)
+              .toList();
         } else {
           // If location not available, show all visits
           filteredVisits = allVisits;
@@ -332,7 +568,8 @@ class _FieldOperationsEnhancedScreenState
       if (mounted) {
         setState(() {
           _availableVisits = filteredVisits;
-          _myVisits = filteredVisits.where((v) => v.assignedTo == userId).toList();
+          _myVisits =
+              filteredVisits.where((v) => v.assignedTo == userId).toList();
           _isLoading = false;
         });
       }
@@ -391,6 +628,9 @@ class _FieldOperationsEnhancedScreenState
 
   // Show visit details sheet
   void _showVisitDetailsSheet(SiteVisit visit) {
+    final isTrackedVisit = _currentTrackedTask?.id == visit.id;
+    final isNear = isTrackedVisit && _isNearDestination(visit);
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -399,6 +639,10 @@ class _FieldOperationsEnhancedScreenState
         visit: visit,
         onStatusChanged: (newStatus) =>
             _handleVisitStatusChanged(visit, newStatus),
+        isTrackingJourney: isTrackedVisit && _isTrackingJourney,
+        isNearDestination: isNear,
+        onArrived: isTrackedVisit ? _handleArrived : null,
+        onGetDirections: () => _getDirectionsToVisit(visit),
       ),
     );
   }
@@ -414,14 +658,14 @@ class _FieldOperationsEnhancedScreenState
 
       // If visit was in-progress and is now completed, stop tracking
       if (visitStatus == VisitStatus.completed &&
-          _locationService.getCurrentVisitId() == visit.id) {
-        await _locationService.stopTracking();
+          _locationTrackingService.getCurrentVisitId() == visit.id) {
+        await _locationTrackingService.stopTracking();
       }
 
       // If visit is now in-progress, start tracking
       if (visitStatus == VisitStatus.inProgress &&
-          _locationService.getCurrentVisitId() != visit.id) {
-        await _locationService.startTracking(visit.id);
+          _locationTrackingService.getCurrentVisitId() != visit.id) {
+        await _locationTrackingService.startTracking(visit.id);
       }
 
       // Update visit in Supabase
@@ -528,8 +772,8 @@ class _FieldOperationsEnhancedScreenState
       );
 
       if (response.result == TaskAssignmentResult.success) {
-        // Start journey tracking
-        await _startJourneyForTask(task);
+        // Show dialog to start tracking
+        _showStartTrackingDialog(task);
 
         // Remove from nearby tasks
         setState(() {
@@ -538,13 +782,14 @@ class _FieldOperationsEnhancedScreenState
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Task accepted successfully')),
+            const SnackBar(content: Text('Task accepted successfully')),
           );
         }
       } else {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(response.message ?? 'Failed to accept task')),
+            SnackBar(
+                content: Text(response.message ?? 'Failed to accept task')),
           );
         }
       }
@@ -590,24 +835,262 @@ class _FieldOperationsEnhancedScreenState
   // Start journey tracking for accepted task
   Future<void> _startJourneyForTask(SiteVisit task) async {
     try {
+      _journeyStartPosition = _currentLocation;
+      _currentTrackedTask = task;
+
       final journeyWaypoints = await _journeyService.startJourney(
         assignedTasks: [task],
         startPosition: _currentLocation,
       );
 
-      // Update UI to show journey mode
+      // Initialize polyline from start to destination
+      final destinationLatLng = latlong.LatLng(task.latitude!, task.longitude!);
+
       setState(() {
+        _isTrackingJourney = true;
         _acceptedTasks.add(task);
+        _journeyPath = [_journeyStartPosition!, destinationLatLng];
+
+        // Create orange polyline for journey path
+        _journeyPolylines = {
+          Polyline(
+            points: [_journeyStartPosition!],
+            color: AppColors.primaryOrange,
+            strokeWidth: 5.0,
+          ),
+        };
+      });
+
+      // Listen to location updates for real-time path tracking
+      _journeyProgressSubscription = _locationService.onLocationChanged
+          .listen((location_package.LocationData locationData) {
+        final currentLatLng =
+            latlong.LatLng(locationData.latitude!, locationData.longitude!);
+
+        setState(() {
+          _currentLocation = currentLatLng;
+
+          // Add current position to journey path
+          if (!_journeyPath.contains(currentLatLng)) {
+            _journeyPath.add(currentLatLng);
+          }
+
+          // Update polyline with accumulated path
+          _journeyPolylines = {
+            Polyline(
+              points: _journeyPath,
+              color: AppColors.primaryOrange,
+              strokeWidth: 5.0,
+            ),
+          };
+
+          _updateMarkers();
+        });
+
+        // Update map camera to follow user
+        _updateMapCamera();
       });
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Journey started - location tracking active')),
+          const SnackBar(
+            content: Text('Journey started - location tracking active'),
+            backgroundColor: AppColors.primaryOrange,
+          ),
         );
       }
     } catch (e) {
       debugPrint('Error starting journey: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error starting journey: $e')),
+        );
+      }
     }
+  }
+
+  // Show dialog to confirm starting journey tracking
+  void _showStartTrackingDialog(SiteVisit task) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Ready to Start Journey?'),
+        content: const Text(
+          'Enable location tracking to monitor your route to the site. '
+          'Your path will be displayed on the map with an orange line.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Not Yet'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _startJourneyForTask(task);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primaryOrange,
+            ),
+            child: const Text('Start Tracking'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Check if user is near the destination (within 50 meters)
+  bool _isNearDestination(SiteVisit visit) {
+    if (visit.latitude == null || visit.longitude == null) return false;
+
+    final distance = latlong.Distance().as(
+      latlong.LengthUnit.Meter,
+      _currentLocation,
+      latlong.LatLng(visit.latitude!, visit.longitude!),
+    );
+
+    return distance <= 50; // 50 meters threshold
+  }
+
+  // Handle arrival at destination
+  Future<void> _handleArrived() async {
+    if (_currentTrackedTask == null) return;
+
+    try {
+      // Prepare arrival data for database storage
+      final arrivalData = {
+        'arrival_latitude': _currentLocation.latitude,
+        'arrival_longitude': _currentLocation.longitude,
+        'arrival_timestamp': DateTime.now().toUtc(),
+        'journey_path': _journeyPath
+            .map((point) => {'lat': point.latitude, 'lng': point.longitude})
+            .toList(),
+        'arrival_recorded': true,
+      };
+
+      // Update visit in Supabase with arrival data
+      await _siteVisitService.supabase.from('visits').update({
+        'arrival_latitude': _currentLocation.latitude,
+        'arrival_longitude': _currentLocation.longitude,
+        'arrival_timestamp': DateTime.now().toUtc(),
+        'journey_path': _journeyPath
+            .map((point) => {'lat': point.latitude, 'lng': point.longitude})
+            .toList(),
+        'arrival_recorded': true,
+        'status': VisitStatus.inProgress.toString(),
+        'last_modified': DateTime.now().toUtc(),
+      }).eq('id', _currentTrackedTask!.id);
+
+      // Also update local visitData for consistency
+      final updatedVisit = _currentTrackedTask!.copyWith(
+        visitData: {
+          ..._currentTrackedTask!.visitData ?? {},
+          'arrival': arrivalData,
+        },
+        status: VisitStatus.inProgress.toString(),
+      );
+
+      // Stop tracking but keep the path visible
+      await _journeyProgressSubscription?.cancel();
+      _journeyProgressSubscription = null;
+
+      setState(() {
+        _isTrackingJourney = false;
+        // Update the visit in the list
+        final index =
+            _myVisits.indexWhere((v) => v.id == _currentTrackedTask!.id);
+        if (index != -1) {
+          _myVisits[index] = updatedVisit;
+        }
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Arrival recorded! You can now complete your task.'),
+            backgroundColor: AppColors.accentGreen,
+          ),
+        );
+
+        // Close the details sheet and reload
+        Navigator.pop(context);
+        await _loadVisits();
+      }
+    } catch (e) {
+      debugPrint('Error recording arrival: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error recording arrival: $e')),
+        );
+      }
+    }
+  }
+
+  // Get directions to visit using OSRM
+  Future<void> _getDirectionsToVisit(SiteVisit visit) async {
+    if (visit.latitude == null || visit.longitude == null) return;
+
+    try {
+      final start =
+          '${_currentLocation.longitude},${_currentLocation.latitude}';
+      final end = '${visit.longitude},${visit.latitude}';
+
+      // Use OSRM public API (free, rate-limited)
+      final url =
+          'https://router.project-osrm.org/route/v1/driving/$start;$end?overview=full&geometries=geojson';
+
+      final response = await http.get(Uri.parse(url));
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final route = data['routes'][0]['geometry']['coordinates'] as List;
+
+        final points =
+            route.map((coord) => latlong.LatLng(coord[1], coord[0])).toList();
+
+        setState(() {
+          _routePolylines = {
+            Polyline(
+              points: points,
+              color: Colors.blue,
+              strokeWidth: 4.0,
+              borderColor: Colors.white,
+              borderStrokeWidth: 2.0,
+            ),
+          };
+        });
+
+        // Fit map to show the route
+        if (points.isNotEmpty) {
+          final bounds = LatLngBounds.fromPoints(points);
+          _mapController.fitCamera(
+            CameraFit.bounds(bounds: bounds, padding: const EdgeInsets.all(50)),
+          );
+        }
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Directions loaded')),
+          );
+        }
+      } else {
+        throw Exception('Failed to load directions');
+      }
+    } catch (e) {
+      debugPrint('Error getting directions: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading directions: $e')),
+        );
+      }
+    }
+  }
+
+  // Clear directions
+  void _clearDirections() {
+    setState(() {
+      _routePolylines.clear();
+    });
   }
 
   // Force sync data
@@ -642,8 +1125,8 @@ class _FieldOperationsEnhancedScreenState
       // Save status to Supabase
       await _authService.supabase
           .from('Users')
-          .update({'status': newStatus ? 'online' : 'offline'})
-          .eq('UID', _authService.currentUser!.id);
+          .update({'status': newStatus ? 'online' : 'offline'}).eq(
+              'UID', _authService.currentUser!.id);
 
       setState(() {
         _isOnline = newStatus;
@@ -654,8 +1137,8 @@ class _FieldOperationsEnhancedScreenState
         _forceSyncData();
       } else {
         // If going offline, stop any active tracking
-        if (_locationService.isTrackingEnabled()) {
-          await _locationService.stopTracking();
+        if (_locationTrackingService.isTrackingEnabled()) {
+          await _locationTrackingService.stopTracking();
         }
       }
 
@@ -664,9 +1147,8 @@ class _FieldOperationsEnhancedScreenState
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('You are now ${newStatus ? 'online' : 'offline'}'),
-            backgroundColor: newStatus
-                ? AppColors.accentGreen
-                : AppColors.accentRed,
+            backgroundColor:
+                newStatus ? AppColors.accentGreen : AppColors.accentRed,
           ),
         );
       }
@@ -683,7 +1165,7 @@ class _FieldOperationsEnhancedScreenState
   Widget build(BuildContext context) {
     final screenHeight = MediaQuery.of(context).size.height;
     final orientation = MediaQuery.of(context).orientation;
-    
+
     return Scaffold(
       key: _scaffoldKey,
       backgroundColor: AppColors.backgroundGray,
@@ -701,12 +1183,13 @@ class _FieldOperationsEnhancedScreenState
                 // Make header height responsive to screen size and orientation
                 ConstrainedBox(
                   constraints: BoxConstraints(
-                    maxHeight: orientation == Orientation.portrait 
-                      ? screenHeight * 0.12  // Max 12% of screen height in portrait
-                      : screenHeight * 0.18, // Max 18% in landscape
+                    maxHeight: orientation == Orientation.portrait
+                        ? screenHeight *
+                            0.12 // Max 12% of screen height in portrait
+                        : screenHeight * 0.18, // Max 18% in landscape
                     minHeight: orientation == Orientation.portrait
-                      ? 60.0  // Minimum height for usability
-                      : 50.0,
+                        ? 60.0 // Minimum height for usability
+                        : 50.0,
                   ),
                   child: _buildHeader(),
                 ),
@@ -747,22 +1230,28 @@ class _FieldOperationsEnhancedScreenState
     return Stack(
       children: [
         // Map
-        GoogleMap(
-          initialCameraPosition: CameraPosition(
-            target: _currentLocation,
+        FlutterMap(
+          mapController: _mapController,
+          options: MapOptions(
+            center: _currentLocation,
             zoom: 14.0,
+            onMapReady: () => _updateMapCamera(),
           ),
-          myLocationEnabled: true,
-          myLocationButtonEnabled: false,
-          zoomControlsEnabled: false,
-          mapToolbarEnabled: false,
-          markers: _markers,
-          onMapCreated: (GoogleMapController controller) {
-            if (!_mapController.isCompleted) {
-              _controller = controller;
-              _mapController.complete(controller);
-            }
-          },
+          children: [
+            // Mapbox Tile Layer for better quality (free tier: 50,000 loads/month)
+            TileLayer(
+              urlTemplate:
+                  'https://api.mapbox.com/styles/v1/mapbox/streets-v11/tiles/{z}/{x}/{y}?access_token=pk.eyJ1Ijoia2F6b2ZmaWNpYWwiLCJhIjoiY21oM3JsdzF4MWR4cmYxc2JmdGgwbTFuayJ9.OfGK_50FoWlBkgh3t76Vbw',
+              additionalOptions: {
+                'accessToken':
+                    'pk.eyJ1Ijoia2F6b2ZmaWNpYWwiLCJhIjoiY21oM3JsdzF4MWR4cmYxc2JmdGgwbTFuayJ9.OfGK_50FoWlBkgh3t76Vbw',
+              },
+              userAgentPackageName: 'com.example.pact_mobile',
+            ),
+            MarkerLayer(markers: _markers.toList()),
+            PolylineLayer(
+                polylines: {..._journeyPolylines, ..._routePolylines}.toList()),
+          ],
         ),
 
         // Overlay UI
@@ -791,6 +1280,18 @@ class _FieldOperationsEnhancedScreenState
             child: Icon(Icons.my_location, color: AppColors.primaryBlue),
           ),
         ),
+
+        // Clear directions button (show when routes exist)
+        if (_routePolylines.isNotEmpty)
+          Positioned(
+            right: 16,
+            bottom: 100,
+            child: FloatingActionButton(
+              onPressed: _clearDirections,
+              backgroundColor: Colors.white,
+              child: Icon(Icons.clear, color: Colors.red),
+            ),
+          ),
       ],
     );
   }
@@ -895,15 +1396,15 @@ class _FieldOperationsEnhancedScreenState
                 child: Row(
                   children: [
                     Container(
-                          width: 6,
-                          height: 6,
-                          decoration: BoxDecoration(
-                            color: _isOnline
-                                ? AppColors.accentGreen
-                                : AppColors.accentRed,
-                            shape: BoxShape.circle,
-                          ),
-                        )
+                      width: 6,
+                      height: 6,
+                      decoration: BoxDecoration(
+                        color: _isOnline
+                            ? AppColors.accentGreen
+                            : AppColors.accentRed,
+                        shape: BoxShape.circle,
+                      ),
+                    )
                         .animate(onPlay: (controller) => controller.repeat())
                         .fadeOut(
                           duration: 1.seconds,

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../theme/app_colors.dart';
 
 class AppMenuOverlay extends StatelessWidget {
@@ -38,108 +39,155 @@ class AppMenuOverlay extends StatelessWidget {
 
   Widget _buildMenuCard(BuildContext context) {
     return Container(
-          width: 280,
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.15),
-                blurRadius: 15,
-                spreadRadius: 0,
-                offset: const Offset(0, 5),
-              ),
-            ],
+      width: 280,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.15),
+            blurRadius: 15,
+            spreadRadius: 0,
+            offset: const Offset(0, 5),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _buildHeader(),
-              const Divider(height: 1, thickness: 1),
-              _buildMenuItem(
-                context,
-                'App Settings',
-                Icons.settings_rounded,
-                AppColors.primaryBlue,
-                onTap: () {
-                  HapticFeedback.mediumImpact();
-                  // Navigate to settings
-                  Navigator.pop(context); // Close menu first
-                  onClose();
-                  // Navigator.pushNamed(context, '/settings');
-                },
-              ),
-              _buildMenuItem(
-                context,
-                'Notifications',
-                Icons.notifications_outlined,
-                AppColors.accentYellow,
-                badge: 3,
-                onTap: () {
-                  HapticFeedback.mediumImpact();
-                  // Navigate to notifications
-                  onClose();
-                },
-              ),
-              _buildMenuItem(
-                context,
-                'Profile',
-                Icons.person_outline_rounded,
-                AppColors.primaryOrange,
-                onTap: () {
-                  HapticFeedback.mediumImpact();
-                  // Navigate to profile
-                  onClose();
-                },
-              ),
-              _buildMenuItem(
-                context,
-                'Help & Support',
-                Icons.help_outline_rounded,
-                AppColors.accentGreen,
-                onTap: () {
-                  HapticFeedback.mediumImpact();
-                  // Open help & support
-                  onClose();
-                },
-              ),
-              _buildMenuItem(
-                context,
-                'About PACT',
-                Icons.info_outline_rounded,
-                AppColors.textLight,
-                onTap: () {
-                  HapticFeedback.mediumImpact();
-                  // Open about dialog
-                  onClose();
-                  _showAboutDialog(context);
-                },
-              ),
-              const Divider(height: 1, thickness: 1),
-              _buildMenuItem(
-                context,
-                'Sign Out',
-                Icons.logout_rounded,
-                AppColors.accentRed,
-                onTap: () {
-                  HapticFeedback.mediumImpact();
-                  // Sign out
-                  onClose();
-                  _showSignOutDialog(context);
-                },
-              ),
-            ],
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildHeader(),
+          const Divider(height: 1, thickness: 1),
+          _buildMenuItem(
+            context,
+            'App Settings',
+            Icons.settings_rounded,
+            AppColors.primaryBlue,
+            onTap: () {
+              HapticFeedback.mediumImpact();
+              // Navigate to settings
+              Navigator.pop(context); // Close menu first
+              onClose();
+              // Navigator.pushNamed(context, '/settings');
+            },
           ),
-        )
-        .animate()
-        .fadeIn(duration: 300.ms)
-        .scale(
+          _buildMenuItem(
+            context,
+            'Notifications',
+            Icons.notifications_outlined,
+            AppColors.accentYellow,
+            badge: 3,
+            onTap: () {
+              HapticFeedback.mediumImpact();
+              // Navigate to notifications
+              onClose();
+            },
+          ),
+          _buildMenuItem(
+            context,
+            'Profile',
+            Icons.person_outline_rounded,
+            AppColors.primaryOrange,
+            onTap: () {
+              HapticFeedback.mediumImpact();
+              // Navigate to profile
+              onClose();
+            },
+          ),
+          _buildMenuItem(
+            context,
+            'Help & Support',
+            Icons.help_outline_rounded,
+            AppColors.accentGreen,
+            onTap: () async {
+              HapticFeedback.mediumImpact();
+              await _sendFeedback(context);
+              onClose();
+            },
+          ),
+          _buildMenuItem(
+            context,
+            'About PACT',
+            Icons.info_outline_rounded,
+            AppColors.textLight,
+            onTap: () async {
+              HapticFeedback.mediumImpact();
+              await _launchPactWebsite(context);
+              onClose();
+            },
+          ),
+          const Divider(height: 1, thickness: 1),
+          _buildMenuItem(
+            context,
+            'Sign Out',
+            Icons.logout_rounded,
+            AppColors.accentRed,
+            onTap: () {
+              HapticFeedback.mediumImpact();
+              // Sign out
+              onClose();
+              _showSignOutDialog(context);
+            },
+          ),
+        ],
+      ),
+    ).animate().fadeIn(duration: 300.ms).scale(
           begin: const Offset(0.9, 0.9),
           end: const Offset(1, 1),
           duration: 300.ms,
           curve: Curves.easeOutQuad,
         );
+  }
+
+  Future<void> _launchPactWebsite(BuildContext context) async {
+    final url = Uri.parse('https://pactorg1.com/about/');
+    try {
+      if (await canLaunchUrl(url)) {
+        await launchUrl(url, mode: LaunchMode.externalApplication);
+      } else {
+        // Fallback: try without checking
+        await launchUrl(url, mode: LaunchMode.externalApplication);
+      }
+    } catch (e) {
+      // Show error message to user
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Unable to open website. Please check your internet connection.'),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _sendFeedback(BuildContext context) async {
+    final Uri emailLaunchUri = Uri(
+      scheme: 'mailto',
+      path: 'francis.b.kaz@gmail.com',
+      queryParameters: {
+        'subject': 'PACT Mobile App Feedback',
+        'body':
+            'Dear Developer,\n\nI would like to provide feedback about the PACT Mobile app:\n\n'
+      },
+    );
+
+    try {
+      if (await canLaunchUrl(emailLaunchUri)) {
+        await launchUrl(emailLaunchUri);
+      } else {
+        // Fallback: try without checking
+        await launchUrl(emailLaunchUri);
+      }
+    } catch (e) {
+      // Show error message to user
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Unable to open email app. Please check if you have an email app installed.'),
+          ),
+        );
+      }
+    }
   }
 
   Widget _buildHeader() {
@@ -310,11 +358,24 @@ class AppMenuOverlay extends StatelessWidget {
         ),
         actions: [
           TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _launchPactWebsite(context);
+            },
+            child: Text(
+              'Visit Website',
+              style: GoogleFonts.poppins(
+                color: AppColors.primaryBlue,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          TextButton(
             onPressed: () => Navigator.pop(context),
             child: Text(
               'Close',
               style: GoogleFonts.poppins(
-                color: AppColors.primaryBlue,
+                color: AppColors.textLight,
                 fontWeight: FontWeight.w500,
               ),
             ),

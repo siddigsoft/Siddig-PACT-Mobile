@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:workmanager/workmanager.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import '../models/location_log_model.dart';
 import 'field_operations_repository.dart';
 
@@ -64,6 +65,317 @@ class LocationTrackingService {
   Timer? _backgroundRegistrationTimer;
   bool _isTrackingEnabled = false;
   String? _currentVisitId;
+  List<LocationLog> _currentJourneyPath = [];
+
+  // ===== LOCAL STORAGE METHODS =====
+
+  /// Initialize Hive boxes for local storage
+  static Future<void> initializeLocalStorage() async {
+    await Hive.initFlutter();
+  }
+
+  /// Get location logs box
+  Future<Box> _getLocationLogsBox() async {
+    return await Hive.openBox('location_logs_cache');
+  }
+
+  /// Get journey paths box
+  Future<Box> _getJourneyPathsBox() async {
+    return await Hive.openBox('journey_paths');
+  }
+
+  /// Cache location log locally for offline access
+  Future<void> cacheLocationLogLocally(LocationLog log) async {
+    try {
+      final box = await _getLocationLogsBox();
+      final logKey = '${log.visitId}_${log.timestamp.millisecondsSinceEpoch}';
+
+      await box.put(logKey, {
+        'visitId': log.visitId,
+        'userId': log.userId,
+        'latitude': log.latitude,
+        'longitude': log.longitude,
+        'accuracy': log.accuracy,
+        'speed': log.speed,
+        'heading': log.heading,
+        'altitude': log.altitude,
+        'timestamp': log.timestamp.toIso8601String(),
+        'synced': false,
+        'cached_at': DateTime.now().toIso8601String(),
+      });
+
+      // Add to current journey path
+      _currentJourneyPath.add(log);
+
+      // Update journey path cache
+      if (log.visitId != null) {
+        await _updateJourneyPathCache(log.visitId!);
+      }
+    } catch (e) {
+      debugPrint('Error caching location log locally: $e');
+    }
+  }
+
+  /// Update journey path cache for a visit
+  Future<void> _updateJourneyPathCache(String visitId) async {
+    try {
+      final box = await _getJourneyPathsBox();
+
+      final journeyData = {
+        'visitId': visitId,
+        'path': _currentJourneyPath
+            .map((log) => {
+                  'lat': log.latitude,
+                  'lng': log.longitude,
+                  'timestamp': log.timestamp.toIso8601String(),
+                  'accuracy': log.accuracy,
+                })
+            .toList(),
+        'start_time': _currentJourneyPath.isNotEmpty
+            ? _currentJourneyPath.first.timestamp.toIso8601String()
+            : null,
+        'end_time': _currentJourneyPath.isNotEmpty
+            ? _currentJourneyPath.last.timestamp.toIso8601String()
+            : null,
+        'total_points': _currentJourneyPath.length,
+        'updated_at': DateTime.now().toIso8601String(),
+      };
+
+      await box.put('journey_$visitId', journeyData);
+    } catch (e) {
+      debugPrint('Error updating journey path cache: $e');
+    }
+  }
+
+  /// Get cached journey path for a visit
+  Future<List<Map<String, dynamic>>?> getCachedJourneyPath(
+      String visitId) async {
+    try {
+      final box = await _getJourneyPathsBox();
+      final journeyData = box.get('journey_$visitId');
+
+      if (journeyData == null) return null;
+
+      return List<Map<String, dynamic>>.from(journeyData['path']);
+    } catch (e) {
+      debugPrint('Error getting cached journey path: $e');
+      return null;
+    }
+  }
+
+  /// Get all cached location logs for a visit
+  Future<List<LocationLog>> getCachedLocationLogs(String visitId) async {
+    try {
+      final box = await _getLocationLogsBox();
+      final logs = <LocationLog>[];
+
+      final keys =
+          box.keys.where((key) => key.toString().startsWith('${visitId}_'));
+
+      for (final key in keys) {
+        final logData = box.get(key);
+        if (logData != null) {
+          logs.add(LocationLog(
+            visitId: logData['visitId'],
+            userId: logData['userId'],
+            latitude: logData['latitude'],
+            longitude: logData['longitude'],
+            accuracy: logData['accuracy'],
+            speed: logData['speed'],
+            heading: logData['heading'],
+            altitude: logData['altitude'],
+            timestamp: DateTime.parse(logData['timestamp']),
+          ));
+        }
+      }
+
+      // Sort by timestamp
+      logs.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+
+      return logs;
+    } catch (e) {
+      debugPrint('Error getting cached location logs: $e');
+      return [];
+    }
+  }
+
+  /// Sync cached location logs when online
+  Future<void> syncCachedLocationLogs() async {
+    try {
+      final box = await _getLocationLogsBox();
+      final keys = box.keys.toList();
+
+      for (final key in keys) {
+        final logData = box.get(key);
+        if (logData != null && !(logData['synced'] ?? false)) {
+          try {
+            final log = LocationLog(
+              visitId: logData['visitId'],
+              userId: logData['userId'],
+              latitude: logData['latitude'],
+              longitude: logData['longitude'],
+              accuracy: logData['accuracy'],
+              speed: logData['speed'],
+              heading: logData['heading'],
+              altitude: logData['altitude'],
+              timestamp: DateTime.parse(logData['timestamp']),
+            );
+
+            // Save to repository (which will sync to remote)
+            await _repository.saveLocationLog(log);
+
+            // Mark as synced
+            logData['synced'] = true;
+            await box.put(key, logData);
+          } catch (e) {
+            debugPrint('Failed to sync location log $key: $e');
+          }
+        }
+      }
+
+      debugPrint('Synced cached location logs');
+    } catch (e) {
+      debugPrint('Error syncing cached location logs: $e');
+    }
+  }
+
+  /// Start journey tracking with local storage
+  Future<bool> startJourneyTracking(String visitId) async {
+    _currentJourneyPath.clear();
+    _currentVisitId = visitId;
+
+    // Load existing journey path if available
+    final cachedPath = await getCachedJourneyPath(visitId);
+    if (cachedPath != null && cachedPath.isNotEmpty) {
+      // Convert cached path back to LocationLog objects
+      _currentJourneyPath = cachedPath
+          .map((point) => LocationLog(
+                visitId: visitId,
+                latitude: point['lat'],
+                longitude: point['lng'],
+                accuracy: point['accuracy'] ?? 0.0,
+                timestamp: DateTime.parse(point['timestamp']),
+              ))
+          .toList();
+
+      debugPrint(
+          'Loaded existing journey path with ${_currentJourneyPath.length} points');
+    }
+
+    return await startTracking(visitId);
+  }
+
+  /// Stop journey tracking and save final path
+  Future<void> stopJourneyTracking() async {
+    if (_currentVisitId != null) {
+      await _updateJourneyPathCache(_currentVisitId!);
+    }
+
+    await stopTracking();
+    _currentJourneyPath.clear();
+  }
+
+  /// Get current journey statistics
+  Future<Map<String, dynamic>> getJourneyStats(String visitId) async {
+    try {
+      final journeyPath =
+          _currentVisitId == visitId && _currentJourneyPath.isNotEmpty
+              ? _currentJourneyPath
+              : await getCachedLocationLogs(visitId);
+
+      if (journeyPath.isEmpty) {
+        return {'total_points': 0, 'duration': 0, 'distance': 0.0};
+      }
+
+      final startTime = journeyPath.first.timestamp;
+      final endTime = journeyPath.last.timestamp;
+      final duration = endTime.difference(startTime).inMinutes;
+
+      // Calculate approximate distance (simplified)
+      double totalDistance = 0.0;
+      for (int i = 1; i < journeyPath.length; i++) {
+        final prev = journeyPath[i - 1];
+        final curr = journeyPath[i];
+        // Simple distance calculation (not accurate for large distances)
+        final distance = Geolocator.distanceBetween(
+          prev.latitude,
+          prev.longitude,
+          curr.latitude,
+          curr.longitude,
+        );
+        totalDistance += distance;
+      }
+
+      return {
+        'total_points': journeyPath.length,
+        'duration_minutes': duration,
+        'distance_meters': totalDistance,
+        'start_time': startTime.toIso8601String(),
+        'end_time': endTime.toIso8601String(),
+      };
+    } catch (e) {
+      debugPrint('Error getting journey stats: $e');
+      return {'total_points': 0, 'duration': 0, 'distance': 0.0};
+    }
+  }
+
+  /// Export journey data for reporting
+  Future<Map<String, dynamic>> exportJourneyData(String visitId) async {
+    try {
+      final journeyPath = await getCachedJourneyPath(visitId);
+      final stats = await getJourneyStats(visitId);
+
+      return {
+        'visit_id': visitId,
+        'journey_path': journeyPath,
+        'statistics': stats,
+        'exported_at': DateTime.now().toIso8601String(),
+      };
+    } catch (e) {
+      debugPrint('Error exporting journey data: $e');
+      return {};
+    }
+  }
+
+  /// Clear cached data for a specific visit
+  Future<void> clearVisitCache(String visitId) async {
+    try {
+      final logsBox = await _getLocationLogsBox();
+      final pathsBox = await _getJourneyPathsBox();
+
+      // Remove location logs for this visit
+      final logKeys =
+          logsBox.keys.where((key) => key.toString().startsWith('${visitId}_'));
+      for (final key in logKeys) {
+        await logsBox.delete(key);
+      }
+
+      // Remove journey path
+      await pathsBox.delete('journey_$visitId');
+
+      debugPrint('Cleared cache for visit: $visitId');
+    } catch (e) {
+      debugPrint('Error clearing visit cache: $e');
+    }
+  }
+
+  /// Get cache statistics
+  Future<Map<String, dynamic>> getCacheStats() async {
+    try {
+      final logsBox = await _getLocationLogsBox();
+      final pathsBox = await _getJourneyPathsBox();
+
+      return {
+        'cached_location_logs': logsBox.length,
+        'cached_journey_paths': pathsBox.length,
+        'current_journey_points': _currentJourneyPath.length,
+        'current_visit_id': _currentVisitId,
+      };
+    } catch (e) {
+      debugPrint('Error getting cache stats: $e');
+      return {};
+    }
+  }
 
   // Initialize location service
   Future<void> initialize() async {
@@ -145,6 +457,11 @@ class LocationTrackingService {
 
   // Stop tracking
   Future<void> stopTracking() async {
+    // Save final journey path
+    if (_currentVisitId != null) {
+      await _updateJourneyPathCache(_currentVisitId!);
+    }
+
     // Cancel foreground tracking
     await _positionStreamSubscription?.cancel();
     _positionStreamSubscription = null;
@@ -158,6 +475,7 @@ class LocationTrackingService {
 
     _isTrackingEnabled = false;
     _currentVisitId = null;
+    _currentJourneyPath.clear();
 
     debugPrint('Location tracking stopped');
   }
@@ -176,8 +494,11 @@ class LocationTrackingService {
       altitude: position.altitude,
     );
 
-    // Save location log
+    // Save to repository (for sync)
     await _repository.saveLocationLog(locationLog);
+
+    // Also cache locally for offline access
+    await cacheLocationLogLocally(locationLog);
 
     debugPrint('Location tracked: ${position.latitude}, ${position.longitude}');
   }

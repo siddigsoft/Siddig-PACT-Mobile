@@ -9,11 +9,19 @@ import '../../theme/app_colors.dart';
 class VisitDetailsSheet extends StatefulWidget {
   final SiteVisit visit;
   final Function(String) onStatusChanged;
+  final bool isTrackingJourney;
+  final bool isNearDestination;
+  final VoidCallback? onArrived;
+  final VoidCallback? onGetDirections;
 
   const VisitDetailsSheet({
     super.key,
     required this.visit,
     required this.onStatusChanged,
+    this.isTrackingJourney = false,
+    this.isNearDestination = false,
+    this.onArrived,
+    this.onGetDirections,
   });
 
   @override
@@ -146,8 +154,7 @@ class _VisitDetailsSheetState extends State<VisitDetailsSheet> {
                     icon: Icons.person,
                     iconColor: Colors.purple.shade400,
                     title: 'Client Information',
-                    content:
-                        _visit.visitData?['client_info'] ??
+                    content: _visit.visitData?['client_info'] ??
                         'No client information provided',
                   ),
                   const Divider(),
@@ -273,6 +280,97 @@ class _VisitDetailsSheetState extends State<VisitDetailsSheet> {
   }
 
   Widget _buildActionButtons() {
+    // Show "Arrived" button if tracking and near destination
+    if (widget.isTrackingJourney &&
+        widget.isNearDestination &&
+        widget.onArrived != null) {
+      return Column(
+        children: [
+          _buildButton(
+            label: 'Arrived at Destination',
+            icon: Icons.location_on,
+            color: AppColors.primaryOrange,
+            onPressed: widget.onArrived!,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'You are within 50 meters of the destination',
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey.shade600,
+              fontStyle: FontStyle.italic,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 16),
+          if (widget.onGetDirections != null)
+            _buildButton(
+              label: 'Get Directions',
+              icon: Icons.directions,
+              color: Colors.blue,
+              onPressed: widget.onGetDirections!,
+              filled: false,
+            ),
+        ],
+      );
+    }
+
+    // Show tracking indicator if journey is active
+    if (widget.isTrackingJourney) {
+      return Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppColors.primaryOrange.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: AppColors.primaryOrange.withOpacity(0.3),
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.navigation, color: AppColors.primaryOrange),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Journey in Progress',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.textDark,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Your route is being tracked. Click "Arrived" when you reach the destination.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          if (widget.onGetDirections != null)
+            _buildButton(
+              label: 'Get Directions',
+              icon: Icons.directions,
+              color: Colors.blue,
+              onPressed: widget.onGetDirections!,
+              filled: false,
+            ),
+        ],
+      );
+    }
+
     // Default button if status doesn't match any case
     Widget defaultButton = _buildButton(
       label: 'View Details',
@@ -287,11 +385,24 @@ class _VisitDetailsSheetState extends State<VisitDetailsSheet> {
       case 'pending':
       case 'available':
       case 'assigned':
-        return _buildButton(
-          label: 'Start Visit',
-          icon: Icons.play_arrow,
-          color: Colors.blue,
-          onPressed: () => _updateVisitStatus('in_progress'),
+        return Column(
+          children: [
+            _buildButton(
+              label: 'Start Visit',
+              icon: Icons.play_arrow,
+              color: Colors.blue,
+              onPressed: () => _updateVisitStatus('in_progress'),
+            ),
+            const SizedBox(height: 16),
+            if (widget.onGetDirections != null)
+              _buildButton(
+                label: 'Get Directions',
+                icon: Icons.directions,
+                color: Colors.blue,
+                onPressed: widget.onGetDirections!,
+                filled: false,
+              ),
+          ],
         );
 
       case 'in_progress':
@@ -311,6 +422,15 @@ class _VisitDetailsSheetState extends State<VisitDetailsSheet> {
               onPressed: () => _updateVisitStatus('cancelled'),
               filled: false,
             ),
+            const SizedBox(height: 16),
+            if (widget.onGetDirections != null)
+              _buildButton(
+                label: 'Get Directions',
+                icon: Icons.directions,
+                color: Colors.blue,
+                onPressed: widget.onGetDirections!,
+                filled: false,
+              ),
           ],
         );
 
@@ -344,22 +464,22 @@ class _VisitDetailsSheetState extends State<VisitDetailsSheet> {
     bool filled = true,
   }) {
     return SizedBox(
-          width: double.infinity,
-          child: ElevatedButton.icon(
-            onPressed: onPressed,
-            icon: Icon(icon, color: filled ? Colors.white : color),
-            label: Text(label),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: filled ? color : Colors.white,
-              foregroundColor: filled ? Colors.white : color,
-              side: filled ? null : BorderSide(color: color),
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
+      width: double.infinity,
+      child: ElevatedButton.icon(
+        onPressed: onPressed,
+        icon: Icon(icon, color: filled ? Colors.white : color),
+        label: Text(label),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: filled ? color : Colors.white,
+          foregroundColor: filled ? Colors.white : color,
+          side: filled ? null : BorderSide(color: color),
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
           ),
-        )
+        ),
+      ),
+    )
         .animate()
         .fadeIn(duration: 300.ms)
         .slideY(begin: 0.1, end: 0, duration: 250.ms);

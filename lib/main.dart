@@ -7,6 +7,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'authentication/login_screen.dart';
 import 'authentication/register_screen.dart';
 import 'authentication/forgot_password_screen.dart';
@@ -52,12 +53,16 @@ void main() async {
   // Initialize Supabase
   await Supabase.initialize(
     url: 'https://abznugnirnlrqnnfkein.supabase.co',
-    anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFiem51Z25pcm5scnFubmZrZWluIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTkxMzU2OTEsImV4cCI6MjA3NDcxMTY5MX0.eAX9yrtgr05OVjAn_Wr2Koi92rMaV32EFj70DFfIgdM',
+    anonKey:
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFiem51Z25pcm5scnFubmZrZWluIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTkxMzU2OTEsImV4cCI6MjA3NDcxMTY5MX0.eAX9yrtgr05OVjAn_Wr2Koi92rMaV32EFj70DFfIgdM',
     authOptions: const FlutterAuthClientOptions(
       authFlowType: AuthFlowType.pkce,
       autoRefreshToken: true,
     ),
   );
+
+  // Initialize Hive for local storage
+  await Hive.initFlutter();
 
   // Initialize web-specific configuration and URL strategy
   configureApp();
@@ -124,102 +129,102 @@ class MyApp extends StatelessWidget {
             Locale('ar', ''), // Arabic
           ],
 
-      // Define theme using AppColors
-      theme: ThemeData(
-        primaryColor: AppColors.primaryOrange,
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: AppColors.primaryOrange,
-          primary: AppColors.primaryOrange,
-          secondary: AppColors.primaryBlue,
-          surface: AppColors.primaryWhite,
-          background: AppColors.backgroundGray,
-          brightness: Brightness.light,
-        ),
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          centerTitle: true,
-          iconTheme: IconThemeData(color: AppColors.textDark),
-          titleTextStyle: TextStyle(
-            color: AppColors.textDark,
-            fontSize: 22,
-            fontWeight: FontWeight.w600,
-            letterSpacing: 0.5,
+          // Define theme using AppColors
+          theme: ThemeData(
+            primaryColor: AppColors.primaryOrange,
+            useMaterial3: true,
+            colorScheme: ColorScheme.fromSeed(
+              seedColor: AppColors.primaryOrange,
+              primary: AppColors.primaryOrange,
+              secondary: AppColors.primaryBlue,
+              surface: AppColors.primaryWhite,
+              background: AppColors.backgroundGray,
+              brightness: Brightness.light,
+            ),
+            appBarTheme: const AppBarTheme(
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              centerTitle: true,
+              iconTheme: IconThemeData(color: AppColors.textDark),
+              titleTextStyle: TextStyle(
+                color: AppColors.textDark,
+                fontSize: 22,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.5,
+              ),
+            ),
           ),
-        ),
-      ),
 
-      // Set up routing for proper URL display
-      // Do not set home when using initialRoute
-      initialRoute: '/login',
+          // Set up routing for proper URL display
+          // Do not set home when using initialRoute
+          initialRoute: '/login',
 
-      // Define routes for navigation throughout the app
-      routes: {
-        '/': (_) => LoginScreen(),
-        '/login': (_) => LoginScreen(),
-        '/register': (_) => RegisterScreen(),
-        '/forgot-password': (_) => ForgotPasswordScreen(),
-        '/main': (_) => MainScreen(),
-        '/field-operations': (_) => FieldOperationsEnhancedScreen(),
-      },
+          // Define routes for navigation throughout the app
+          routes: {
+            '/': (_) => LoginScreen(),
+            '/login': (_) => LoginScreen(),
+            '/register': (_) => RegisterScreen(),
+            '/forgot-password': (_) => ForgotPasswordScreen(),
+            '/main': (_) => MainScreen(),
+            '/field-operations': (_) => FieldOperationsEnhancedScreen(),
+          },
 
-      // Backup with onGenerateRoute for dynamic routes and better debugging
-      onGenerateRoute: (settings) {
-        debugPrint('⚠️ Fallback route generation: ${settings.name}');
+          // Backup with onGenerateRoute for dynamic routes and better debugging
+          onGenerateRoute: (settings) {
+            debugPrint('⚠️ Fallback route generation: ${settings.name}');
 
-        // Only for routes not defined in routes map
-        switch (settings.name) {
-          case '/login':
-          case '/register':
-          case '/forgot-password':
-          case '/main':
-          case '/':
-            // These should be handled by the routes map above
-            // Just a fallback
-            final routeBuilders = {
-              '/': (_) => LoginScreen(),
-              '/login': (_) => LoginScreen(),
-              '/register': (_) => RegisterScreen(),
-              '/forgot-password': (_) => ForgotPasswordScreen(),
-              '/main': (_) => MainScreen(),
-            };
+            // Only for routes not defined in routes map
+            switch (settings.name) {
+              case '/login':
+              case '/register':
+              case '/forgot-password':
+              case '/main':
+              case '/':
+                // These should be handled by the routes map above
+                // Just a fallback
+                final routeBuilders = {
+                  '/': (_) => LoginScreen(),
+                  '/login': (_) => LoginScreen(),
+                  '/register': (_) => RegisterScreen(),
+                  '/forgot-password': (_) => ForgotPasswordScreen(),
+                  '/main': (_) => MainScreen(),
+                };
 
-            final builder = routeBuilders[settings.name];
-            if (builder != null) {
-              return PageRouteBuilder(
-                settings: settings,
-                pageBuilder: (context, animation, secondaryAnimation) =>
-                    builder(context),
-                transitionsBuilder:
-                    (context, animation, secondaryAnimation, child) {
+                final builder = routeBuilders[settings.name];
+                if (builder != null) {
+                  return PageRouteBuilder(
+                    settings: settings,
+                    pageBuilder: (context, animation, secondaryAnimation) =>
+                        builder(context),
+                    transitionsBuilder:
+                        (context, animation, secondaryAnimation, child) {
                       return FadeTransition(opacity: animation, child: child);
                     },
-              );
+                  );
+                }
+                return null;
+              default:
+                // If route not found, pass to onUnknownRoute
+                return null;
             }
-            return null;
-          default:
-            // If route not found, pass to onUnknownRoute
-            return null;
-        }
-      },
+          },
 
-      // Handle unknown routes (404 page)
-      onUnknownRoute: (settings) {
-        debugPrint('Unknown route: ${settings.name}');
-        return MaterialPageRoute(
-          builder: (context) => Scaffold(
-            body: Center(child: Text('Page not found: ${settings.name}')),
-          ),
+          // Handle unknown routes (404 page)
+          onUnknownRoute: (settings) {
+            debugPrint('Unknown route: ${settings.name}');
+            return MaterialPageRoute(
+              builder: (context) => Scaffold(
+                body: Center(child: Text('Page not found: ${settings.name}')),
+              ),
+            );
+          },
+
+          // Add route observer for logging navigation
+          navigatorObservers: [if (routeObserver != null) routeObserver!],
+
+          // Use global navigator key for navigation
+          navigatorKey: navigatorKey,
         );
-      },
-
-      // Add route observer for logging navigation
-      navigatorObservers: [if (routeObserver != null) routeObserver!],
-
-      // Use global navigator key for navigation
-      navigatorKey: navigatorKey,
-    );
       },
     );
   }

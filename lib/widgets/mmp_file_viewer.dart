@@ -4,10 +4,12 @@ import '../models/mmp_file.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'dart:io';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 class MMPFileViewer extends StatelessWidget {
   final MMPFile mmpFile;
-  
+
   const MMPFileViewer({
     Key? key,
     required this.mmpFile,
@@ -15,18 +17,26 @@ class MMPFileViewer extends StatelessWidget {
 
   Future<void> _openFile() async {
     try {
+      // Request storage permission
+      var status = await Permission.storage.request();
+      if (!status.isGranted) {
+        throw Exception('Storage permission denied');
+      }
+
       // Get the local path where the file is stored
       final directory = await getApplicationDocumentsDirectory();
       final filePath = '${directory.path}/${mmpFile.fileName}';
-      
+
       // Check if file exists locally, if not, download it
       final file = File(filePath);
       if (!await file.exists()) {
-        // TODO: Download file from Supabase storage
-        // final bytes = await supabase.storage.from('mmps').download(mmpFile.filePath);
-        // await file.writeAsBytes(bytes);
+        // Download file from Supabase storage
+        final supabase = Supabase.instance.client;
+        final bytes =
+            await supabase.storage.from('mmps').download(mmpFile.filePath);
+        await file.writeAsBytes(bytes);
       }
-      
+
       // Open the file with system default application
       final result = await OpenFile.open(filePath);
       if (result.type != ResultType.done) {

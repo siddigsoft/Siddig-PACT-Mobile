@@ -4,12 +4,12 @@ import 'distance_helper.dart';
 /// Algorithm for finding the nearest available site visits to a given location
 class NearestSiteVisits {
   /// Returns the k nearest available site visits to the given location
-  /// 
+  ///
   /// [userLocation] The current location of the user (latitude, longitude)
   /// [availableVisits] List of all available site visits
   /// [k] Number of nearest visits to return
   /// [maxRadiusMeters] Optional maximum radius to consider (null means no limit)
-  /// 
+  ///
   /// Returns a list of [SiteVisit] objects sorted by distance, with distances included
   static List<SiteVisitWithDistance> findNearest({
     required Location userLocation,
@@ -61,6 +61,18 @@ class SiteVisitWithDistance {
     required this.visit,
     required this.distanceMeters,
   });
+
+  /// Get distance in kilometers
+  double get distance => distanceMeters / 1000;
+
+  /// Get human-readable distance text
+  String get distanceText {
+    if (distanceMeters < 1000) {
+      return '${distanceMeters.round()}m';
+    } else {
+      return '${(distanceMeters / 1000).toStringAsFixed(1)}km';
+    }
+  }
 }
 
 /// Simple location class for latitude/longitude pairs

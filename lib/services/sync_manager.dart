@@ -5,6 +5,8 @@ import 'dart:convert';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:sqflite/sqflite.dart';
+import 'package:path/path.dart';
 
 import '../models/location_log_model.dart';
 import '../models/report_model.dart';
@@ -25,6 +27,7 @@ class SyncManager {
 
   bool _isSyncing = false;
   bool _isInitialized = false;
+  Database? _database;
 
   // API endpoints for sync - replace with real API endpoints
   static const String _apiBaseUrl = 'https://api.example.com';
@@ -32,11 +35,378 @@ class SyncManager {
   static const String _locationLogsSyncEndpoint = '/location-logs';
   static const String _reportsSyncEndpoint = '/reports';
 
+  // ===== LOCAL STORAGE METHODS =====
+
+  /// Initialize SQLite database for sync queue
+  Future<void> _initializeDatabase() async {
+    if (_database != null) return;
+
+    final databasesPath = await getDatabasesPath();
+    final path = join(databasesPath, 'sync_manager.db');
+
+    _database = await openDatabase(
+      path,
+      version: 1,
+      onCreate: _createDatabaseTables,
+    );
+  }
+
+  /// Create database tables
+  Future<void> _createDatabaseTables(Database db, int version) async {
+    // Sync queue table for offline operations
+    await db.execute('''
+      CREATE TABLE sync_queue (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        operation_type TEXT NOT NULL,
+        data_type TEXT NOT NULL,
+        data_id TEXT NOT NULL,
+        data TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        retry_count INTEGER DEFAULT 0,
+        last_error TEXT,
+        status TEXT DEFAULT 'pending'
+      )
+    ''');
+
+    // Conflicts table for handling sync conflicts
+    await db.execute('''
+      CREATE TABLE sync_conflicts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        data_type TEXT NOT NULL,
+        data_id TEXT NOT NULL,
+        local_data TEXT NOT NULL,
+        remote_data TEXT NOT NULL,
+        conflict_reason TEXT,
+        resolution_strategy TEXT,
+        created_at TEXT NOT NULL,
+        resolved_at TEXT,
+        status TEXT DEFAULT 'pending'
+      )
+    ''');
+
+    // Sync metadata table
+    await db.execute('''
+      CREATE TABLE sync_metadata (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )
+    ''');
+  }
+
+  /// Queue an operation for later sync
+  Future<void> queueOperationForSync({
+    required String operationType,
+    required String dataType,
+    required String dataId,
+    required Map<String, dynamic> data,
+  }) async {
+    await _initializeDatabase();
+
+    await _database!.insert('sync_queue', {
+      'operation_type': operationType,
+      'data_type': dataType,
+      'data_id': dataId,
+      'data': jsonEncode(data),
+      'created_at': DateTime.now().toIso8601String(),
+      'status': 'pending',
+    });
+
+    debugPrint('Queued $operationType operation for $dataType $dataId');
+  }
+
+  /// Get all pending sync operations
+  Future<List<Map<String, dynamic>>> getPendingSyncOperations() async {
+    await _initializeDatabase();
+
+    final results = await _database!.query(
+      'sync_queue',
+      where: 'status = ?',
+      whereArgs: ['pending'],
+      orderBy: 'created_at ASC',
+    );
+
+    return results;
+  }
+
+  /// Mark sync operation as completed
+  Future<void> markOperationCompleted(String operationId) async {
+    await _initializeDatabase();
+
+    await _database!.update(
+      'sync_queue',
+      {'status': 'completed'},
+      where: 'id = ?',
+      whereArgs: [operationId],
+    );
+  }
+
+  /// Mark sync operation as failed
+  Future<void> markOperationFailed(String operationId, String error) async {
+    await _initializeDatabase();
+
+    await _database!.update(
+      'sync_queue',
+      {
+        'status': 'failed',
+        'last_error': error,
+        'retry_count': 1, // Will be incremented by retry logic
+      },
+      where: 'id = ?',
+      whereArgs: [operationId],
+    );
+  }
+
+  /// Retry failed operations
+  Future<void> retryFailedOperations() async {
+    await _initializeDatabase();
+
+    final failedOps = await _database!.query(
+      'sync_queue',
+      where: 'status = ? AND retry_count < ?',
+      whereArgs: ['failed', 3], // Max 3 retries
+    );
+
+    for (final op in failedOps) {
+      // Increment retry count and reset status
+      final currentRetryCount = (op['retry_count'] as int?) ?? 0;
+      await _database!.update(
+        'sync_queue',
+        {
+          'status': 'pending',
+          'retry_count': currentRetryCount + 1,
+        },
+        where: 'id = ?',
+        whereArgs: [op['id']],
+      );
+    }
+  }
+
+  /// Process sync queue when online
+  Future<void> processSyncQueue() async {
+    if (_isSyncing) return;
+
+    _isSyncing = true;
+    debugPrint('Processing sync queue');
+
+    try {
+      final pendingOps = await getPendingSyncOperations();
+
+      for (final op in pendingOps) {
+        try {
+          final success = await _executeQueuedOperation(op);
+          if (success) {
+            await markOperationCompleted(op['id'].toString());
+          } else {
+            await markOperationFailed(op['id'].toString(), 'Execution failed');
+          }
+        } catch (e) {
+          await markOperationFailed(op['id'].toString(), e.toString());
+        }
+      }
+
+      // Clean up old completed operations (older than 7 days)
+      await _cleanupOldOperations();
+    } catch (e) {
+      debugPrint('Error processing sync queue: $e');
+    } finally {
+      _isSyncing = false;
+    }
+  }
+
+  /// Execute a queued operation
+  Future<bool> _executeQueuedOperation(Map<String, dynamic> operation) async {
+    final operationType = operation['operation_type'];
+    final dataType = operation['data_type'];
+    final data = jsonDecode(operation['data']);
+
+    switch (dataType) {
+      case 'visit':
+        return await _executeVisitOperation(operationType, data);
+      case 'location_log':
+        return await _executeLocationLogOperation(operationType, data);
+      case 'report':
+        return await _executeReportOperation(operationType, data);
+      default:
+        debugPrint('Unknown data type: $dataType');
+        return false;
+    }
+  }
+
+  /// Execute visit operation
+  Future<bool> _executeVisitOperation(
+      String operationType, Map<String, dynamic> data) async {
+    switch (operationType) {
+      case 'create':
+      case 'update':
+        final response = await http.post(
+          Uri.parse('$_apiBaseUrl$_visitsSyncEndpoint'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode(data),
+        );
+        return response.statusCode == 200 || response.statusCode == 201;
+
+      case 'delete':
+        final response = await http.delete(
+          Uri.parse('$_apiBaseUrl$_visitsSyncEndpoint/${data['id']}'),
+        );
+        return response.statusCode == 200 || response.statusCode == 204;
+
+      default:
+        return false;
+    }
+  }
+
+  /// Execute location log operation
+  Future<bool> _executeLocationLogOperation(
+      String operationType, Map<String, dynamic> data) async {
+    if (operationType == 'create' || operationType == 'update') {
+      final response = await http.post(
+        Uri.parse('$_apiBaseUrl$_locationLogsSyncEndpoint'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(data),
+      );
+      return response.statusCode == 200 || response.statusCode == 201;
+    }
+    return false;
+  }
+
+  /// Execute report operation
+  Future<bool> _executeReportOperation(
+      String operationType, Map<String, dynamic> data) async {
+    if (operationType == 'create' || operationType == 'update') {
+      final response = await http.post(
+        Uri.parse('$_apiBaseUrl$_reportsSyncEndpoint'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(data),
+      );
+      return response.statusCode == 200 || response.statusCode == 201;
+    }
+    return false;
+  }
+
+  /// Handle sync conflicts
+  Future<void> handleSyncConflict({
+    required String dataType,
+    required String dataId,
+    required Map<String, dynamic> localData,
+    required Map<String, dynamic> remoteData,
+    required String conflictReason,
+  }) async {
+    await _initializeDatabase();
+
+    await _database!.insert('sync_conflicts', {
+      'data_type': dataType,
+      'data_id': dataId,
+      'local_data': jsonEncode(localData),
+      'remote_data': jsonEncode(remoteData),
+      'conflict_reason': conflictReason,
+      'created_at': DateTime.now().toIso8601String(),
+      'status': 'pending',
+    });
+
+    debugPrint('Recorded sync conflict for $dataType $dataId');
+  }
+
+  /// Get pending conflicts
+  Future<List<Map<String, dynamic>>> getPendingConflicts() async {
+    await _initializeDatabase();
+
+    return await _database!.query(
+      'sync_conflicts',
+      where: 'status = ?',
+      whereArgs: ['pending'],
+      orderBy: 'created_at DESC',
+    );
+  }
+
+  /// Resolve conflict with strategy
+  Future<void> resolveConflict(
+    int conflictId,
+    String resolutionStrategy, // 'local_wins', 'remote_wins', 'merge', 'manual'
+  ) async {
+    await _initializeDatabase();
+
+    await _database!.update(
+      'sync_conflicts',
+      {
+        'resolution_strategy': resolutionStrategy,
+        'resolved_at': DateTime.now().toIso8601String(),
+        'status': 'resolved',
+      },
+      where: 'id = ?',
+      whereArgs: [conflictId],
+    );
+  }
+
+  /// Clean up old operations
+  Future<void> _cleanupOldOperations() async {
+    await _initializeDatabase();
+
+    final cutoffDate =
+        DateTime.now().subtract(const Duration(days: 7)).toIso8601String();
+
+    await _database!.delete(
+      'sync_queue',
+      where: 'status = ? AND created_at < ?',
+      whereArgs: ['completed', cutoffDate],
+    );
+  }
+
+  /// Get sync statistics
+  Future<Map<String, dynamic>> getSyncStats() async {
+    await _initializeDatabase();
+
+    final queueStats = await _database!.rawQuery('''
+      SELECT status, COUNT(*) as count
+      FROM sync_queue
+      GROUP BY status
+    ''');
+
+    final conflictStats = await _database!.rawQuery('''
+      SELECT status, COUNT(*) as count
+      FROM sync_conflicts
+      GROUP BY status
+    ''');
+
+    final lastSync = await _database!.query(
+      'sync_metadata',
+      where: 'key = ?',
+      whereArgs: ['last_sync_time'],
+    );
+
+    return {
+      'queue_stats': Map.fromEntries(
+        queueStats.map((row) => MapEntry(row['status'], row['count'])),
+      ),
+      'conflict_stats': Map.fromEntries(
+        conflictStats.map((row) => MapEntry(row['status'], row['count'])),
+      ),
+      'last_sync': lastSync.isNotEmpty ? lastSync.first['value'] : null,
+    };
+  }
+
+  /// Update sync metadata
+  Future<void> updateSyncMetadata(String key, String value) async {
+    await _initializeDatabase();
+
+    await _database!.insert(
+      'sync_metadata',
+      {
+        'key': key,
+        'value': value,
+        'updated_at': DateTime.now().toIso8601String(),
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
   // Initialize the sync manager
   Future<void> initialize() async {
     if (_isInitialized) return;
 
     await _repository.initialize();
+    await _initializeDatabase(); // Initialize SQLite database
 
     // Set up connectivity monitoring
     _connectivitySubscription = _connectivity.onConnectivityChanged.listen(
@@ -54,19 +424,20 @@ class SyncManager {
     _handleConnectivityChange(connectivityResult);
 
     _isInitialized = true;
-    debugPrint('SyncManager initialized');
+    debugPrint('SyncManager initialized with local storage');
   }
 
   // Handle connectivity changes
   void _handleConnectivityChange(List<ConnectivityResult> results) {
-    final hasConnectivity =
-        results.contains(ConnectivityResult.mobile) ||
+    final hasConnectivity = results.contains(ConnectivityResult.mobile) ||
         results.contains(ConnectivityResult.wifi) ||
         results.contains(ConnectivityResult.ethernet);
 
     if (hasConnectivity) {
       debugPrint('Connectivity restored, checking for sync');
       _checkAndSync();
+      // Also process any queued operations
+      processSyncQueue();
     }
   }
 
@@ -110,6 +481,10 @@ class SyncManager {
 
       // Clean up old data
       await _repository.wipeOldSyncedData(30); // Wipe data older than 30 days
+
+      // Update sync metadata
+      await updateSyncMetadata(
+          'last_sync_time', DateTime.now().toIso8601String());
 
       _isSyncing = false;
       return visitsSuccess && logsSuccess && reportsSuccess;
@@ -251,6 +626,7 @@ class SyncManager {
   void dispose() {
     _connectivitySubscription?.cancel();
     _periodicSyncTimer?.cancel();
+    _database?.close();
     _isInitialized = false;
   }
 }
