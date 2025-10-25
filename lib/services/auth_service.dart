@@ -71,18 +71,18 @@ class AuthService {
         }).eq('UID', user.id);
       }
 
-      // Ensure user has data_collector role
+      // Ensure user has worker role
       final role = await supabase
           .from('user_roles')
           .select()
           .eq('user_id', user.id)
-          .eq('role', 'data_collector')
+          .eq('role', 'worker')
           .maybeSingle();
 
       if (role == null) {
         await supabase.from('user_roles').insert({
           'user_id': user.id,
-          'role': 'data_collector',
+          'role': 'worker',
         });
       }
     } catch (e) {

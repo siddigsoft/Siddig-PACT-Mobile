@@ -16,11 +16,13 @@ class SiteVisit {
     if (lat == null) return null;
     return lat is int ? lat.toDouble() : lat as double;
   }
+
   double? get longitude {
     final lng = location?['longitude'];
     if (lng == null) return null;
     return lng is int ? lng.toDouble() : lng as double;
   }
+
   String get locationString => location?['description'] as String? ?? '';
   final Map<String, dynamic>? fees;
   final Map<String, dynamic>? visitData;
@@ -32,6 +34,11 @@ class SiteVisit {
   final int? rating;
   final String? mmpId;
   final DateTime createdAt;
+  final double? arrivalLatitude;
+  final double? arrivalLongitude;
+  final DateTime? arrivalTimestamp;
+  final Map<String, dynamic>? journeyPath;
+  final bool arrivalRecorded;
 
   SiteVisit({
     required this.id,
@@ -56,27 +63,31 @@ class SiteVisit {
     this.rating,
     this.mmpId,
     required this.createdAt,
+    this.arrivalLatitude,
+    this.arrivalLongitude,
+    this.arrivalTimestamp,
+    this.journeyPath,
+    this.arrivalRecorded = false,
   });
 
   factory SiteVisit.fromJson(Map<String, dynamic> json) {
     return SiteVisit(
-      id: json['id'],
-      siteName: json['site_name'],
-      siteCode: json['site_code'],
-      status: json['status'],
-      locality: json['locality'],
-      state: json['state'],
-      activity: json['activity'],
-      priority: json['priority'],
-      dueDate: json['due_date'] != null
-          ? DateTime.parse(json['due_date'])
-          : null,
+      id: json['id'] ?? '',
+      siteName: json['site_name'] ?? '',
+      siteCode: json['site_code'] ?? '',
+      status: json['status'] ?? 'pending',
+      locality: json['locality'] ?? '',
+      state: json['state'] ?? '',
+      activity: json['activity'] ?? '',
+      priority: json['priority'] ?? 'medium',
+      dueDate:
+          json['due_date'] != null ? DateTime.parse(json['due_date']) : null,
       notes: json['notes'] ?? '',
       mainActivity: json['main_activity'] ?? '',
       location: json['location'],
       fees: json['fees'],
       visitData: json['visit_data'],
-      assignedTo: json['assigned_to'],
+      assignedTo: json['assigned_to'] ?? '',
       assignedBy: json['assigned_by'],
       assignedAt: json['assigned_at'] != null
           ? DateTime.parse(json['assigned_at'])
@@ -89,7 +100,16 @@ class SiteVisit {
           : null,
       rating: json['rating'],
       mmpId: json['mmp_id'],
-      createdAt: DateTime.parse(json['created_at']),
+      createdAt: json['created_at'] != null
+          ? DateTime.parse(json['created_at'])
+          : DateTime.now(),
+      arrivalLatitude: json['arrival_latitude'],
+      arrivalLongitude: json['arrival_longitude'],
+      arrivalTimestamp: json['arrival_timestamp'] != null
+          ? DateTime.parse(json['arrival_timestamp'])
+          : null,
+      journeyPath: json['journey_path'],
+      arrivalRecorded: json['arrival_recorded'] ?? false,
     );
   }
 
@@ -117,6 +137,11 @@ class SiteVisit {
       'rating': rating,
       'mmp_id': mmpId,
       'created_at': createdAt.toIso8601String(),
+      'arrival_latitude': arrivalLatitude,
+      'arrival_longitude': arrivalLongitude,
+      'arrival_timestamp': arrivalTimestamp?.toIso8601String(),
+      'journey_path': journeyPath,
+      'arrival_recorded': arrivalRecorded,
     };
   }
 
@@ -143,6 +168,11 @@ class SiteVisit {
     int? rating,
     String? mmpId,
     DateTime? createdAt,
+    double? arrivalLatitude,
+    double? arrivalLongitude,
+    DateTime? arrivalTimestamp,
+    Map<String, dynamic>? journeyPath,
+    bool? arrivalRecorded,
   }) {
     return SiteVisit(
       id: id ?? this.id,
@@ -167,6 +197,11 @@ class SiteVisit {
       rating: rating ?? this.rating,
       mmpId: mmpId ?? this.mmpId,
       createdAt: createdAt ?? this.createdAt,
+      arrivalLatitude: arrivalLatitude ?? this.arrivalLatitude,
+      arrivalLongitude: arrivalLongitude ?? this.arrivalLongitude,
+      arrivalTimestamp: arrivalTimestamp ?? this.arrivalTimestamp,
+      journeyPath: journeyPath ?? this.journeyPath,
+      arrivalRecorded: arrivalRecorded ?? this.arrivalRecorded,
     );
   }
 }

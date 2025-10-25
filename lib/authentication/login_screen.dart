@@ -121,7 +121,7 @@ class _LoginScreenState extends State<LoginScreen>
               .from('user_roles')
               .select()
               .eq('user_id', userId)
-              .eq('role', 'data_collector')
+              .eq('role', 'worker')
               .maybeSingle();
 
           if (dataCollectorCheck != null) {
@@ -137,7 +137,7 @@ class _LoginScreenState extends State<LoginScreen>
             try {
               await authService.supabase.from('user_roles').insert({
                 'user_id': userId,
-                'role': 'data_collector',
+                'role': 'worker',
               });
               if (mounted) {
                 // Haptic feedback for successful login
@@ -147,7 +147,7 @@ class _LoginScreenState extends State<LoginScreen>
               }
             } catch (roleError) {
               // If role assignment fails, still allow login but show warning
-              debugPrint('Failed to assign data_collector role: $roleError');
+              debugPrint('Failed to assign worker role: $roleError');
               if (mounted) {
                 HapticFeedback.mediumImpact();
                 Navigator.pushReplacementNamed(context, '/main');
@@ -244,49 +244,49 @@ class _LoginScreenState extends State<LoginScreen>
 
                     // Company Logo/Icon Section
                     Container(
-                          width: 150,
-                          height: 150,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            gradient: LinearGradient(
-                              colors: [
-                                Colors.white,
-                                AppColors.backgroundGray.withOpacity(0.8),
-                              ],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
+                      width: 150,
+                      height: 150,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: LinearGradient(
+                          colors: [
+                            Colors.white,
+                            AppColors.backgroundGray.withOpacity(0.8),
+                          ],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.primaryOrange.withOpacity(
+                              0.15,
                             ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: AppColors.primaryOrange.withOpacity(
-                                  0.15,
-                                ),
-                                blurRadius: 30,
-                                offset: const Offset(0, 15),
-                                spreadRadius: -5,
-                              ),
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.03),
-                                blurRadius: 10,
-                                offset: const Offset(0, 5),
-                                spreadRadius: 0,
-                              ),
-                            ],
-                            border: Border.all(
-                              color: Colors.white.withOpacity(0.95),
-                              width: 6,
-                            ),
+                            blurRadius: 30,
+                            offset: const Offset(0, 15),
+                            spreadRadius: -5,
                           ),
-                          child: Padding(
-                            padding: const EdgeInsets.all(4.0),
-                            child: ClipOval(
-                              child: Image.asset(
-                                'assets/images/pact_consultancy_pact_cover.jpg',
-                                fit: BoxFit.contain,
-                              ),
-                            ),
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.03),
+                            blurRadius: 10,
+                            offset: const Offset(0, 5),
+                            spreadRadius: 0,
                           ),
-                        )
+                        ],
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.95),
+                          width: 6,
+                        ),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(4.0),
+                        child: ClipOval(
+                          child: Image.asset(
+                            'assets/images/pact_consultancy_pact_cover.jpg',
+                            fit: BoxFit.contain,
+                          ),
+                        ),
+                      ),
+                    )
                         .animate()
                         .fadeIn(duration: 800.ms, delay: 200.ms)
                         .slideY(
@@ -305,15 +305,15 @@ class _LoginScreenState extends State<LoginScreen>
 
                     // Welcome Text
                     Text(
-                          AppLocalizations.of(context)!.welcomeBack,
-                          style: GoogleFonts.poppins(
-                            fontSize: 34,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.textDark,
-                            letterSpacing: 0.5,
-                            height: 1.1,
-                          ),
-                        )
+                      AppLocalizations.of(context)!.welcomeBack,
+                      style: GoogleFonts.poppins(
+                        fontSize: 34,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textDark,
+                        letterSpacing: 0.5,
+                        height: 1.1,
+                      ),
+                    )
                         .animate()
                         .fadeIn(duration: 800.ms, delay: 300.ms)
                         .slideY(begin: 0.3, end: 0, duration: 600.ms)
@@ -327,24 +327,24 @@ class _LoginScreenState extends State<LoginScreen>
 
                     // Subtitle
                     Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppColors.primaryOrange.withOpacity(0.08),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text(
-                            AppLocalizations.of(context)!.signInToAccount,
-                            style: GoogleFonts.poppins(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w500,
-                              color: AppColors.textLight,
-                              letterSpacing: 0.2,
-                            ),
-                          ),
-                        )
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryOrange.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        AppLocalizations.of(context)!.signInToAccount,
+                        style: GoogleFonts.poppins(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w500,
+                          color: AppColors.textLight,
+                          letterSpacing: 0.2,
+                        ),
+                      ),
+                    )
                         .animate()
                         .fadeIn(duration: 800.ms, delay: 400.ms)
                         .slideY(begin: 0.3, end: 0, duration: 500.ms),
@@ -358,56 +358,56 @@ class _LoginScreenState extends State<LoginScreen>
                         children: [
                           // Email Input Field
                           Container(
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(20),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withOpacity(0.03),
-                                      blurRadius: 20,
-                                      offset: const Offset(0, 10),
-                                      spreadRadius: -5,
-                                    ),
-                                  ],
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(20),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.03),
+                                  blurRadius: 20,
+                                  offset: const Offset(0, 10),
+                                  spreadRadius: -5,
                                 ),
-                                child: TextFormField(
-                                  controller: _emailController,
-                                  keyboardType: TextInputType.emailAddress,
-                                  validator: _validateEmail,
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 16,
-                                    color: AppColors.textDark,
-                                    fontWeight: FontWeight.w500,
+                              ],
+                            ),
+                            child: TextFormField(
+                              controller: _emailController,
+                              keyboardType: TextInputType.emailAddress,
+                              validator: _validateEmail,
+                              style: GoogleFonts.poppins(
+                                fontSize: 16,
+                                color: AppColors.textDark,
+                                fontWeight: FontWeight.w500,
+                              ),
+                              decoration: InputDecoration(
+                                labelText: 'Email',
+                                hintText: 'Enter your email',
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 24,
+                                  vertical: 22,
+                                ),
+                                prefixIcon: Container(
+                                  margin: const EdgeInsets.only(
+                                    left: 16,
+                                    right: 12,
                                   ),
-                                  decoration: InputDecoration(
-                                    labelText: 'Email',
-                                    hintText: 'Enter your email',
-                                    contentPadding: const EdgeInsets.symmetric(
-                                      horizontal: 24,
-                                      vertical: 22,
-                                    ),
-                                    prefixIcon: Container(
-                                      margin: const EdgeInsets.only(
-                                        left: 16,
-                                        right: 12,
-                                      ),
-                                      child: const Icon(
-                                        Icons.email_outlined,
-                                        color: AppColors.primaryOrange,
-                                        size: 22,
-                                      ),
-                                    ),
-                                    floatingLabelBehavior:
-                                        FloatingLabelBehavior.auto,
-                                    labelStyle: TextStyle(
-                                      color: AppColors.textLight.withOpacity(
-                                        0.8,
-                                      ),
-                                      fontWeight: FontWeight.w500,
-                                      fontSize: 15,
-                                    ),
+                                  child: const Icon(
+                                    Icons.email_outlined,
+                                    color: AppColors.primaryOrange,
+                                    size: 22,
                                   ),
                                 ),
-                              )
+                                floatingLabelBehavior:
+                                    FloatingLabelBehavior.auto,
+                                labelStyle: TextStyle(
+                                  color: AppColors.textLight.withOpacity(
+                                    0.8,
+                                  ),
+                                  fontWeight: FontWeight.w500,
+                                  fontSize: 15,
+                                ),
+                              ),
+                            ),
+                          )
                               .animate()
                               .fadeIn(duration: 600.ms, delay: 500.ms)
                               .slideY(begin: 0.3, end: 0, duration: 400.ms),
@@ -416,74 +416,74 @@ class _LoginScreenState extends State<LoginScreen>
 
                           // Password Input Field
                           Container(
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(20),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withOpacity(0.03),
-                                      blurRadius: 20,
-                                      offset: const Offset(0, 10),
-                                      spreadRadius: -5,
-                                    ),
-                                  ],
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(20),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.03),
+                                  blurRadius: 20,
+                                  offset: const Offset(0, 10),
+                                  spreadRadius: -5,
                                 ),
-                                child: TextFormField(
-                                  controller: _passwordController,
-                                  obscureText:
-                                      !_isPasswordVisible, // Hide/show password
-                                  validator: _validatePassword,
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 16,
-                                    color: AppColors.textDark,
-                                    fontWeight: FontWeight.w500,
+                              ],
+                            ),
+                            child: TextFormField(
+                              controller: _passwordController,
+                              obscureText:
+                                  !_isPasswordVisible, // Hide/show password
+                              validator: _validatePassword,
+                              style: GoogleFonts.poppins(
+                                fontSize: 16,
+                                color: AppColors.textDark,
+                                fontWeight: FontWeight.w500,
+                              ),
+                              decoration: InputDecoration(
+                                labelText: 'Password',
+                                hintText: 'Enter your password',
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 24,
+                                  vertical: 22,
+                                ),
+                                prefixIcon: Container(
+                                  margin: const EdgeInsets.only(
+                                    left: 16,
+                                    right: 12,
                                   ),
-                                  decoration: InputDecoration(
-                                    labelText: 'Password',
-                                    hintText: 'Enter your password',
-                                    contentPadding: const EdgeInsets.symmetric(
-                                      horizontal: 24,
-                                      vertical: 22,
-                                    ),
-                                    prefixIcon: Container(
-                                      margin: const EdgeInsets.only(
-                                        left: 16,
-                                        right: 12,
-                                      ),
-                                      child: const Icon(
-                                        Icons.lock_outline,
-                                        color: AppColors.primaryOrange,
-                                        size: 22,
-                                      ),
-                                    ),
-                                    suffixIcon: Container(
-                                      margin: const EdgeInsets.only(right: 8),
-                                      child: IconButton(
-                                        icon: Icon(
-                                          _isPasswordVisible
-                                              ? Icons.visibility_off
-                                              : Icons.visibility,
-                                          color: AppColors.textLight,
-                                          size: 22,
-                                        ),
-                                        splashRadius: 20,
-                                        onPressed: () {
-                                          setState(() {
-                                            _isPasswordVisible =
-                                                !_isPasswordVisible;
-                                          });
-                                        },
-                                      ),
-                                    ),
-                                    labelStyle: TextStyle(
-                                      color: AppColors.textLight.withOpacity(
-                                        0.8,
-                                      ),
-                                      fontWeight: FontWeight.w500,
-                                      fontSize: 15,
-                                    ),
+                                  child: const Icon(
+                                    Icons.lock_outline,
+                                    color: AppColors.primaryOrange,
+                                    size: 22,
                                   ),
                                 ),
-                              )
+                                suffixIcon: Container(
+                                  margin: const EdgeInsets.only(right: 8),
+                                  child: IconButton(
+                                    icon: Icon(
+                                      _isPasswordVisible
+                                          ? Icons.visibility_off
+                                          : Icons.visibility,
+                                      color: AppColors.textLight,
+                                      size: 22,
+                                    ),
+                                    splashRadius: 20,
+                                    onPressed: () {
+                                      setState(() {
+                                        _isPasswordVisible =
+                                            !_isPasswordVisible;
+                                      });
+                                    },
+                                  ),
+                                ),
+                                labelStyle: TextStyle(
+                                  color: AppColors.textLight.withOpacity(
+                                    0.8,
+                                  ),
+                                  fontWeight: FontWeight.w500,
+                                  fontSize: 15,
+                                ),
+                              ),
+                            ),
+                          )
                               .animate()
                               .fadeIn(duration: 600.ms, delay: 600.ms)
                               .slideY(begin: 0.3, end: 0, duration: 400.ms),
@@ -521,75 +521,76 @@ class _LoginScreenState extends State<LoginScreen>
 
                           // Login Button
                           Container(
-                                width: double.infinity,
-                                height: 60,
-                                decoration: BoxDecoration(
+                            width: double.infinity,
+                            height: 60,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(20),
+                              gradient: const LinearGradient(
+                                colors: [
+                                  AppColors.primaryOrange,
+                                  AppColors.lightOrange,
+                                ],
+                                begin: Alignment.centerLeft,
+                                end: Alignment.centerRight,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color:
+                                      AppColors.primaryOrange.withOpacity(0.25),
+                                  blurRadius: 20,
+                                  offset: const Offset(0, 10),
+                                  spreadRadius: -5,
+                                ),
+                              ],
+                            ),
+                            child: ElevatedButton(
+                              onPressed: _isLoading ? null : _handleLogin,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.transparent,
+                                foregroundColor: Colors.white,
+                                disabledBackgroundColor: Colors.transparent,
+                                disabledForegroundColor:
+                                    Colors.white.withOpacity(0.8),
+                                shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(20),
-                                  gradient: const LinearGradient(
-                                    colors: [
-                                      AppColors.primaryOrange,
-                                      AppColors.lightOrange,
-                                    ],
-                                    begin: Alignment.centerLeft,
-                                    end: Alignment.centerRight,
-                                  ),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: AppColors.primaryOrange
-                                          .withOpacity(0.25),
-                                      blurRadius: 20,
-                                      offset: const Offset(0, 10),
-                                      spreadRadius: -5,
-                                    ),
-                                  ],
                                 ),
-                                child: ElevatedButton(
-                                  onPressed: _isLoading ? null : _handleLogin,
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.transparent,
-                                    foregroundColor: Colors.white,
-                                    disabledBackgroundColor: Colors.transparent,
-                                    disabledForegroundColor: Colors.white
-                                        .withOpacity(0.8),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(20),
-                                    ),
-                                    elevation: 0,
-                                    shadowColor: Colors.transparent,
-                                    padding: const EdgeInsets.symmetric(
-                                      vertical: 16,
-                                    ),
-                                  ),
-                                  child: _isLoading
-                                      ? SizedBox(
-                                          width: 24,
-                                          height: 24,
-                                          child: CircularProgressIndicator(
-                                            color: Colors.white,
-                                            strokeWidth: 2,
+                                elevation: 0,
+                                shadowColor: Colors.transparent,
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 16,
+                                ),
+                              ),
+                              child: _isLoading
+                                  ? SizedBox(
+                                      width: 24,
+                                      height: 24,
+                                      child: CircularProgressIndicator(
+                                        color: Colors.white,
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        Text(
+                                          AppLocalizations.of(context)!
+                                              .signInCaps,
+                                          style: GoogleFonts.poppins(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w600,
+                                            letterSpacing: 1.2,
                                           ),
-                                        )
-                                      : Row(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.center,
-                                          children: [
-                                            Text(
-                                              AppLocalizations.of(context)!.signInCaps,
-                                              style: GoogleFonts.poppins(
-                                                fontSize: 16,
-                                                fontWeight: FontWeight.w600,
-                                                letterSpacing: 1.2,
-                                              ),
-                                            ),
-                                            const SizedBox(width: 10),
-                                            const Icon(
-                                              Icons.arrow_forward_rounded,
-                                              size: 20,
-                                            ),
-                                          ],
                                         ),
-                                ),
-                              )
+                                        const SizedBox(width: 10),
+                                        const Icon(
+                                          Icons.arrow_forward_rounded,
+                                          size: 20,
+                                        ),
+                                      ],
+                                    ),
+                            ),
+                          )
                               .animate()
                               .fadeIn(duration: 600.ms, delay: 800.ms)
                               .slideY(
@@ -687,83 +688,88 @@ class _LoginScreenState extends State<LoginScreen>
                               children: [
                                 // Google Login Button
                                 Container(
-                                      width: 60,
-                                      height: 60,
-                                      decoration: BoxDecoration(
-                                        color: Colors.white,
-                                        borderRadius: BorderRadius.circular(20),
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color: Colors.black.withOpacity(
-                                              0.03,
-                                            ),
-                                            blurRadius: 15,
-                                            spreadRadius: -8,
-                                            offset: const Offset(0, 8),
-                                          ),
-                                        ],
-                                        border: Border.all(
-                                          color: AppColors.borderColor
-                                              .withOpacity(0.1),
-                                          width: 1,
+                                  width: 60,
+                                  height: 60,
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(20),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withOpacity(
+                                          0.03,
                                         ),
+                                        blurRadius: 15,
+                                        spreadRadius: -8,
+                                        offset: const Offset(0, 8),
                                       ),
-                                      child: Material(
-                                        color: Colors.transparent,
-                                        borderRadius: BorderRadius.circular(20),
-                                        child: InkWell(
-                                          borderRadius: BorderRadius.circular(
-                                            20,
-                                          ),
-                                          onTap: () async {
-                                            HapticFeedback.lightImpact();
-                                            try {
-                                              setState(() => _isLoading = true);
-                                              final success = await _authService.signInWithGoogle();
-                                              if (mounted && success) {
-                                                Navigator.pushReplacementNamed(
-                                                  context,
-                                                  '/home',
-                                                );
-                                              } else if (mounted) {
-                                                ScaffoldMessenger.of(context).showSnackBar(
-                                                  const SnackBar(
-                                                    content: Text('Failed to sign in with Google'),
-                                                    backgroundColor: Colors.red,
-                                                  ),
-                                                );
-                                              }
-                                            } catch (e) {
-                                              if (mounted) {
-                                                ScaffoldMessenger.of(context).showSnackBar(
-                                                  SnackBar(
-                                                    content: Text('Error signing in with Google: ${e.toString()}'),
-                                                    backgroundColor: Colors.red,
-                                                  ),
-                                                );
-                                              }
-                                            } finally {
-                                              if (mounted) {
-                                                setState(() => _isLoading = false);
-                                              }
-                                            }
-                                          },
-                                          child: const Padding(
-                                            padding: EdgeInsets.all(12.0),
-                                            child: Center(
-                                              child: Icon(
-                                                Icons
-                                                    .g_mobiledata, // Replace with actual Google icon
-                                                size: 32,
-                                                color: Color(
-                                                  0xFFDB4437,
-                                                ), // Google red
+                                    ],
+                                    border: Border.all(
+                                      color: AppColors.borderColor
+                                          .withOpacity(0.1),
+                                      width: 1,
+                                    ),
+                                  ),
+                                  child: Material(
+                                    color: Colors.transparent,
+                                    borderRadius: BorderRadius.circular(20),
+                                    child: InkWell(
+                                      borderRadius: BorderRadius.circular(
+                                        20,
+                                      ),
+                                      onTap: () async {
+                                        HapticFeedback.lightImpact();
+                                        try {
+                                          setState(() => _isLoading = true);
+                                          final success = await _authService
+                                              .signInWithGoogle();
+                                          if (mounted && success) {
+                                            Navigator.pushReplacementNamed(
+                                              context,
+                                              '/home',
+                                            );
+                                          } else if (mounted) {
+                                            ScaffoldMessenger.of(context)
+                                                .showSnackBar(
+                                              const SnackBar(
+                                                content: Text(
+                                                    'Failed to sign in with Google'),
+                                                backgroundColor: Colors.red,
                                               ),
-                                            ),
+                                            );
+                                          }
+                                        } catch (e) {
+                                          if (mounted) {
+                                            ScaffoldMessenger.of(context)
+                                                .showSnackBar(
+                                              SnackBar(
+                                                content: Text(
+                                                    'Error signing in with Google: ${e.toString()}'),
+                                                backgroundColor: Colors.red,
+                                              ),
+                                            );
+                                          }
+                                        } finally {
+                                          if (mounted) {
+                                            setState(() => _isLoading = false);
+                                          }
+                                        }
+                                      },
+                                      child: const Padding(
+                                        padding: EdgeInsets.all(12.0),
+                                        child: Center(
+                                          child: Icon(
+                                            Icons
+                                                .g_mobiledata, // Replace with actual Google icon
+                                            size: 32,
+                                            color: Color(
+                                              0xFFDB4437,
+                                            ), // Google red
                                           ),
                                         ),
                                       ),
-                                    )
+                                    ),
+                                  ),
+                                )
                                     .animate()
                                     .fadeIn(duration: 600.ms, delay: 950.ms)
                                     .scale(
@@ -774,53 +780,53 @@ class _LoginScreenState extends State<LoginScreen>
 
                                 // Facebook Login Button
                                 Container(
-                                      width: 60,
-                                      height: 60,
-                                      decoration: BoxDecoration(
-                                        color: Colors.white,
-                                        borderRadius: BorderRadius.circular(20),
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color: Colors.black.withOpacity(
-                                              0.03,
-                                            ),
-                                            blurRadius: 15,
-                                            spreadRadius: -8,
-                                            offset: const Offset(0, 8),
+                                  width: 60,
+                                  height: 60,
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(20),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withOpacity(
+                                          0.03,
+                                        ),
+                                        blurRadius: 15,
+                                        spreadRadius: -8,
+                                        offset: const Offset(0, 8),
+                                      ),
+                                    ],
+                                    border: Border.all(
+                                      color: AppColors.borderColor
+                                          .withOpacity(0.1),
+                                      width: 1,
+                                    ),
+                                  ),
+                                  child: Material(
+                                    color: Colors.transparent,
+                                    borderRadius: BorderRadius.circular(20),
+                                    child: InkWell(
+                                      borderRadius: BorderRadius.circular(
+                                        20,
+                                      ),
+                                      onTap: () {
+                                        HapticFeedback.lightImpact();
+                                        // TODO: Implement Facebook login
+                                      },
+                                      child: const Padding(
+                                        padding: EdgeInsets.all(12.0),
+                                        child: Center(
+                                          child: Icon(
+                                            Icons.facebook,
+                                            size: 32,
+                                            color: Color(
+                                              0xFF1877F2,
+                                            ), // Facebook blue
                                           ),
-                                        ],
-                                        border: Border.all(
-                                          color: AppColors.borderColor
-                                              .withOpacity(0.1),
-                                          width: 1,
                                         ),
                                       ),
-                                      child: Material(
-                                        color: Colors.transparent,
-                                        borderRadius: BorderRadius.circular(20),
-                                        child: InkWell(
-                                          borderRadius: BorderRadius.circular(
-                                            20,
-                                          ),
-                                          onTap: () {
-                                            HapticFeedback.lightImpact();
-                                            // TODO: Implement Facebook login
-                                          },
-                                          child: const Padding(
-                                            padding: EdgeInsets.all(12.0),
-                                            child: Center(
-                                              child: Icon(
-                                                Icons.facebook,
-                                                size: 32,
-                                                color: Color(
-                                                  0xFF1877F2,
-                                                ), // Facebook blue
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    )
+                                    ),
+                                  ),
+                                )
                                     .animate()
                                     .fadeIn(duration: 600.ms, delay: 1000.ms)
                                     .scale(
@@ -831,51 +837,51 @@ class _LoginScreenState extends State<LoginScreen>
 
                                 // Apple Login Button
                                 Container(
-                                      width: 60,
-                                      height: 60,
-                                      decoration: BoxDecoration(
-                                        color: Colors.white,
-                                        borderRadius: BorderRadius.circular(20),
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color: Colors.black.withOpacity(
-                                              0.03,
-                                            ),
-                                            blurRadius: 15,
-                                            spreadRadius: -8,
-                                            offset: const Offset(0, 8),
+                                  width: 60,
+                                  height: 60,
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(20),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withOpacity(
+                                          0.03,
+                                        ),
+                                        blurRadius: 15,
+                                        spreadRadius: -8,
+                                        offset: const Offset(0, 8),
+                                      ),
+                                    ],
+                                    border: Border.all(
+                                      color: AppColors.borderColor
+                                          .withOpacity(0.1),
+                                      width: 1,
+                                    ),
+                                  ),
+                                  child: Material(
+                                    color: Colors.transparent,
+                                    borderRadius: BorderRadius.circular(20),
+                                    child: InkWell(
+                                      borderRadius: BorderRadius.circular(
+                                        20,
+                                      ),
+                                      onTap: () {
+                                        HapticFeedback.lightImpact();
+                                        // TODO: Implement Apple login
+                                      },
+                                      child: const Padding(
+                                        padding: EdgeInsets.all(12.0),
+                                        child: Center(
+                                          child: Icon(
+                                            Icons.apple,
+                                            size: 32,
+                                            color: Colors.black,
                                           ),
-                                        ],
-                                        border: Border.all(
-                                          color: AppColors.borderColor
-                                              .withOpacity(0.1),
-                                          width: 1,
                                         ),
                                       ),
-                                      child: Material(
-                                        color: Colors.transparent,
-                                        borderRadius: BorderRadius.circular(20),
-                                        child: InkWell(
-                                          borderRadius: BorderRadius.circular(
-                                            20,
-                                          ),
-                                          onTap: () {
-                                            HapticFeedback.lightImpact();
-                                            // TODO: Implement Apple login
-                                          },
-                                          child: const Padding(
-                                            padding: EdgeInsets.all(12.0),
-                                            child: Center(
-                                              child: Icon(
-                                                Icons.apple,
-                                                size: 32,
-                                                color: Colors.black,
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    )
+                                    ),
+                                  ),
+                                )
                                     .animate()
                                     .fadeIn(duration: 600.ms, delay: 1050.ms)
                                     .scale(

@@ -41,6 +41,13 @@ class SyncManager {
   Future<void> _initializeDatabase() async {
     if (_database != null) return;
 
+    // Skip database initialization on web platform
+    if (kIsWeb) {
+      debugPrint(
+          'SyncManager: Skipping database initialization on web platform');
+      return;
+    }
+
     final databasesPath = await getDatabasesPath();
     final path = join(databasesPath, 'sync_manager.db');
 
@@ -103,6 +110,13 @@ class SyncManager {
   }) async {
     await _initializeDatabase();
 
+    // Skip queuing on web platform (no offline sync)
+    if (kIsWeb || _database == null) {
+      debugPrint(
+          'SyncManager: Skipping queue operation on web platform or when database unavailable');
+      return;
+    }
+
     await _database!.insert('sync_queue', {
       'operation_type': operationType,
       'data_type': dataType,
@@ -119,6 +133,13 @@ class SyncManager {
   Future<List<Map<String, dynamic>>> getPendingSyncOperations() async {
     await _initializeDatabase();
 
+    // Return empty list on web platform (no offline sync)
+    if (kIsWeb || _database == null) {
+      debugPrint(
+          'SyncManager: Returning empty sync operations on web platform or when database unavailable');
+      return [];
+    }
+
     final results = await _database!.query(
       'sync_queue',
       where: 'status = ?',
@@ -133,6 +154,13 @@ class SyncManager {
   Future<void> markOperationCompleted(String operationId) async {
     await _initializeDatabase();
 
+    // Skip on web platform (no offline sync)
+    if (kIsWeb || _database == null) {
+      debugPrint(
+          'SyncManager: Skipping mark operation completed on web platform or when database unavailable');
+      return;
+    }
+
     await _database!.update(
       'sync_queue',
       {'status': 'completed'},
@@ -144,6 +172,13 @@ class SyncManager {
   /// Mark sync operation as failed
   Future<void> markOperationFailed(String operationId, String error) async {
     await _initializeDatabase();
+
+    // Skip on web platform (no offline sync)
+    if (kIsWeb || _database == null) {
+      debugPrint(
+          'SyncManager: Skipping mark operation failed on web platform or when database unavailable');
+      return;
+    }
 
     await _database!.update(
       'sync_queue',
@@ -160,6 +195,13 @@ class SyncManager {
   /// Retry failed operations
   Future<void> retryFailedOperations() async {
     await _initializeDatabase();
+
+    // Skip on web platform (no offline sync)
+    if (kIsWeb || _database == null) {
+      debugPrint(
+          'SyncManager: Skipping retry failed operations on web platform or when database unavailable');
+      return;
+    }
 
     final failedOps = await _database!.query(
       'sync_queue',
@@ -295,6 +337,13 @@ class SyncManager {
   }) async {
     await _initializeDatabase();
 
+    // Skip on web platform (no offline sync)
+    if (kIsWeb || _database == null) {
+      debugPrint(
+          'SyncManager: Skipping handle sync conflict on web platform or when database unavailable');
+      return;
+    }
+
     await _database!.insert('sync_conflicts', {
       'data_type': dataType,
       'data_id': dataId,
@@ -312,6 +361,13 @@ class SyncManager {
   Future<List<Map<String, dynamic>>> getPendingConflicts() async {
     await _initializeDatabase();
 
+    // Return empty list on web platform (no offline sync)
+    if (kIsWeb || _database == null) {
+      debugPrint(
+          'SyncManager: Returning empty conflicts on web platform or when database unavailable');
+      return [];
+    }
+
     return await _database!.query(
       'sync_conflicts',
       where: 'status = ?',
@@ -326,6 +382,13 @@ class SyncManager {
     String resolutionStrategy, // 'local_wins', 'remote_wins', 'merge', 'manual'
   ) async {
     await _initializeDatabase();
+
+    // Skip on web platform (no offline sync)
+    if (kIsWeb || _database == null) {
+      debugPrint(
+          'SyncManager: Skipping resolve conflict on web platform or when database unavailable');
+      return;
+    }
 
     await _database!.update(
       'sync_conflicts',
@@ -343,6 +406,13 @@ class SyncManager {
   Future<void> _cleanupOldOperations() async {
     await _initializeDatabase();
 
+    // Skip on web platform (no offline sync)
+    if (kIsWeb || _database == null) {
+      debugPrint(
+          'SyncManager: Skipping cleanup old operations on web platform or when database unavailable');
+      return;
+    }
+
     final cutoffDate =
         DateTime.now().subtract(const Duration(days: 7)).toIso8601String();
 
@@ -356,6 +426,20 @@ class SyncManager {
   /// Get sync statistics
   Future<Map<String, dynamic>> getSyncStats() async {
     await _initializeDatabase();
+
+    // Return empty stats on web platform (no offline sync)
+    if (kIsWeb || _database == null) {
+      debugPrint(
+          'SyncManager: Returning empty sync stats on web platform or when database unavailable');
+      return {
+        'queue_stats': {},
+        'conflict_stats': {},
+        'last_sync_time': null,
+        'total_operations': 0,
+        'pending_operations': 0,
+        'failed_operations': 0,
+      };
+    }
 
     final queueStats = await _database!.rawQuery('''
       SELECT status, COUNT(*) as count
@@ -389,6 +473,13 @@ class SyncManager {
   /// Update sync metadata
   Future<void> updateSyncMetadata(String key, String value) async {
     await _initializeDatabase();
+
+    // Skip on web platform (no offline sync)
+    if (kIsWeb || _database == null) {
+      debugPrint(
+          'SyncManager: Skipping update sync metadata on web platform or when database unavailable');
+      return;
+    }
 
     await _database!.insert(
       'sync_metadata',

@@ -7,7 +7,7 @@ import 'field_operations_enhanced_screen.dart';
 import 'forms_screen.dart';
 import 'equipment_screen.dart';
 import 'safety_hub_screen.dart';
-import 'chat_screen.dart';
+import 'chat_list_screen.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -23,7 +23,7 @@ class _MainScreenState extends State<MainScreen> {
     const FormsScreen(),
     const EquipmentScreen(),
     const SafetyHubScreen(),
-    const ChatScreen(),
+    const ChatListScreen(),
   ];
 
   void _onItemTapped(int index) {
