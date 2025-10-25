@@ -204,12 +204,25 @@ class SyncStatusDialog extends StatelessWidget {
                     onPressed: syncProvider.syncStatus == SyncStatus.syncing
                         ? null
                         : () async {
-                            await syncProvider.syncSafetyReports();
+                            await syncProvider.syncIncidentReports();
                           },
-                    icon: const Icon(Icons.shield),
-                    label: const Text('Safety'),
+                    icon: const Icon(Icons.report_problem),
+                    label: const Text('Incidents'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.red,
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
+                  ElevatedButton.icon(
+                    onPressed: syncProvider.syncStatus == SyncStatus.syncing
+                        ? null
+                        : () async {
+                            await syncProvider.syncSafetyChecklists();
+                          },
+                    icon: const Icon(Icons.checklist),
+                    label: const Text('Checklists'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.purple,
                       foregroundColor: Colors.white,
                     ),
                   ),

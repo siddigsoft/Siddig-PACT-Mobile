@@ -1,47 +1,47 @@
 class UserProfile {
+  String id;
   String userId;
   String fullName;
   String email;
   String role; // 'admin', 'manager', 'worker'
   String department;
-  DateTime lastLogin;
-  Map<String, dynamic>? preferences;
-  List<String> permissions;
+  DateTime createdAt;
+  DateTime updatedAt;
 
   UserProfile({
+    required this.id,
     required this.userId,
     required this.fullName,
     required this.email,
     required this.role,
     required this.department,
-    required this.lastLogin,
-    this.preferences,
-    required this.permissions,
+    required this.createdAt,
+    required this.updatedAt,
   });
 
   Map<String, dynamic> toJson() {
     return {
-      'userId': userId,
-      'fullName': fullName,
+      'id': id,
+      'user_id': userId,
+      'full_name': fullName,
       'email': email,
       'role': role,
       'department': department,
-      'lastLogin': lastLogin.toIso8601String(),
-      'preferences': preferences,
-      'permissions': permissions,
+      'created_at': createdAt.toIso8601String(),
+      'updated_at': updatedAt.toIso8601String(),
     };
   }
 
   factory UserProfile.fromJson(Map<String, dynamic> json) {
     return UserProfile(
-      userId: json['userId'],
-      fullName: json['fullName'],
+      id: json['id'],
+      userId: json['user_id'],
+      fullName: json['full_name'],
       email: json['email'],
       role: json['role'],
       department: json['department'],
-      lastLogin: DateTime.parse(json['lastLogin']),
-      preferences: json['preferences'],
-      permissions: List<String>.from(json['permissions']),
+      createdAt: DateTime.parse(json['created_at']),
+      updatedAt: DateTime.parse(json['updated_at']),
     );
   }
 }

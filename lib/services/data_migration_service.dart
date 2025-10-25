@@ -3,7 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import '../models/equipment.dart';
 import '../models/safety_checklist.dart';
-import '../models/safety_report.dart';
+import '../models/incident_report.dart';
 import '../models/task.dart';
 import 'local_storage_service.dart';
 
@@ -71,23 +71,8 @@ class DataMigrationService {
         final List<dynamic> jsonList = json.decode(checklistData);
         final checklists = jsonList.map((json) => SafetyChecklist.fromJson(json)).toList();
 
-        // Convert checklists to safety reports for consistency
         for (final checklist in checklists) {
-          final report = SafetyReport(
-            id: checklist.id,
-            title: 'Safety Checklist - ${checklist.location}',
-            description: checklist.safetyNotes ?? checklist.additionalNotes ?? 'Safety checklist completed',
-            status: 'submitted',
-            createdAt: checklist.date,
-            submittedAt: checklist.date,
-            location: checklist.location,
-            hazards: checklist.threatsEncountered ? ['Threats encountered'] : [],
-            recommendations: checklist.areaSafe ? ['Area is safe'] : ['Area needs attention'],
-            incidentType: 'safety_checklist',
-            incidentDate: checklist.date,
-          );
-
-          await _localStorage.saveSafetyReport(report);
+          await _localStorage.saveSafetyChecklist(checklist);
         }
 
         print('Migrated ${checklists.length} safety checklists');
@@ -106,7 +91,7 @@ class DataMigrationService {
         final incidents = jsonList.map((json) => _convertIncidentReport(json)).toList();
 
         for (final incident in incidents) {
-          await _localStorage.saveSafetyReport(incident);
+          await _localStorage.saveIncidentReport(incident);
         }
 
         print('Migrated ${incidents.length} incident reports');
@@ -116,24 +101,20 @@ class DataMigrationService {
     }
   }
 
-  SafetyReport _convertIncidentReport(Map<String, dynamic> json) {
-    return SafetyReport(
+  IncidentReport _convertIncidentReport(Map<String, dynamic> json) {
+    return IncidentReport(
       id: json['id'] ?? DateTime.now().millisecondsSinceEpoch.toString(),
-      title: 'Incident Report - ${json['type'] ?? 'Unknown'}',
+      userId: json['reportedBy'] ?? 'unknown_user',
+      incidentType: json['type'] ?? 'other',
       description: json['description'] ?? '',
-      status: 'submitted',
-      createdAt: json['date'] != null ? DateTime.parse(json['date']) : DateTime.now(),
-      submittedAt: json['date'] != null ? DateTime.parse(json['date']) : DateTime.now(),
+      severity: json['requiresImmediate'] == true ? 'critical' : 'moderate',
       location: json['location'] ?? 'Unknown',
-      hazards: [json['type'] ?? 'Unknown'],
-      recommendations: json['actionTaken'] != null ? [json['actionTaken']] : [],
-      incidentType: json['type'],
-      incidentDate: json['date'] != null ? DateTime.parse(json['date']) : null,
+      incidentDate: json['date'] != null ? DateTime.parse(json['date']) : DateTime.now(),
       witnesses: json['witnesses'] != null ? List<String>.from(json['witnesses']) : null,
-      requiresImmediate: json['requiresImmediate'] ?? false,
-      actionTaken: json['actionTaken'],
-      mediaUrls: json['mediaUrls'] != null ? List<String>.from(json['mediaUrls']) : null,
-      reportedBy: json['reportedBy'] ?? 'Unknown',
+      immediateActionTaken: json['actionTaken'],
+      requiresFollowUp: json['requiresImmediate'] == false,
+      createdAt: json['date'] != null ? DateTime.parse(json['date']) : DateTime.now(),
+      updatedAt: DateTime.now(),
     );
   }
 
@@ -168,13 +149,14 @@ class DataMigrationService {
   Task _convertTask(Map<String, dynamic> json) {
     return Task(
       id: json['id'] ?? DateTime.now().millisecondsSinceEpoch.toString(),
-      title: json['title'] ?? json['name'] ?? 'Unnamed Task',
-      description: json['description'] ?? '',
-      status: json['status'] ?? 'pending',
-      dueDate: json['dueDate'] != null ? DateTime.parse(json['dueDate']) : DateTime.now().add(const Duration(days: 7)),
-      assignedTo: json['assignedTo'] ?? json['userId'] ?? 'unassigned',
-      priority: json['priority'] ?? 'medium',
-      metadata: json['metadata'],
+      userId: json['userId'] ?? json['assignedTo'] ?? 'unknown',
+      siteName: json['title'] ?? json['name'] ?? 'Unnamed Site',
+      siteAddress: json['description'] ?? '',
+      visitStatus: json['status'] ?? 'planned',
+      notes: json['metadata']?['notes'],
+      journeyPath: json['metadata']?['journeyPath'],
+      createdAt: json['createdAt'] != null ? DateTime.parse(json['createdAt']) : DateTime.now(),
+      updatedAt: DateTime.now(),
     );
   }
 

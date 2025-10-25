@@ -5,7 +5,8 @@ import 'connectivity_service.dart';
 import 'local_storage_service.dart';
 import '../models/task.dart';
 import '../models/equipment.dart';
-import '../models/safety_report.dart';
+import '../models/incident_report.dart';
+import '../models/safety_checklist.dart';
 import '../models/user_profile.dart';
 
 enum SyncStatus {
@@ -87,10 +88,14 @@ class OfflineSyncService {
       totalUploaded += equipmentResult.uploaded;
       totalDownloaded += equipmentResult.downloaded;
 
-      // Sync safety reports
-      final safetyResult = await _syncSafetyReports();
-      totalUploaded += safetyResult.uploaded;
-      totalDownloaded += safetyResult.downloaded;
+      // Sync safety reports (incident reports and safety checklists)
+      final incidentResult = await _syncIncidentReports();
+      totalUploaded += incidentResult.uploaded;
+      totalDownloaded += incidentResult.downloaded;
+
+      final checklistResult = await _syncSafetyChecklists();
+      totalUploaded += checklistResult.uploaded;
+      totalDownloaded += checklistResult.downloaded;
 
       // Sync user profiles
       final profileResult = await _syncUserProfiles();
@@ -123,18 +128,18 @@ class OfflineSyncService {
     // Upload unsynced tasks
     for (final task in unsyncedTasks) {
       try {
-        await _supabase.from('tasks').upsert(task.toJson());
+        await _supabase.from('site_visits').upsert(task.toJson());
         _localStorage.markAsSynced('tasks', task.id);
         uploaded++;
       } catch (e) {
-        debugPrint('Failed to upload task ${task.id}: $e');
+        debugPrint('Failed to upload site visit ${task.id}: $e');
         // Continue with other tasks
       }
     }
 
     // Download latest tasks from server
     try {
-      final response = await _supabase.from('tasks').select('*');
+      final response = await _supabase.from('site_visits').select('*');
       final serverTasks = (response as List)
           .map((json) => Task.fromJson(json))
           .toList();
@@ -143,7 +148,7 @@ class OfflineSyncService {
       await _localStorage.saveMultipleTasks(serverTasks);
       downloaded = serverTasks.length;
     } catch (e) {
-      debugPrint('Failed to download tasks: $e');
+      debugPrint('Failed to download site visits: $e');
     }
 
     return _SyncCounts(uploaded: uploaded, downloaded: downloaded);
@@ -187,12 +192,13 @@ class OfflineSyncService {
     return _SyncCounts(uploaded: uploaded, downloaded: downloaded);
   }
 
-  Future<_SyncCounts> _syncSafetyReports() async {
-    _updateStatus(SyncStatus.syncing, 'Syncing safety reports...');
+  Future<_SyncCounts> _syncIncidentReports() async {
+    _updateStatus(SyncStatus.syncing, 'Syncing incident reports...');
 
-    final localReports = _localStorage.getAllSafetyReports();
+    // Get local incident reports that need syncing
+    final localReports = _localStorage.getAllIncidentReports();
     final unsyncedReports = localReports.where((report) =>
-      !_localStorage.isSynced('safetyReports', report.id)).toList();
+      !_localStorage.isSynced('incidentReports', report.id)).toList();
 
     int uploaded = 0;
     int downloaded = 0;
@@ -200,25 +206,63 @@ class OfflineSyncService {
     // Upload unsynced reports
     for (final report in unsyncedReports) {
       try {
-        await _supabase.from('safety_reports').upsert(report.toJson());
-        _localStorage.markAsSynced('safetyReports', report.id);
+        await _supabase.from('incident_reports').upsert(report.toJson());
+        _localStorage.markAsSynced('incidentReports', report.id);
         uploaded++;
       } catch (e) {
-        debugPrint('Failed to upload safety report ${report.id}: $e');
+        debugPrint('Failed to upload incident report ${report.id}: $e');
       }
     }
 
     // Download reports
     try {
-      final response = await _supabase.from('safety_reports').select('*');
+      final response = await _supabase.from('incident_reports').select('*');
       final serverReports = (response as List)
-          .map((json) => SafetyReport.fromJson(json))
+          .map((json) => IncidentReport.fromJson(json))
           .toList();
 
-      await _localStorage.saveMultipleSafetyReports(serverReports);
+      await _localStorage.saveMultipleIncidentReports(serverReports);
       downloaded = serverReports.length;
     } catch (e) {
-      debugPrint('Failed to download safety reports: $e');
+      debugPrint('Failed to download incident reports: $e');
+    }
+
+    return _SyncCounts(uploaded: uploaded, downloaded: downloaded);
+  }
+
+  Future<_SyncCounts> _syncSafetyChecklists() async {
+    _updateStatus(SyncStatus.syncing, 'Syncing safety checklists...');
+
+    // Get local safety checklists that need syncing
+    final localChecklists = _localStorage.getAllSafetyChecklists();
+    final unsyncedChecklists = localChecklists.where((checklist) =>
+      !_localStorage.isSynced('safetyChecklists', checklist.id)).toList();
+
+    int uploaded = 0;
+    int downloaded = 0;
+
+    // Upload unsynced checklists
+    for (final checklist in unsyncedChecklists) {
+      try {
+        await _supabase.from('safety_checklists').upsert(checklist.toJson());
+        _localStorage.markAsSynced('safetyChecklists', checklist.id);
+        uploaded++;
+      } catch (e) {
+        debugPrint('Failed to upload safety checklist ${checklist.id}: $e');
+      }
+    }
+
+    // Download checklists
+    try {
+      final response = await _supabase.from('safety_checklists').select('*');
+      final serverChecklists = (response as List)
+          .map((json) => SafetyChecklist.fromJson(json))
+          .toList();
+
+      await _localStorage.saveMultipleSafetyChecklists(serverChecklists);
+      downloaded = serverChecklists.length;
+    } catch (e) {
+      debugPrint('Failed to download safety checklists: $e');
     }
 
     return _SyncCounts(uploaded: uploaded, downloaded: downloaded);
@@ -234,7 +278,7 @@ class OfflineSyncService {
       final currentUser = _supabase.auth.currentUser;
       if (currentUser != null) {
         final response = await _supabase
-            .from('user_profiles')
+            .from('profiles')
             .select('*')
             .eq('user_id', currentUser.id)
             .single();
@@ -253,7 +297,8 @@ class OfflineSyncService {
   // Manual sync methods for specific data types
   Future<void> syncTasks() async => await _syncTasks();
   Future<void> syncEquipment() async => await _syncEquipment();
-  Future<void> syncSafetyReports() async => await _syncSafetyReports();
+  Future<void> syncIncidentReports() async => await _syncIncidentReports();
+  Future<void> syncSafetyChecklists() async => await _syncSafetyChecklists();
   Future<void> syncUserProfile() async => await _syncUserProfiles();
 
   // Force sync (ignores sync status flags)

@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
-import '../models/safety_report.dart';
+import '../models/incident_report.dart';
 import '../services/local_storage_service.dart';
 import '../providers/sync_provider.dart';
 import '../theme/app_colors.dart';
@@ -20,7 +20,7 @@ class IncidentReportScreen extends StatefulWidget {
 
 class _IncidentReportScreenState extends State<IncidentReportScreen> {
   late LocalStorageService _localStorage;
-  List<SafetyReport> _reports = [];
+  List<IncidentReport> _reports = [];
   bool _isLoading = true;
   final _imagePicker = ImagePicker();
   List<String> _selectedImages = [];
@@ -38,13 +38,13 @@ class _IncidentReportScreenState extends State<IncidentReportScreen> {
     // Trigger sync when screen loads if online
     final syncProvider = Provider.of<SyncProvider>(context, listen: false);
     if (syncProvider.isOnline) {
-      syncProvider.syncSafetyReports();
+      syncProvider.syncIncidentReports();
     }
   }
 
   Future<void> _loadReports() async {
     setState(() => _isLoading = true);
-    final reports = _localStorage.getAllSafetyReports();
+    final reports = _localStorage.getAllIncidentReports();
     setState(() {
       _reports = reports;
       _isLoading = false;
@@ -200,30 +200,26 @@ class _IncidentReportScreenState extends State<IncidentReportScreen> {
             onPressed: () async {
               if (locationController.text.isNotEmpty &&
                   descriptionController.text.isNotEmpty) {
-                final report = SafetyReport(
+                final report = IncidentReport(
                   id: DateTime.now().millisecondsSinceEpoch.toString(),
-                  title: 'Incident Report - ${selectedType}',
-                  description: descriptionController.text,
-                  status: 'submitted',
-                  createdAt: DateTime.now(),
-                  submittedAt: DateTime.now(),
-                  location: locationController.text,
-                  hazards: [selectedType], // Using incident type as hazard
-                  recommendations: actionController.text.isNotEmpty ? [actionController.text] : [],
+                  userId: 'current_user_id', // Replace with actual user ID
                   incidentType: selectedType,
+                  description: descriptionController.text,
+                  severity: requiresImmediate ? 'critical' : 'moderate',
+                  location: locationController.text,
                   incidentDate: DateTime.now(),
                   witnesses: witnessesController.text
                       .split(',')
                       .map((e) => e.trim())
                       .where((e) => e.isNotEmpty)
                       .toList(),
-                  requiresImmediate: requiresImmediate,
-                  actionTaken: actionController.text.isNotEmpty ? actionController.text : null,
-                  mediaUrls: _selectedImages,
-                  reportedBy: 'Current User', // Replace with actual user
+                  immediateActionTaken: actionController.text.isNotEmpty ? actionController.text : null,
+                  requiresFollowUp: !requiresImmediate,
+                  createdAt: DateTime.now(),
+                  updatedAt: DateTime.now(),
                 );
 
-                await _localStorage.saveSafetyReport(report);
+                await _localStorage.saveIncidentReport(report);
                 _loadReports();
                 if (mounted) Navigator.pop(context);
               }
@@ -290,7 +286,7 @@ class _IncidentReportScreenState extends State<IncidentReportScreen> {
                         ),
                       ],
                     ),
-                    trailing: report.requiresImmediate == true
+                    trailing: report.severity == 'critical'
                         ? Icon(Icons.warning, color: AppColors.accentRed)
                         : null,
                     onTap: () {
@@ -324,31 +320,19 @@ class _IncidentReportScreenState extends State<IncidentReportScreen> {
                                     'Witnesses',
                                     report.witnesses!.join(', '),
                                   ),
-                                if (report.actionTaken != null)
+                                if (report.immediateActionTaken != null)
                                   _buildDetailItem(
-                                    'Action Taken',
-                                    report.actionTaken!,
+                                    'Immediate Action Taken',
+                                    report.immediateActionTaken!,
                                   ),
                                 _buildDetailItem(
-                                  'Immediate Attention',
-                                  report.requiresImmediate == true ? 'Yes' : 'No',
+                                  'Severity',
+                                  report.severity,
                                 ),
-                                if (report.mediaUrls != null &&
-                                    report.mediaUrls!.isNotEmpty)
-                                  Wrap(
-                                    spacing: 8,
-                                    runSpacing: 8,
-                                    children: report.mediaUrls!
-                                        .map(
-                                          (path) => Image.file(
-                                            File(path),
-                                            width: 100,
-                                            height: 100,
-                                            fit: BoxFit.cover,
-                                          ),
-                                        )
-                                        .toList(),
-                                  ),
+                                _buildDetailItem(
+                                  'Requires Follow-up',
+                                  report.requiresFollowUp ? 'Yes' : 'No',
+                                ),
                               ],
                             ),
                           ),

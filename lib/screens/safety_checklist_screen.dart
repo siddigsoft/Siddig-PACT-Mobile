@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/safety_checklist.dart';
 import '../services/safety_service.dart';
 import '../theme/app_colors.dart';
@@ -19,6 +20,10 @@ class _SafetyChecklistScreenState extends State<SafetyChecklistScreen> {
   late SafetyService _safetyService;
   List<SafetyChecklist> _checklists = [];
   bool _isLoading = true;
+
+  // Checklist type configuration
+  final List<String> _checklistTypes = ['pre_visit', 'during_visit', 'post_visit', 'emergency'];
+  String _selectedChecklistType = 'pre_visit';
 
   @override
   void initState() {
@@ -41,6 +46,12 @@ class _SafetyChecklistScreenState extends State<SafetyChecklistScreen> {
     });
   }
 
+  // Helper method to get current user ID from Supabase auth
+  String? _getCurrentUserId() {
+    final user = Supabase.instance.client.auth.currentUser;
+    return user?.id;
+  }
+
   Future<void> _showNewChecklistForm() async {
     final locationController = TextEditingController();
     bool areaSafe = true;
@@ -51,6 +62,9 @@ class _SafetyChecklistScreenState extends State<SafetyChecklistScreen> {
     final threatDetailsController = TextEditingController();
     final hindrancesController = TextEditingController();
     final additionalNotesController = TextEditingController();
+
+    // Reset selected type to default
+    _selectedChecklistType = 'pre_visit';
 
     await showDialog(
       context: context,
@@ -64,6 +78,26 @@ class _SafetyChecklistScreenState extends State<SafetyChecklistScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Checklist type dropdown
+              DropdownButtonFormField<String>(
+                value: _selectedChecklistType,
+                decoration: const InputDecoration(
+                  labelText: 'Checklist Type',
+                  hintText: 'Select checklist type',
+                ),
+                items: _checklistTypes.map((type) {
+                  return DropdownMenuItem<String>(
+                    value: type,
+                    child: Text(type.replaceAll('_', ' ').toUpperCase()),
+                  );
+                }).toList(),
+                onChanged: (value) {
+                  if (value != null) {
+                    setState(() => _selectedChecklistType = value);
+                  }
+                },
+              ),
+              const SizedBox(height: 16),
               TextField(
                 controller: locationController,
                 decoration: const InputDecoration(
@@ -150,27 +184,47 @@ class _SafetyChecklistScreenState extends State<SafetyChecklistScreen> {
           ),
           ElevatedButton(
             onPressed: () async {
+              final userId = _getCurrentUserId();
+              if (userId == null) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('User not authenticated')),
+                );
+                return;
+              }
+
               if (locationController.text.isNotEmpty) {
                 final checklist = SafetyChecklist(
                   id: DateTime.now().millisecondsSinceEpoch.toString(),
-                  date: DateTime.now(),
-                  areaSafe: areaSafe,
-                  safetyNotes: !areaSafe ? safetyNotesController.text : null,
-                  threatsEncountered: threatsEncountered,
-                  threatDetails: threatsEncountered
-                      ? threatDetailsController.text
-                      : null,
-                  cleanWaterAvailable: cleanWaterAvailable,
-                  foodAvailable: foodAvailable,
-                  hindrances: hindrancesController.text
-                      .split(',')
-                      .map((e) => e.trim())
-                      .where((e) => e.isNotEmpty)
-                      .toList(),
-                  additionalNotes: additionalNotesController.text.isNotEmpty
-                      ? additionalNotesController.text
-                      : null,
-                  location: locationController.text,
+                  userId: userId, // Now gets actual user ID from auth
+                  checklistType: _selectedChecklistType, // Now configurable
+                  items: [
+                    {
+                      'question': 'Is the area safe?',
+                      'answer': areaSafe,
+                      'notes': !areaSafe ? safetyNotesController.text : null,
+                    },
+                    {
+                      'question': 'Threats encountered?',
+                      'answer': threatsEncountered,
+                      'details': threatsEncountered ? threatDetailsController.text : null,
+                    },
+                    {
+                      'question': 'Clean water available?',
+                      'answer': cleanWaterAvailable,
+                    },
+                    {
+                      'question': 'Food available?',
+                      'answer': foodAvailable,
+                    },
+                    {
+                      'question': 'Hindrances',
+                      'answer': hindrancesController.text.isNotEmpty,
+                      'details': hindrancesController.text,
+                    },
+                  ],
+                  completedAt: DateTime.now(),
+                  createdAt: DateTime.now(),
+                  updatedAt: DateTime.now(),
                 );
 
                 await _safetyService.addChecklist(checklist);
@@ -220,16 +274,18 @@ class _SafetyChecklistScreenState extends State<SafetyChecklistScreen> {
                   margin: const EdgeInsets.only(bottom: 16),
                   child: ListTile(
                     title: Text(
-                      checklist.location,
+                      'Safety Checklist - ${checklist.checklistType.replaceAll('_', ' ').toUpperCase()}',
                       style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
                     ),
                     subtitle: Text(
-                      'Date: ${checklist.date.toString().split('.')[0]}',
+                      'Completed: ${checklist.completedAt?.toString().split('.')[0] ?? checklist.createdAt.toString().split('.')[0]}',
                       style: GoogleFonts.poppins(),
                     ),
                     trailing: Icon(
-                      checklist.areaSafe ? Icons.check_circle : Icons.warning,
-                      color: checklist.areaSafe
+                      checklist.items.any((item) => item['question'] == 'Is the area safe?' && item['answer'] == true)
+                          ? Icons.check_circle
+                          : Icons.warning,
+                      color: checklist.items.any((item) => item['question'] == 'Is the area safe?' && item['answer'] == true)
                           ? AppColors.accentGreen
                           : AppColors.accentRed,
                     ),
@@ -239,7 +295,7 @@ class _SafetyChecklistScreenState extends State<SafetyChecklistScreen> {
                         context: context,
                         builder: (context) => AlertDialog(
                           title: Text(
-                            checklist.location,
+                            'Safety Checklist - ${checklist.checklistType.replaceAll('_', ' ').toUpperCase()}',
                             style: GoogleFonts.poppins(
                               fontWeight: FontWeight.w600,
                             ),
@@ -250,45 +306,13 @@ class _SafetyChecklistScreenState extends State<SafetyChecklistScreen> {
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 _buildDetailItem(
-                                  'Date',
-                                  checklist.date.toString().split('.')[0],
+                                  'Completed',
+                                  checklist.completedAt?.toString().split('.')[0] ?? 'Not completed',
                                 ),
-                                _buildDetailItem(
-                                  'Area Safety',
-                                  checklist.areaSafe ? 'Safe' : 'Unsafe',
-                                ),
-                                if (!checklist.areaSafe)
-                                  _buildDetailItem(
-                                    'Safety Notes',
-                                    checklist.safetyNotes ?? 'No notes',
-                                  ),
-                                _buildDetailItem(
-                                  'Threats',
-                                  checklist.threatsEncountered ? 'Yes' : 'No',
-                                ),
-                                if (checklist.threatsEncountered)
-                                  _buildDetailItem(
-                                    'Threat Details',
-                                    checklist.threatDetails ?? 'No details',
-                                  ),
-                                _buildDetailItem(
-                                  'Clean Water',
-                                  checklist.cleanWaterAvailable ? 'Yes' : 'No',
-                                ),
-                                _buildDetailItem(
-                                  'Food',
-                                  checklist.foodAvailable ? 'Yes' : 'No',
-                                ),
-                                if (checklist.hindrances.isNotEmpty)
-                                  _buildDetailItem(
-                                    'Hindrances',
-                                    checklist.hindrances.join(', '),
-                                  ),
-                                if (checklist.additionalNotes != null)
-                                  _buildDetailItem(
-                                    'Additional Notes',
-                                    checklist.additionalNotes!,
-                                  ),
+                                ...checklist.items.map((item) => _buildDetailItem(
+                                  item['question'] ?? 'Unknown',
+                                  item['answer']?.toString() ?? 'N/A',
+                                )),
                               ],
                             ),
                           ),

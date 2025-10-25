@@ -66,14 +66,16 @@ void main() async {
   // Open boxes for offline data storage
   await Hive.openBox('tasks');
   await Hive.openBox('equipments');
-  await Hive.openBox('safetyReports');
+  await Hive.openBox('incidentReports');
+  await Hive.openBox('safetyChecklists');
   await Hive.openBox('userProfiles');
   await Hive.openBox('appSettings');
   await Hive.openBox('mapData');
   // Open sync status boxes
   await Hive.openBox('tasks_sync');
   await Hive.openBox('equipments_sync');
-  await Hive.openBox('safetyReports_sync');
+  await Hive.openBox('incidentReports_sync');
+  await Hive.openBox('safetyChecklists_sync');
   await Hive.openBox('userProfiles_sync');
 
   // Initialize web-specific configuration and URL strategy

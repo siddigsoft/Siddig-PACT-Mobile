@@ -47,8 +47,13 @@ class SyncProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> syncSafetyReports() async {
-    await _syncService.syncSafetyReports();
+  Future<void> syncIncidentReports() async {
+    await _syncService.syncIncidentReports();
+    notifyListeners();
+  }
+
+  Future<void> syncSafetyChecklists() async {
+    await _syncService.syncSafetyChecklists();
     notifyListeners();
   }
 
