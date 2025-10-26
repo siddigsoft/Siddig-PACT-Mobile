@@ -220,58 +220,70 @@ class ChatService {
   // Get chat participants
   Future<List<ChatParticipant>> getChatParticipants(String chatId) async {
     try {
+      // Try to join with profiles table first
       final response = await _supabase
           .from('chat_participants')
-          .select('*')
+          .select('*, profiles!inner(full_name)')
           .eq('chat_id', chatId);
 
       // Debug: print raw response to help trace participant loading issues
       // ignore: avoid_print
       print('getChatParticipants response for $chatId: $response');
 
-      final participants = <ChatParticipant>[];
-
-      for (final json in response) {
-        String? userName;
-
-        // Try to get user name from auth metadata or user_profiles table
-        try {
-          // First try to get from user_profiles if it exists
-          final profileResponse = await _supabase
-              .from('user_profiles')
-              .select('full_name')
-              .eq('user_id', json['user_id'])
-              .maybeSingle();
-
-          if (profileResponse != null && profileResponse['full_name'] != null) {
-            userName = profileResponse['full_name'];
-          } else {
-            // Fallback: try to get from auth.users metadata
-            final authUser =
-                await _supabase.auth.admin.getUserById(json['user_id']);
-            userName = authUser.user?.userMetadata?['full_name'] ??
-                authUser.user?.email?.split('@').first ??
-                'User ${json['user_id'].substring(0, 8)}';
-          }
-        } catch (e) {
-          // If all else fails, use user ID prefix
-          userName = 'User ${json['user_id'].substring(0, 8)}';
-          print('Error getting user name for ${json['user_id']}: $e');
-        }
-
-        participants.add(ChatParticipant(
+      return response.map((json) {
+        return ChatParticipant(
           chatId: json['chat_id'],
           userId: json['user_id'],
-          userName: userName,
+          userName: json['profiles']?['full_name'] ?? 'User ${json['user_id'].substring(0, 8)}',
           joinedAt: DateTime.parse(json['joined_at']),
-        ));
-      }
-
-      return participants;
+        );
+      }).toList();
     } catch (e) {
-      // ignore: avoid_print
-      print('Error getting chat participants: $e');
-      return [];
+      // If join fails, try without join and query profiles separately
+      print('Join with profiles failed, trying separate queries: $e');
+      try {
+        final response = await _supabase
+            .from('chat_participants')
+            .select('*')
+            .eq('chat_id', chatId);
+
+        final participants = <ChatParticipant>[];
+
+        for (final json in response) {
+          String? userName;
+
+          // Try to get user name from profiles table
+          try {
+            final profileResponse = await _supabase
+                .from('profiles')
+                .select('full_name')
+                .eq('id', json['user_id'])
+                .maybeSingle();
+
+            if (profileResponse != null && profileResponse['full_name'] != null) {
+              userName = profileResponse['full_name'];
+            }
+          } catch (e) {
+            print('Error getting profile for ${json['user_id']}: $e');
+          }
+
+          // Fallback to user ID if no name found
+          userName ??= 'User ${json['user_id'].substring(0, 8)}';
+
+          participants.add(ChatParticipant(
+            chatId: json['chat_id'],
+            userId: json['user_id'],
+            userName: userName,
+            joinedAt: DateTime.parse(json['joined_at']),
+          ));
+        }
+
+        return participants;
+      } catch (e) {
+        // ignore: avoid_print
+        print('Error getting chat participants: $e');
+        return [];
+      }
     }
   }
 

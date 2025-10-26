@@ -547,23 +547,8 @@ class _FieldOperationsEnhancedScreenState
       final allVisits =
           visitData.map((data) => SiteVisit.fromJson(data)).toList();
 
-      // Filter visits by current location if on mobile
-      List<SiteVisit> filteredVisits;
-      if (!kIsWeb) {
-        final currentCity = await _getCurrentCity();
-        if (currentCity != null) {
-          // Filter visits where site_code matches current city
-          filteredVisits = allVisits
-              .where((visit) => visit.siteCode == currentCity)
-              .toList();
-        } else {
-          // If location not available, show all visits
-          filteredVisits = allVisits;
-        }
-      } else {
-        // On web, show all visits (location filtering not reliable)
-        filteredVisits = allVisits;
-      }
+      // Show all assigned visits (removed location filtering for reliability)
+      final filteredVisits = allVisits; // when implementing geofencing based on city change this 
 
       if (mounted) {
         setState(() {
@@ -605,15 +590,41 @@ class _FieldOperationsEnhancedScreenState
       // Return null to show all visits
       return null;
     }
+
     try {
+      // Check location permissions first
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          debugPrint('Location permission denied');
+          return null;
+        }
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        debugPrint('Location permission permanently denied');
+        return null;
+      }
+
+      // Get current position with timeout
       Position position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
+        timeLimit: const Duration(seconds: 10),
       );
+
+      // Get placemarks from coordinates
       List<Placemark> placemarks = await placemarkFromCoordinates(
         position.latitude,
         position.longitude,
       );
-      return placemarks.first.locality; // e.g., "Kampala"
+
+      if (placemarks.isNotEmpty && placemarks.first.locality != null) {
+        return placemarks.first.locality; // e.g., "Kampala"
+      } else {
+        debugPrint('No locality found in placemarks');
+        return null;
+      }
     } catch (e) {
       debugPrint('Error getting current city: $e');
       return null;
