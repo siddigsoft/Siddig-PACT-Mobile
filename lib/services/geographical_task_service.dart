@@ -175,7 +175,7 @@ class GeographicalTaskService {
           distanceMeters: (taskData['distance'] as num).toDouble() *
               1000, // Convert km back to meters
         );
-      }).toList() as List<SiteVisitWithDistance>;
+      }).toList();
     } catch (e) {
       print('Error getting cached nearby tasks: $e');
       return null;

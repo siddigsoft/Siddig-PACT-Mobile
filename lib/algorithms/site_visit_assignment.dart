@@ -1,5 +1,4 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../models/site_visit.dart';
 
 /// Handles the atomic assignment of site visits to users
 class SiteVisitAssignment {
@@ -8,7 +7,7 @@ class SiteVisitAssignment {
   SiteVisitAssignment(this._supabase);
 
   /// Attempts to assign a site visit to a user
-  /// 
+  ///
   /// Returns a Future that completes with the assignment result
   /// If successful, updates the local site visit status
   /// If failed, returns the current assignment state from the server
@@ -39,7 +38,7 @@ class SiteVisitAssignment {
       }
 
       final result = response.data as Map<String, dynamic>;
-      
+
       if (result['success'] == true) {
         // Update local state
         await _updateLocalAssignment(

@@ -5,7 +5,7 @@ import 'package:path/path.dart' as path;
 
 class StorageService {
   final supabase = Supabase.instance.client;
-  
+
   // Singleton pattern
   static final StorageService _instance = StorageService._internal();
   factory StorageService() => _instance;
@@ -16,17 +16,18 @@ class StorageService {
     try {
       final fileName = path.basename(file.path);
       final filePath = folder != null ? '$folder/$fileName' : fileName;
-      
-      await supabase.storage.from(bucket).upload(
-        filePath,
-        file,
-        fileOptions: const FileOptions(
-          cacheControl: '3600',
-          upsert: true,
-        ),
-      );
 
-      final String publicUrl = supabase.storage.from(bucket).getPublicUrl(filePath);
+      await supabase.storage.from(bucket).upload(
+            filePath,
+            file,
+            fileOptions: const FileOptions(
+              cacheControl: '3600',
+              upsert: true,
+            ),
+          );
+
+      final String publicUrl =
+          supabase.storage.from(bucket).getPublicUrl(filePath);
       return publicUrl;
     } on StorageException catch (e) {
       if (kDebugMode) {
@@ -39,7 +40,8 @@ class StorageService {
   }
 
   // Download file
-  Future<File> downloadFile(String path, String bucket, String destinationPath) async {
+  Future<File> downloadFile(
+      String path, String bucket, String destinationPath) async {
     try {
       final bytes = await supabase.storage.from(bucket).download(path);
       final file = File(destinationPath);
@@ -62,9 +64,8 @@ class StorageService {
   // List files in a bucket/folder
   Future<List<FileObject>> listFiles(String bucket, {String? folder}) async {
     try {
-      final List<FileObject> files = await supabase.storage
-          .from(bucket)
-          .list(path: folder);
+      final List<FileObject> files =
+          await supabase.storage.from(bucket).list(path: folder);
       return files;
     } catch (e) {
       throw StorageException('Failed to list files');

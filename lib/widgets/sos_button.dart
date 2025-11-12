@@ -78,7 +78,7 @@ class SOSButton extends StatelessWidget {
                       _makeEmergencyCall(number);
                     },
                   );
-                }).toList(),
+                }),
               ],
             ),
           ),
@@ -96,36 +96,34 @@ class SOSButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: () => _showEmergencyOptions(context),
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: AppColors.accentRed.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.accentRed, width: 2),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.emergency, color: AppColors.accentRed, size: 28),
-                  const SizedBox(width: 8),
-                  Text(
-                    'SOS',
-                    style: GoogleFonts.poppins(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.accentRed,
-                    ),
-                  ),
-                ],
-              ),
-            ),
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => _showEmergencyOptions(context),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: AppColors.accentRed.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.accentRed, width: 2),
           ),
-        )
-        .animate(onPlay: (controller) => controller.repeat())
-        .shimmer(
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.emergency, color: AppColors.accentRed, size: 28),
+              const SizedBox(width: 8),
+              Text(
+                'SOS',
+                style: GoogleFonts.poppins(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.accentRed,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ).animate(onPlay: (controller) => controller.repeat()).shimmer(
           duration: const Duration(milliseconds: 2000),
           color: AppColors.accentRed.withOpacity(0.3),
         );

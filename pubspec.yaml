@@ -42,6 +42,7 @@ dependencies:
   hive_flutter: ^1.1.0       # Hive Flutter integration
   shared_preferences: ^2.2.2  # For local storage
   flutter_secure_storage: ^9.0.0 # For storing encryption keys
+  local_auth: ^2.3.0         # For biometric authentication
   flutter_local_notifications: ^19.4.2 # For local notifications
   connectivity_plus: ^7.0.0  # For network connectivity
   uuid: ^4.4.0              # For generating unique IDs
@@ -77,6 +78,13 @@ dependencies:
   sqflite: ^2.4.2
   path: ^1.9.1
   provider: ^6.1.1           # For state management
+  flutter_map_tile_caching: ^9.0.1 # For offline map tile caching
+  flutter_map_marker_popup: ^6.1.2  # For marker popups
+  syncfusion_flutter_xlsio: ^28.1.36 # For Excel file handling
+  syncfusion_flutter_pdf: ^28.1.36 # For PDF viewing
+  webview_flutter: ^4.10.0 # For in-app document viewing
+  shorebird_code_push: ^1.1.0 # For Shorebird OTA updates
+  firebase_messaging: ^15.1.6 # For push notifications (optional, for FCM)
 
 dev_dependencies:
   flutter_test:

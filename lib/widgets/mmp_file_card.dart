@@ -9,10 +9,10 @@ class MMPFileCard extends StatelessWidget {
   final VoidCallback? onTap;
 
   const MMPFileCard({
-    Key? key,
+    super.key,
     required this.file,
     this.onTap,
-  }) : super(key: key);
+  });
 
   Future<void> _openFile() async {
     if (file.fileUrl != null) {
@@ -76,7 +76,8 @@ class MMPFileCard extends StatelessWidget {
                     ),
                     decoration: BoxDecoration(
                       color: Color(
-                        int.parse(_getStatusColor().substring(1, 7), radix: 16) +
+                        int.parse(_getStatusColor().substring(1, 7),
+                                radix: 16) +
                             0xFF000000,
                       ),
                       borderRadius: BorderRadius.circular(12),

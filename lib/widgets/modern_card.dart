@@ -91,16 +91,26 @@ class ModernCard extends StatelessWidget {
   Widget _buildCardContent(BuildContext context) {
     final content =
         headerTitle != null || headerLeading != null || headerTrailing != null
-        ? Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _buildHeader(),
-              Padding(
-                padding: padding ?? const EdgeInsets.all(16),
-                child: child,
-              ),
-            ],
+        ? LayoutBuilder(
+            builder: (context, constraints) {
+              // Use a Column with an Expanded + SingleChildScrollView to prevent overflow
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.max,
+                children: [
+                  _buildHeader(),
+                  Expanded(
+                    child: Padding(
+                      padding: padding ?? const EdgeInsets.all(16),
+                      child: SingleChildScrollView(
+                        physics: const ClampingScrollPhysics(),
+                        child: child,
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
           )
         : Padding(padding: padding ?? const EdgeInsets.all(16), child: child);
 
@@ -112,7 +122,7 @@ class ModernCard extends StatelessWidget {
 
   Widget _buildHeader() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 6), // Reduced padding
       child: Row(
         children: [
           if (headerLeading != null) ...[

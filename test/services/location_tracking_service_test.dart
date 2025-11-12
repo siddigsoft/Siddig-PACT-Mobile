@@ -2,11 +2,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:pact_mobile/services/location_tracking_service.dart';
-import 'package:pact_mobile/models/location_log_model.dart';
 import 'package:geolocator/geolocator.dart';
 
 class MockDatabase extends Mock implements Database {}
+
 class MockBatch extends Mock implements Batch {}
+
 class MockPosition extends Mock implements Position {}
 
 void main() {
@@ -24,10 +25,9 @@ void main() {
               conflictAlgorithm: any(named: 'conflictAlgorithm')))
           .thenAnswer((_) async => 1);
       when(() => mockDatabase.query(any(),
-              where: any(named: 'where'),
-              limit: any(named: 'limit'),
-              orderBy: any(named: 'orderBy')))
-          .thenAnswer((_) async => []);
+          where: any(named: 'where'),
+          limit: any(named: 'limit'),
+          orderBy: any(named: 'orderBy'))).thenAnswer((_) async => []);
     });
 
     test('startTracking should initialize location tracking', () async {

@@ -5,11 +5,10 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../models/incident_report.dart';
 import '../services/local_storage_service.dart';
+import '../services/auth_service.dart';
 import '../providers/sync_provider.dart';
 import '../theme/app_colors.dart';
 import '../l10n/app_localizations.dart';
-import 'dart:io';
-import 'package:image_picker/image_picker.dart';
 
 class IncidentReportScreen extends StatefulWidget {
   const IncidentReportScreen({super.key});
@@ -20,10 +19,9 @@ class IncidentReportScreen extends StatefulWidget {
 
 class _IncidentReportScreenState extends State<IncidentReportScreen> {
   late LocalStorageService _localStorage;
+  late AuthService _authService;
   List<IncidentReport> _reports = [];
   bool _isLoading = true;
-  final _imagePicker = ImagePicker();
-  List<String> _selectedImages = [];
 
   @override
   void initState() {
@@ -33,6 +31,7 @@ class _IncidentReportScreenState extends State<IncidentReportScreen> {
 
   Future<void> _initializeService() async {
     _localStorage = LocalStorageService();
+    _authService = AuthService();
     _loadReports();
 
     // Trigger sync when screen loads if online
@@ -51,17 +50,6 @@ class _IncidentReportScreenState extends State<IncidentReportScreen> {
     });
   }
 
-  Future<void> _pickImage() async {
-    final XFile? image = await _imagePicker.pickImage(
-      source: ImageSource.camera,
-    );
-    if (image != null) {
-      setState(() {
-        _selectedImages.add(image.path);
-      });
-    }
-  }
-
   Future<void> _showNewReportForm() async {
     final locationController = TextEditingController();
     final descriptionController = TextEditingController();
@@ -69,7 +57,6 @@ class _IncidentReportScreenState extends State<IncidentReportScreen> {
     final actionController = TextEditingController();
     String selectedType = 'other';
     bool requiresImmediate = false;
-    _selectedImages = [];
 
     await showDialog(
       context: context,
@@ -83,8 +70,15 @@ class _IncidentReportScreenState extends State<IncidentReportScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               DropdownButtonFormField<String>(
-                value: selectedType,
-                items: ['harassment', 'theft', 'accident', 'medicalEmergency', 'naturalDisaster', 'other']
+                initialValue: selectedType,
+                items: [
+                  'harassment',
+                  'theft',
+                  'accident',
+                  'medicalEmergency',
+                  'naturalDisaster',
+                  'other'
+                ]
                     .map(
                       (type) => DropdownMenuItem(
                         value: type,
@@ -133,59 +127,11 @@ class _IncidentReportScreenState extends State<IncidentReportScreen> {
               ),
               const SizedBox(height: 16),
               StatefulBuilder(
-                builder: (context, setState) => Column(
-                  children: [
-                    SwitchListTile(
-                      title: const Text('Requires Immediate Attention'),
-                      value: requiresImmediate,
-                      onChanged: (value) =>
-                          setState(() => requiresImmediate = value),
-                    ),
-                    ElevatedButton.icon(
-                      onPressed: () async {
-                        await _pickImage();
-                        setState(() {});
-                      },
-                      icon: const Icon(Icons.camera_alt),
-                      label: const Text('Add Photo'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primaryOrange,
-                        foregroundColor: Colors.white, // Ensure text is visible
-                      ),
-                    ),
-                    if (_selectedImages.isNotEmpty)
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: _selectedImages
-                            .map(
-                              (path) => Stack(
-                                children: [
-                                  Image.file(
-                                    File(path),
-                                    width: 80,
-                                    height: 80,
-                                    fit: BoxFit.cover,
-                                  ),
-                                  Positioned(
-                                    right: 0,
-                                    top: 0,
-                                    child: IconButton(
-                                      icon: const Icon(Icons.remove_circle),
-                                      color: Colors.red,
-                                      onPressed: () {
-                                        setState(() {
-                                          _selectedImages.remove(path);
-                                        });
-                                      },
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            )
-                            .toList(),
-                      ),
-                  ],
+                builder: (context, setState) => SwitchListTile(
+                  title: const Text('Requires Immediate Attention'),
+                  value: requiresImmediate,
+                  onChanged: (value) =>
+                      setState(() => requiresImmediate = value),
                 ),
               ),
             ],
@@ -202,7 +148,7 @@ class _IncidentReportScreenState extends State<IncidentReportScreen> {
                   descriptionController.text.isNotEmpty) {
                 final report = IncidentReport(
                   id: DateTime.now().millisecondsSinceEpoch.toString(),
-                  userId: 'current_user_id', // Replace with actual user ID
+                  userId: _authService.currentUser?.id ?? '',
                   incidentType: selectedType,
                   description: descriptionController.text,
                   severity: requiresImmediate ? 'critical' : 'moderate',
@@ -213,7 +159,9 @@ class _IncidentReportScreenState extends State<IncidentReportScreen> {
                       .map((e) => e.trim())
                       .where((e) => e.isNotEmpty)
                       .toList(),
-                  immediateActionTaken: actionController.text.isNotEmpty ? actionController.text : null,
+                  immediateActionTaken: actionController.text.isNotEmpty
+                      ? actionController.text
+                      : null,
                   requiresFollowUp: !requiresImmediate,
                   createdAt: DateTime.now(),
                   updatedAt: DateTime.now(),
@@ -226,7 +174,7 @@ class _IncidentReportScreenState extends State<IncidentReportScreen> {
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primaryOrange,
-              foregroundColor: Colors.white, // Ensure text is visible
+              foregroundColor: Colors.white,
             ),
             child: Text(AppLocalizations.of(context)!.submit),
           ),
@@ -281,7 +229,7 @@ class _IncidentReportScreenState extends State<IncidentReportScreen> {
                           style: GoogleFonts.poppins(),
                         ),
                         Text(
-                          'Date: ${report.incidentDate?.toString().split('.')[0] ?? report.createdAt.toString().split('.')[0]}',
+                          'Date: ${report.incidentDate.toString().split('.')[0] ?? report.createdAt.toString().split('.')[0]}',
                           style: GoogleFonts.poppins(),
                         ),
                       ],
@@ -308,7 +256,10 @@ class _IncidentReportScreenState extends State<IncidentReportScreen> {
                                 _buildDetailItem('Location', report.location),
                                 _buildDetailItem(
                                   'Date',
-                                  report.incidentDate?.toString().split('.')[0] ?? report.createdAt.toString().split('.')[0],
+                                  report.incidentDate
+                                          .toString()
+                                          .split('.')[0] ??
+                                      report.createdAt.toString().split('.')[0],
                                 ),
                                 _buildDetailItem(
                                   'Description',

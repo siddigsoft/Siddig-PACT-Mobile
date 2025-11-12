@@ -1,24 +1,23 @@
 import 'package:sqflite/sqflite.dart';
-import 'package:path/path.dart';
 import '../services/supabase_service.dart';
 
 abstract class BaseRepository<T> {
   final Database database;
   final SupabaseService supabaseService;
   final String tableName;
-  
+
   BaseRepository({
     required this.database,
     required this.supabaseService,
     required this.tableName,
   });
-  
+
   // Convert model to Map
   Map<String, dynamic> toMap(T item);
-  
+
   // Create model from Map
   T fromMap(Map<String, dynamic> map);
-  
+
   Future<void> syncWithSupabase() async {
     try {
       // Get local changes
@@ -27,7 +26,7 @@ abstract class BaseRepository<T> {
         where: 'synced = ?',
         whereArgs: [0],
       );
-      
+
       // Upload local changes
       for (final change in localChanges) {
         try {
@@ -42,10 +41,10 @@ abstract class BaseRepository<T> {
           print('Error syncing record ${change['id']}: $e');
         }
       }
-      
+
       // Get remote changes
       final remoteChanges = await supabaseService.fetchRecords(tableName);
-      
+
       // Update local database
       await database.transaction((txn) async {
         for (final change in remoteChanges) {
@@ -61,19 +60,19 @@ abstract class BaseRepository<T> {
       rethrow;
     }
   }
-  
+
   // CRUD operations
   Future<int> insert(T item) async {
     final map = toMap(item);
     map['synced'] = 0;
     return await database.insert(tableName, map);
   }
-  
+
   Future<List<T>> getAll() async {
     final maps = await database.query(tableName);
     return maps.map((map) => fromMap(map)).toList();
   }
-  
+
   Future<T?> getById(String id) async {
     final maps = await database.query(
       tableName,
@@ -81,11 +80,11 @@ abstract class BaseRepository<T> {
       whereArgs: [id],
       limit: 1,
     );
-    
+
     if (maps.isEmpty) return null;
     return fromMap(maps.first);
   }
-  
+
   Future<int> update(T item) async {
     final map = toMap(item);
     map['synced'] = 0;
@@ -96,7 +95,7 @@ abstract class BaseRepository<T> {
       whereArgs: [map['id']],
     );
   }
-  
+
   Future<int> delete(String id) async {
     return await database.delete(
       tableName,

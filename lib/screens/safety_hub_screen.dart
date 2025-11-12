@@ -7,7 +7,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_colors.dart';
 import '../widgets/modern_app_header.dart';
 import '../widgets/sos_button.dart';
-import 'safety_checklist_screen.dart';
+import 'comprehensive_monitoring_form_screen.dart';
 import 'incident_report_screen.dart';
 import 'helpline_screen.dart';
 import '../l10n/app_localizations.dart';
@@ -145,7 +145,7 @@ class SafetyHubScreen extends StatelessWidget {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (context) => const SafetyChecklistScreen(),
+                  builder: (context) => const ComprehensiveMonitoringFormScreen(),
                 ),
               );
             } else if (title == AppLocalizations.of(context)!.incidentReport) {

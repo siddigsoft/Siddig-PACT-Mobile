@@ -48,6 +48,11 @@ class AppColors {
   static const Color cardBackground = Color(
     0xFFFEFEFE,
   ); // Slightly off-white for card backgrounds
+  
+  // Aliases for common use cases
+  static const Color primary = primaryOrange;
+  static const Color success = accentGreen;
+  static const Color error = accentRed;
   static const Color shadowColor = Color(
     0x14000000,
   ); // Subtle shadow color (8% opacity)

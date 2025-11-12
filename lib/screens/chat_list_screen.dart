@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/chat.dart';
 import '../models/chat_participant.dart';
 import '../services/chat_service.dart';
 import '../theme/app_colors.dart';
 import 'user_selection_screen.dart';
 import 'chat_screen.dart';
+import '../theme/app_design_system.dart';
+import '../widgets/app_widgets.dart';
 
 class ChatListScreen extends StatefulWidget {
   const ChatListScreen({super.key});
@@ -97,11 +97,15 @@ class _ChatListScreenState extends State<ChatListScreen> {
         ],
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(
+              child: CircularProgressIndicator(
+                color: AppColors.primaryOrange,
+              ),
+            )
           : _chats.isEmpty
               ? _buildEmptyState()
               : ListView.builder(
-                  padding: const EdgeInsets.all(16),
+                  padding: EdgeInsets.all(AppDesignSystem.spaceMD),
                   itemCount: _chats.length,
                   itemBuilder: (context, index) {
                     final chat = _chats[index];
@@ -112,24 +116,27 @@ class _ChatListScreenState extends State<ChatListScreen> {
                       builder: (context, snapshot) {
                         if (snapshot.connectionState ==
                             ConnectionState.waiting) {
-                          return Card(
-                            margin: const EdgeInsets.only(bottom: 8),
+                          return AppCard(
+                            margin: EdgeInsets.only(
+                                bottom: AppDesignSystem.spaceSM),
                             child: ListTile(
                               title: Text('Loading...',
-                                  style: GoogleFonts.poppins()),
+                                  style: AppDesignSystem.bodyLarge),
                               subtitle: Text('Private Chat',
-                                  style: GoogleFonts.poppins(fontSize: 12)),
+                                  style: AppDesignSystem.bodySmall),
                             ),
-                          );
+                          ).animate().fadeIn();
                         }
 
                         if (snapshot.hasError || !snapshot.hasData) {
-                          return Card(
-                            margin: const EdgeInsets.only(bottom: 8),
+                          return AppCard(
+                            margin: EdgeInsets.only(
+                                bottom: AppDesignSystem.spaceSM),
                             child: ListTile(
-                              title: Text('Chat', style: GoogleFonts.poppins()),
+                              title: Text('Chat',
+                                  style: AppDesignSystem.bodyLarge),
                               subtitle: Text('Private Chat',
-                                  style: GoogleFonts.poppins(fontSize: 12)),
+                                  style: AppDesignSystem.bodySmall),
                             ),
                           );
                         }
@@ -164,61 +171,123 @@ class _ChatListScreenState extends State<ChatListScreen> {
                           chatSubtitle = '${participants.length} members';
                         }
 
-                        return Card(
-                          margin: const EdgeInsets.only(bottom: 8),
-                          child: ListTile(
-                            title: Text(
-                              chatTitle,
-                              style: GoogleFonts.poppins(
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.textDark,
+                        return AppCard(
+                          margin:
+                              EdgeInsets.only(bottom: AppDesignSystem.spaceSM),
+                          shadows: AppDesignSystem.shadowSM,
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => ChatScreen(chat: chat),
                               ),
-                            ),
-                            subtitle: chatSubtitle.isNotEmpty
-                                ? Text(
-                                    chatSubtitle,
-                                    style: GoogleFonts.poppins(
-                                      color: AppColors.textLight,
+                            ).then(
+                                (_) => _loadChats()); // Refresh when returning
+                          },
+                          child: Padding(
+                            padding: EdgeInsets.all(AppDesignSystem.spaceSM),
+                            child: Row(
+                              children: [
+                                // Avatar
+                                Container(
+                                  width: 50,
+                                  height: 50,
+                                  decoration: BoxDecoration(
+                                    gradient: AppColors.primaryGradient,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      chatTitle.isNotEmpty
+                                          ? chatTitle[0].toUpperCase()
+                                          : '?',
+                                      style: AppDesignSystem.headlineMedium
+                                          .copyWith(
+                                        color: Colors.white,
+                                      ),
                                     ),
-                                  )
-                                : null,
-                            trailing: unreadCount > 0
-                                ? Container(
-                                    padding: const EdgeInsets.all(6),
-                                    decoration: const BoxDecoration(
-                                      color: AppColors.primaryOrange,
-                                      shape: BoxShape.circle,
+                                  ),
+                                ),
+                                SizedBox(width: AppDesignSystem.spaceMD),
+                                // Chat info
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        chatTitle,
+                                        style:
+                                            AppDesignSystem.titleLarge.copyWith(
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      if (chatSubtitle.isNotEmpty) ...[
+                                        SizedBox(
+                                            height: AppDesignSystem.spaceXS),
+                                        Text(
+                                          chatSubtitle,
+                                          style: AppDesignSystem.bodySmall
+                                              .copyWith(
+                                            color: AppColors.textLight,
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+                                // Unread badge
+                                if (unreadCount > 0)
+                                  Container(
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: AppDesignSystem.spaceSM,
+                                      vertical: AppDesignSystem.spaceXS,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      gradient: AppColors.primaryGradient,
+                                      borderRadius: BorderRadius.circular(
+                                        AppDesignSystem.radiusFull,
+                                      ),
                                     ),
                                     child: Text(
-                                      unreadCount.toString(),
-                                      style: GoogleFonts.poppins(
+                                      unreadCount > 99
+                                          ? '99+'
+                                          : unreadCount.toString(),
+                                      style:
+                                          AppDesignSystem.labelSmall.copyWith(
                                         color: Colors.white,
-                                        fontSize: 12,
                                         fontWeight: FontWeight.w600,
                                       ),
                                     ),
-                                  )
-                                : null,
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => ChatScreen(chat: chat),
-                                ),
-                              ).then((_) =>
-                                  _loadChats()); // Refresh when returning
-                            },
+                                  ).animate().scale(
+                                        duration: 300.ms,
+                                        curve: Curves.elasticOut,
+                                      ),
+                              ],
+                            ),
                           ),
-                        );
+                        )
+                            .animate()
+                            .fadeIn(duration: 400.ms, delay: (index * 50).ms)
+                            .slideX(begin: 0.2, end: 0);
                       },
                     );
                   },
                 ),
-      floatingActionButton: FloatingActionButton(
+      floatingActionButton: FloatingActionButton.extended(
         onPressed: _startNewChat,
         backgroundColor: AppColors.primaryOrange,
-        child: const Icon(Icons.message, color: Colors.white),
-      ),
+        icon: const Icon(Icons.add, color: Colors.white),
+        label: Text(
+          'New Chat',
+          style: AppDesignSystem.labelLarge.copyWith(
+            color: Colors.white,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ).animate().scale(delay: 500.ms, duration: 400.ms),
     );
   }
 
@@ -227,38 +296,41 @@ class _ChatListScreenState extends State<ChatListScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            Icons.chat_bubble_outline,
-            size: 80,
-            color: AppColors.textLight.withOpacity(0.5),
-          ),
-          const SizedBox(height: 16),
+          Container(
+            padding: EdgeInsets.all(AppDesignSystem.spaceLG),
+            decoration: BoxDecoration(
+              color: AppColors.primaryOrange.withOpacity(0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.chat_bubble_outline,
+              size: 80,
+              color: AppColors.primaryOrange,
+            ),
+          ).animate().scale(duration: 600.ms, curve: Curves.elasticOut),
+          SizedBox(height: AppDesignSystem.spaceLG),
           Text(
             'No conversations yet',
-            style: GoogleFonts.poppins(
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-              color: AppColors.textLight,
+            style: AppDesignSystem.headlineLarge,
+          ).animate().fadeIn(delay: 200.ms),
+          SizedBox(height: AppDesignSystem.spaceSM),
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: AppDesignSystem.spaceLG),
+            child: Text(
+              'Start a new chat to connect with team members',
+              style: AppDesignSystem.bodyLarge.copyWith(
+                color: AppColors.textLight,
+              ),
+              textAlign: TextAlign.center,
             ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Start a new chat to connect with team members',
-            style: GoogleFonts.poppins(
-              color: AppColors.textLight,
-            ),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 24),
+          ).animate().fadeIn(delay: 300.ms),
+          SizedBox(height: AppDesignSystem.spaceLG),
           ElevatedButton.icon(
             onPressed: _startNewChat,
             icon: const Icon(Icons.add),
             label: const Text('Start New Chat'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primaryOrange,
-              foregroundColor: Colors.white,
-            ),
-          ),
+            style: AppDesignSystem.primaryButton(),
+          ).animate().fadeIn(delay: 400.ms).slideY(begin: 0.3, end: 0),
         ],
       ),
     );

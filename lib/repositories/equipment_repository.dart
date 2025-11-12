@@ -5,11 +5,9 @@ import 'base_repository.dart';
 
 class EquipmentRepository extends BaseRepository<Equipment> {
   EquipmentRepository({
-    required Database database,
-    required SupabaseService supabaseService,
+    required super.database,
+    required super.supabaseService,
   }) : super(
-          database: database,
-          supabaseService: supabaseService,
           tableName: 'equipment',
         );
 

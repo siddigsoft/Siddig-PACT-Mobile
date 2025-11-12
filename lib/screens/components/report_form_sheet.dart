@@ -3,11 +3,14 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:path/path.dart' as p;
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../models/report_model.dart';
 import '../../models/site_visit.dart';
 import '../../services/site_visit_service.dart';
+import '../../services/storage_service.dart';
+import '../../services/offline_data_service.dart';
 import '../../theme/app_colors.dart';
 
 class ReportFormSheet extends StatefulWidget {
@@ -65,7 +68,77 @@ class _ReportFormSheetState extends State<ReportFormSheet> {
       _isSubmitting = true;
     });
 
+    // Show loading dialog
+    if (mounted) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (BuildContext context) {
+          return Dialog(
+            backgroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const CircularProgressIndicator(),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Submitting report...',
+                    style: GoogleFonts.inter(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Please wait',
+                    style: GoogleFonts.inter(
+                      fontSize: 14,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      );
+    }
+
     try {
+      // Show inline progress overlay (snackbar with spinner)
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          duration: const Duration(minutes: 1),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: AppColors.primaryBlue,
+          content: Row(
+            children: const [
+              SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              ),
+              SizedBox(width: 12),
+              Expanded(
+                  child: Text('Uploading report & photos...',
+                      style: TextStyle(color: Colors.white))),
+            ],
+          ),
+        ),
+      );
+      final offlineService = OfflineDataService();
+      final isOnline = await offlineService.isOnline();
+
+      print('🔄 Starting report submission - Online: $isOnline');
+
       // Create the report
       final report = Report(
         visitId: widget.visit.id,
@@ -73,33 +146,160 @@ class _ReportFormSheetState extends State<ReportFormSheet> {
         photoUrls: _photoUrls,
       );
 
-      // Save report
-      // Update visit with completion details
-      final updatedVisit = widget.visit.copyWith(
-        completedAt: DateTime.now(),
-        status: 'completed',
-      );
+      // Prepare report data
+      final reportData = {
+        'site_visit_id': widget.visit.id,
+        'notes': _notesController.text.trim(),
+        'submitted_at': DateTime.now().toIso8601String(),
+        'is_synced': isOnline,
+        'last_modified': DateTime.now().toIso8601String(),
+      };
 
-      // Update the visit in Supabase
-      await _visitService.updateSiteVisit(updatedVisit);
+      print('📝 Report data prepared: $reportData');
+
+      if (isOnline) {
+        print('☁️ Saving report to Supabase...');
+        // Save report to Supabase
+        final reportResponse = await _visitService.supabase
+            .from('reports')
+            .insert(reportData)
+            .select()
+            .single();
+
+        print('✅ Report saved to Supabase: ${reportResponse['id']}');
+
+        print('✅ Report saved to Supabase: ${reportResponse['id']}');
+
+        // Save photos to Supabase Storage and DB if any
+        if (_photoUrls.isNotEmpty) {
+          print('📸 Uploading ${_photoUrls.length} photos to storage...');
+          final storage = StorageService();
+          final reportId = reportResponse['id'];
+          final bucket = 'report_photos';
+
+          final List<Map<String, dynamic>> photoInserts = [];
+          for (final localPath in _photoUrls) {
+            try {
+              final file = File(localPath);
+              final filename = p.basename(localPath);
+              final folder = 'reports/$reportId';
+
+              // Upload file and get public URL
+              final publicUrl = await storage.uploadFile(
+                file,
+                bucket,
+                folder: folder,
+              );
+
+              photoInserts.add({
+                'report_id': reportId,
+                'photo_url': publicUrl,
+                'storage_path': '$folder/$filename',
+                'is_synced': true,
+                'last_modified': DateTime.now().toIso8601String(),
+              });
+            } catch (e) {
+              print('⚠️ Failed to upload photo $localPath: $e');
+            }
+          }
+
+          if (photoInserts.isNotEmpty) {
+            await _visitService.supabase
+                .from('report_photos')
+                .insert(photoInserts);
+            print('✅ Photos metadata saved to report_photos');
+          }
+        }
+
+        // Note: We do NOT update site_visits here per requirement.
+        // Any visit status changes will be handled elsewhere in the workflow.
+      } else {
+        print('💾 Saving report offline...');
+        // Save offline for later sync
+        reportData['photos'] = _photoUrls
+            .map((url) => {
+                  'photo_url': url,
+                  'storage_path': url,
+                })
+            .toList();
+
+        await offlineService.saveReportOffline(reportData);
+        print('✅ Report saved offline for later sync');
+
+        // Note: Visit status will be updated when sync happens
+      }
+
+      // Dismiss loading dialog (if still open)
+      if (mounted) {
+        Navigator.of(context).pop(); // Close blocking dialog
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      }
 
       // Notify parent
       widget.onReportSubmitted(report);
 
-      // Close sheet
+      print('🎉 Report submission complete!');
+
+      // Close sheet with success message
       if (mounted) {
         Navigator.of(context).pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                Icon(
+                  isOnline ? Icons.check_circle : Icons.offline_pin,
+                  color: Colors.white,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(isOnline
+                      ? 'Report submitted successfully!'
+                      : 'Report saved offline. Will sync when online.'),
+                ),
+              ],
+            ),
+            backgroundColor: isOnline ? Colors.green : Colors.orange,
+            duration: const Duration(seconds: 3),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      print('❌ Error submitting report: $e');
+      print('Stack trace: $stackTrace');
+
+      // Dismiss loading dialog
+      if (mounted) {
+        Navigator.of(context).pop();
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      }
+
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('Error submitting report: $e')));
+        ).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.error, color: Colors.white),
+                const SizedBox(width: 8),
+                Expanded(child: Text('Error submitting report: $e')),
+              ],
+            ),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
       }
     } finally {
-      setState(() {
-        _isSubmitting = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+        });
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      }
     }
   }
 
@@ -246,47 +446,47 @@ class _ReportFormSheetState extends State<ReportFormSheet> {
                     GridView.builder(
                       gridDelegate:
                           const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 3,
-                            crossAxisSpacing: 8,
-                            mainAxisSpacing: 8,
-                          ),
+                        crossAxisCount: 3,
+                        crossAxisSpacing: 8,
+                        mainAxisSpacing: 8,
+                      ),
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
                       itemCount: _photoUrls.length,
                       itemBuilder: (context, index) {
                         final photoUrl = _photoUrls[index];
                         return Stack(
-                              children: [
-                                Container(
+                          children: [
+                            Container(
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(8),
+                                image: DecorationImage(
+                                  image: FileImage(File(photoUrl)),
+                                  fit: BoxFit.cover,
+                                ),
+                              ),
+                            ),
+                            Positioned(
+                              top: 4,
+                              right: 4,
+                              child: InkWell(
+                                onTap: () => _removePhoto(index),
+                                child: Container(
+                                  padding: const EdgeInsets.all(4),
                                   decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(8),
-                                    image: DecorationImage(
-                                      image: FileImage(File(photoUrl)),
-                                      fit: BoxFit.cover,
-                                    ),
+                                    color: Colors.black.withOpacity(0.5),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    Icons.close,
+                                    color: Colors.white,
+                                    size: 16,
                                   ),
                                 ),
-                                Positioned(
-                                  top: 4,
-                                  right: 4,
-                                  child: InkWell(
-                                    onTap: () => _removePhoto(index),
-                                    child: Container(
-                                      padding: const EdgeInsets.all(4),
-                                      decoration: BoxDecoration(
-                                        color: Colors.black.withOpacity(0.5),
-                                        shape: BoxShape.circle,
-                                      ),
-                                      child: const Icon(
-                                        Icons.close,
-                                        color: Colors.white,
-                                        size: 16,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            )
+                              ),
+                            ),
+                          ],
+                        )
                             .animate()
                             .fadeIn(duration: 300.ms, delay: 50.ms * index)
                             .slideY(begin: 0.2, end: 0, duration: 300.ms);

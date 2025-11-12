@@ -2,7 +2,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/chat.dart';
 import '../models/chat_message.dart';
 import '../models/chat_participant.dart';
-import '../models/chat_message_read.dart';
 
 class ChatService {
   final SupabaseClient _supabase = Supabase.instance.client;
@@ -223,21 +222,65 @@ class ChatService {
       // Try to join with profiles table first
       final response = await _supabase
           .from('chat_participants')
-          .select('*, profiles!inner(full_name)')
+          .select('*, profiles!inner(full_name, email)')
           .eq('chat_id', chatId);
 
       // Debug: print raw response to help trace participant loading issues
       // ignore: avoid_print
       print('getChatParticipants response for $chatId: $response');
 
-      return response.map((json) {
+      final participants = response.map((json) {
         return ChatParticipant(
           chatId: json['chat_id'],
           userId: json['user_id'],
-          userName: json['profiles']?['full_name'] ?? 'User ${json['user_id'].substring(0, 8)}',
+          userName: json['profiles']?['full_name'] ??
+              json['profiles']?['email'] ??
+              'User ${json['user_id'].substring(0, 8)}',
           joinedAt: DateTime.parse(json['joined_at']),
         );
       }).toList();
+
+      // If we only got one participant (current user), try to get other participants from messages
+      if (participants.length == 1) {
+        try {
+          final messages = await _supabase
+              .from('chat_messages')
+              .select(
+                  'sender_id, profiles!chat_messages_sender_id_fkey(full_name, email)')
+              .eq('chat_id', chatId)
+              .neq('sender_id', getCurrentUserId() ?? '')
+              .limit(10);
+
+          // Extract unique sender IDs
+          final senderIds = <String>{};
+          for (var msg in messages) {
+            if (msg['sender_id'] != null) {
+              senderIds.add(msg['sender_id']);
+            }
+          }
+
+          // Add message senders as participants
+          for (var msg in messages) {
+            final senderId = msg['sender_id'];
+            if (senderId != null &&
+                !participants.any((p) => p.userId == senderId)) {
+              participants.add(ChatParticipant(
+                chatId: chatId,
+                userId: senderId,
+                userName: msg['profiles']?['full_name'] ??
+                    msg['profiles']?['email'] ??
+                    'User',
+                joinedAt: DateTime.now(),
+              ));
+              break; // Only add one other participant for private chats
+            }
+          }
+        } catch (e) {
+          print('Error fetching participants from messages: $e');
+        }
+      }
+
+      return participants;
     } catch (e) {
       // If join fails, try without join and query profiles separately
       print('Join with profiles failed, trying separate queries: $e');
@@ -260,7 +303,8 @@ class ChatService {
                 .eq('id', json['user_id'])
                 .maybeSingle();
 
-            if (profileResponse != null && profileResponse['full_name'] != null) {
+            if (profileResponse != null &&
+                profileResponse['full_name'] != null) {
               userName = profileResponse['full_name'];
             }
           } catch (e) {
@@ -317,6 +361,59 @@ class ChatService {
       }
     } catch (e) {
       print('Error marking messages as read: $e');
+    }
+  }
+
+  // Delete a chat and all its messages
+  Future<void> deleteChat(String chatId) async {
+    try {
+      // First, get all message IDs from this chat
+      final messages = await _supabase
+          .from('chat_messages')
+          .select('id')
+          .eq('chat_id', chatId);
+
+      final messageIds =
+          (messages as List).map((msg) => msg['id'] as String).toList();
+
+      // Delete message reads if there are any messages
+      if (messageIds.isNotEmpty) {
+        for (final messageId in messageIds) {
+          await _supabase
+              .from('chat_message_reads')
+              .delete()
+              .eq('message_id', messageId);
+        }
+      }
+
+      // Delete all messages in the chat
+      await _supabase.from('chat_messages').delete().eq('chat_id', chatId);
+
+      // Delete all participants
+      await _supabase.from('chat_participants').delete().eq('chat_id', chatId);
+
+      // Delete the chat itself
+      await _supabase.from('chats').delete().eq('id', chatId);
+    } catch (e) {
+      print('Error deleting chat: $e');
+      rethrow;
+    }
+  }
+
+  // Delete a single message
+  Future<void> deleteMessage(String messageId) async {
+    try {
+      // Delete message reads first
+      await _supabase
+          .from('chat_message_reads')
+          .delete()
+          .eq('message_id', messageId);
+
+      // Delete the message
+      await _supabase.from('chat_messages').delete().eq('id', messageId);
+    } catch (e) {
+      print('Error deleting message: $e');
+      rethrow;
     }
   }
 }

@@ -42,18 +42,38 @@ class Task {
   }
 
   factory Task.fromJson(Map<String, dynamic> json) {
+    String asString(dynamic v, {String fallback = ''}) {
+      if (v == null) return fallback;
+      if (v is String) return v;
+      return v.toString();
+    }
+
+    DateTime parseDate(dynamic v) {
+      if (v == null) return DateTime.now();
+      try {
+        return DateTime.parse(v as String);
+      } catch (_) {
+        return DateTime.now();
+      }
+    }
+
     return Task(
-      id: json['id'],
-      userId: json['user_id'],
-      siteName: json['site_name'],
-      siteAddress: json['site_address'],
-      arrivalTime: json['arrival_time'] != null ? DateTime.parse(json['arrival_time']) : null,
-      departureTime: json['departure_time'] != null ? DateTime.parse(json['departure_time']) : null,
-      visitStatus: json['visit_status'],
-      notes: json['notes'],
-      journeyPath: json['journey_path'] != null ? List<Map<String, dynamic>>.from(json['journey_path']) : null,
-      createdAt: DateTime.parse(json['created_at']),
-      updatedAt: DateTime.parse(json['updated_at']),
+      id: asString(json['id']),
+      userId: asString(json['user_id']),
+      siteName: asString(json['site_name']),
+      siteAddress: asString(json['site_address']),
+      arrivalTime:
+          json['arrival_time'] != null ? parseDate(json['arrival_time']) : null,
+      departureTime: json['departure_time'] != null
+          ? parseDate(json['departure_time'])
+          : null,
+      visitStatus: asString(json['visit_status'], fallback: 'planned'),
+      notes: json['notes'] == null ? null : asString(json['notes']),
+      journeyPath: json['journey_path'] != null
+          ? List<Map<String, dynamic>>.from(json['journey_path'])
+          : null,
+      createdAt: parseDate(json['created_at']),
+      updatedAt: parseDate(json['updated_at']),
     );
   }
 }

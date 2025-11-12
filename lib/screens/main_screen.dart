@@ -1,7 +1,6 @@
 // lib/screens/main_screen.dart
 
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import 'components/bottom_navigation_bar.dart';
 import 'field_operations_enhanced_screen.dart';
 import 'forms_screen.dart';

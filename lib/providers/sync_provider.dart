@@ -57,6 +57,11 @@ class SyncProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> syncComprehensiveSafetyChecklists() async {
+    await _syncService.syncComprehensiveSafetyChecklists();
+    notifyListeners();
+  }
+
   Future<void> syncUserProfile() async {
     await _syncService.syncUserProfile();
     notifyListeners();

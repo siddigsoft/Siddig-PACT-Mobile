@@ -33,15 +33,31 @@ class UserProfile {
   }
 
   factory UserProfile.fromJson(Map<String, dynamic> json) {
+    // Defensive parsing: handle nulls and unexpected types gracefully
+    String asString(dynamic v, {String fallback = ''}) {
+      if (v == null) return fallback;
+      if (v is String) return v;
+      return v.toString();
+    }
+
+    DateTime parseDate(dynamic v) {
+      if (v == null) return DateTime.now();
+      try {
+        return DateTime.parse(v as String);
+      } catch (_) {
+        return DateTime.now();
+      }
+    }
+
     return UserProfile(
-      id: json['id'],
-      userId: json['user_id'],
-      fullName: json['full_name'],
-      email: json['email'],
-      role: json['role'],
-      department: json['department'],
-      createdAt: DateTime.parse(json['created_at']),
-      updatedAt: DateTime.parse(json['updated_at']),
+      id: asString(json['id']),
+      userId: asString(json['user_id']),
+      fullName: asString(json['full_name']),
+      email: asString(json['email']),
+      role: asString(json['role'], fallback: 'worker'),
+      department: asString(json['department']),
+      createdAt: parseDate(json['created_at']),
+      updatedAt: parseDate(json['updated_at']),
     );
   }
 }

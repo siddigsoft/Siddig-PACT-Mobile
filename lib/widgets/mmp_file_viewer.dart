@@ -11,9 +11,9 @@ class MMPFileViewer extends StatelessWidget {
   final MMPFile mmpFile;
 
   const MMPFileViewer({
-    Key? key,
+    super.key,
     required this.mmpFile,
-  }) : super(key: key);
+  });
 
   Future<void> _openFile() async {
     try {

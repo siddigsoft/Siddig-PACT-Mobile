@@ -90,30 +90,29 @@ class Visit {
   // Create Visit from a Map
   factory Visit.fromMap(Map<String, dynamic> map) {
     return Visit(
-        id: map['id'],
-        title: map['title'],
-        description: map['description'],
-        latitude: map['latitude'],
-        longitude: map['longitude'],
-        scheduledDate: map['scheduledDate'] != null
-            ? DateTime.parse(map['scheduledDate'])
-            : null,
-        status: VisitStatus.values.firstWhere(
-          (e) => e.toString() == map['status'],
-          orElse: () => VisitStatus.available,
-        ),
-        assignedToId: map['assignedToId'],
-        assignedUserId: map['assignedUserId'],
-        startTime: map['startTime'] != null
-            ? DateTime.parse(map['startTime'])
-            : null,
-        endTime: map['endTime'] != null ? DateTime.parse(map['endTime']) : null,
-        reportId: map['reportId'],
-        isSynced: map['isSynced'] == 1,
-        lastModified: map['lastModified'] != null
-            ? DateTime.parse(map['lastModified'])
-            : DateTime.now(),
-      )
+      id: map['id'],
+      title: map['title'],
+      description: map['description'],
+      latitude: map['latitude'],
+      longitude: map['longitude'],
+      scheduledDate: map['scheduledDate'] != null
+          ? DateTime.parse(map['scheduledDate'])
+          : null,
+      status: VisitStatus.values.firstWhere(
+        (e) => e.toString() == map['status'],
+        orElse: () => VisitStatus.available,
+      ),
+      assignedToId: map['assignedToId'],
+      assignedUserId: map['assignedUserId'],
+      startTime:
+          map['startTime'] != null ? DateTime.parse(map['startTime']) : null,
+      endTime: map['endTime'] != null ? DateTime.parse(map['endTime']) : null,
+      reportId: map['reportId'],
+      isSynced: map['isSynced'] == 1,
+      lastModified: map['lastModified'] != null
+          ? DateTime.parse(map['lastModified'])
+          : DateTime.now(),
+    )
       ..location = map['location']
       ..address = map['address']
       ..clientInfo = map['clientInfo']
@@ -144,7 +143,7 @@ class Visit {
     String? priority,
   }) {
     return Visit(
-      id: this.id,
+      id: id,
       title: title ?? this.title,
       description: description ?? this.description,
       latitude: latitude ?? this.latitude,

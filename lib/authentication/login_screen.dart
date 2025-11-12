@@ -5,7 +5,11 @@ import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_colors.dart';
+import '../widgets/app_widgets.dart';
 import '../services/auth_service.dart';
+import '../services/biometric_auth_service.dart';
+import '../services/realtime_notification_service.dart';
+import '../widgets/biometric_setup_dialog.dart';
 import '../l10n/app_localizations.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -34,8 +38,14 @@ class _LoginScreenState extends State<LoginScreen>
   // Boolean to track loading state
   bool _isLoading = false;
 
+  // Biometric state
+  bool _isBiometricAvailable = false;
+  bool _isBiometricEnabled = false;
+  String _biometricType = 'Biometric';
+
   // Services
   final _authService = AuthService();
+  final _biometricService = BiometricAuthService();
 
   @override
   void initState() {
@@ -60,6 +70,99 @@ class _LoginScreenState extends State<LoginScreen>
     Future.delayed(const Duration(milliseconds: 100), () {
       _animationController.forward();
     });
+
+    // Check biometric availability
+    _checkBiometricAvailability();
+  }
+
+  /// Check if biometric authentication is available and enabled
+  Future<void> _checkBiometricAvailability() async {
+    final isAvailable = await _biometricService.isBiometricAvailable();
+    final isEnabled = await _biometricService.isBiometricEnabled();
+
+    if (isAvailable) {
+      final biometrics = await _biometricService.getAvailableBiometrics();
+      final typeName = _biometricService.getBiometricTypeName(biometrics);
+
+      setState(() {
+        _isBiometricAvailable = isAvailable;
+        _isBiometricEnabled = isEnabled;
+        _biometricType = typeName;
+      });
+
+      // Auto-attempt biometric login if enabled
+      if (isEnabled) {
+        Future.delayed(const Duration(milliseconds: 500), () {
+          _attemptBiometricLogin();
+        });
+      }
+    }
+  }
+
+  /// Attempt biometric login
+  Future<void> _attemptBiometricLogin() async {
+    if (!_isBiometricEnabled || _isLoading) return;
+
+    try {
+      final authenticated = await _biometricService.authenticate(
+        reason: 'Login to PACT Mobile',
+      );
+
+      if (!authenticated) return;
+
+      setState(() => _isLoading = true);
+
+      // Get stored credentials
+      final credentials = await _biometricService.getStoredCredentials();
+      final email = credentials['email'];
+      final password = credentials['password'];
+
+      if (email == null || password == null) {
+        // Credentials not found, disable biometric
+        await _biometricService.disableBiometric();
+        setState(() {
+          _isBiometricEnabled = false;
+          _isLoading = false;
+        });
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Please login with your email and password'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        return;
+      }
+
+      // Attempt login
+      final response =
+          await _authService.signIn(email: email, password: password);
+
+      if (mounted) {
+        if (response.user != null) {
+          Navigator.pushReplacementNamed(context, '/home');
+        } else {
+          setState(() => _isLoading = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Login failed. Please try again.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Biometric login error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -129,6 +232,23 @@ class _LoginScreenState extends State<LoginScreen>
             if (mounted) {
               // Haptic feedback for successful login
               HapticFeedback.mediumImpact();
+
+              // Show biometric setup dialog if not already enabled
+              if (_isBiometricAvailable && !_isBiometricEnabled) {
+                await showDialog(
+                  context: context,
+                  barrierDismissible: false,
+                  builder: (context) => BiometricSetupDialog(
+                    email: _emailController.text.trim(),
+                    password: _passwordController.text,
+                    biometricType: _biometricType,
+                  ),
+                );
+              }
+
+              // Initialize realtime notifications after successful login
+              await RealtimeNotificationService().initialize();
+
               // Navigate to main screen
               Navigator.pushReplacementNamed(context, '/main');
             }
@@ -142,6 +262,23 @@ class _LoginScreenState extends State<LoginScreen>
               if (mounted) {
                 // Haptic feedback for successful login
                 HapticFeedback.mediumImpact();
+
+                // Show biometric setup dialog if not already enabled
+                if (_isBiometricAvailable && !_isBiometricEnabled) {
+                  await showDialog(
+                    context: context,
+                    barrierDismissible: false,
+                    builder: (context) => BiometricSetupDialog(
+                      email: _emailController.text.trim(),
+                      password: _passwordController.text,
+                      biometricType: _biometricType,
+                    ),
+                  );
+                }
+
+                // Initialize realtime notifications after successful login
+                await RealtimeNotificationService().initialize();
+
                 // Navigate to main screen
                 Navigator.pushReplacementNamed(context, '/main');
               }
@@ -150,19 +287,32 @@ class _LoginScreenState extends State<LoginScreen>
               debugPrint('Failed to assign worker role: $roleError');
               if (mounted) {
                 HapticFeedback.mediumImpact();
+
+                // Show biometric setup dialog if not already enabled
+                if (_isBiometricAvailable && !_isBiometricEnabled) {
+                  await showDialog(
+                    context: context,
+                    barrierDismissible: false,
+                    builder: (context) => BiometricSetupDialog(
+                      email: _emailController.text.trim(),
+                      password: _passwordController.text,
+                      biometricType: _biometricType,
+                    ),
+                  );
+                }
+
                 Navigator.pushReplacementNamed(context, '/main');
               }
             }
           }
         }
       } catch (e) {
-        // Show error message
+        // Show error message using new design system
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Login failed: ${e.toString()}'),
-              backgroundColor: Colors.red,
-            ),
+          AppSnackBar.show(
+            context,
+            message: 'Login failed: ${e.toString()}',
+            type: SnackBarType.error,
           );
         }
       } finally {
@@ -172,36 +322,6 @@ class _LoginScreenState extends State<LoginScreen>
           });
         }
       }
-
-      // Show modern success message with animation
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              const Icon(Icons.check_circle, color: Colors.white),
-              const SizedBox(width: 12),
-              Text(
-                'Login successful!',
-                style: GoogleFonts.poppins(
-                  fontWeight: FontWeight.w500,
-                  fontSize: 14,
-                ),
-              ),
-            ],
-          ),
-          backgroundColor: AppColors.primaryBlue,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          margin: const EdgeInsets.all(16),
-          duration: const Duration(seconds: 3),
-        ),
-      );
-
-      // Navigate to the main screen with bottom navigation
-      // Use direct navigation instead of utility
-      Navigator.of(context).pushReplacementNamed('/main');
     }
   }
 
@@ -350,6 +470,64 @@ class _LoginScreenState extends State<LoginScreen>
                         .slideY(begin: 0.3, end: 0, duration: 500.ms),
 
                     SizedBox(height: screenHeight * 0.04),
+
+                    // Biometric Login Button (if available)
+                    if (_isBiometricAvailable && _isBiometricEnabled)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 24),
+                        child: InkWell(
+                          onTap: _isLoading ? null : _attemptBiometricLogin,
+                          borderRadius: BorderRadius.circular(20),
+                          child: Container(
+                            padding: const EdgeInsets.all(20),
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [
+                                  AppColors.primaryOrange,
+                                  AppColors.primaryOrange.withOpacity(0.8),
+                                ],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                              borderRadius: BorderRadius.circular(20),
+                              boxShadow: [
+                                BoxShadow(
+                                  color:
+                                      AppColors.primaryOrange.withOpacity(0.3),
+                                  blurRadius: 20,
+                                  offset: const Offset(0, 10),
+                                  spreadRadius: -5,
+                                ),
+                              ],
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  _biometricType.toLowerCase().contains('face')
+                                      ? Icons.face
+                                      : Icons.fingerprint,
+                                  color: Colors.white,
+                                  size: 28,
+                                ),
+                                const SizedBox(width: 12),
+                                Text(
+                                  'Login with $_biometricType',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.white,
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        )
+                            .animate()
+                            .fadeIn(duration: 600.ms, delay: 300.ms)
+                            .slideY(begin: 0.2, end: 0, duration: 500.ms),
+                      ),
 
                     // Form Section
                     Form(
@@ -602,298 +780,7 @@ class _LoginScreenState extends State<LoginScreen>
 
                           SizedBox(height: screenHeight * 0.035),
 
-                          // Divider with OR text
-                          Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 20),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: Container(
-                                    height: 1.2,
-                                    decoration: BoxDecoration(
-                                      gradient: LinearGradient(
-                                        colors: [
-                                          AppColors.borderColor.withOpacity(
-                                            0.05,
-                                          ),
-                                          AppColors.borderColor.withOpacity(
-                                            0.6,
-                                          ),
-                                          AppColors.borderColor.withOpacity(
-                                            0.05,
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 16,
-                                    vertical: 5,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.backgroundGray.withOpacity(
-                                      0.5,
-                                    ),
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(
-                                      color: AppColors.borderColor.withOpacity(
-                                        0.2,
-                                      ),
-                                      width: 1,
-                                    ),
-                                  ),
-                                  child: Text(
-                                    'OR',
-                                    style: GoogleFonts.poppins(
-                                      color: AppColors.textLight,
-                                      fontWeight: FontWeight.w500,
-                                      fontSize: 12,
-                                      letterSpacing: 0.5,
-                                    ),
-                                  ),
-                                ),
-                                Expanded(
-                                  child: Container(
-                                    height: 1.2,
-                                    decoration: BoxDecoration(
-                                      gradient: LinearGradient(
-                                        colors: [
-                                          AppColors.borderColor.withOpacity(
-                                            0.05,
-                                          ),
-                                          AppColors.borderColor.withOpacity(
-                                            0.6,
-                                          ),
-                                          AppColors.borderColor.withOpacity(
-                                            0.05,
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ).animate().fadeIn(duration: 600.ms, delay: 900.ms),
-
-                          SizedBox(height: screenHeight * 0.025),
-
-                          // Social Login Buttons
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 20),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                              children: [
-                                // Google Login Button
-                                Container(
-                                  width: 60,
-                                  height: 60,
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    borderRadius: BorderRadius.circular(20),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.black.withOpacity(
-                                          0.03,
-                                        ),
-                                        blurRadius: 15,
-                                        spreadRadius: -8,
-                                        offset: const Offset(0, 8),
-                                      ),
-                                    ],
-                                    border: Border.all(
-                                      color: AppColors.borderColor
-                                          .withOpacity(0.1),
-                                      width: 1,
-                                    ),
-                                  ),
-                                  child: Material(
-                                    color: Colors.transparent,
-                                    borderRadius: BorderRadius.circular(20),
-                                    child: InkWell(
-                                      borderRadius: BorderRadius.circular(
-                                        20,
-                                      ),
-                                      onTap: () async {
-                                        HapticFeedback.lightImpact();
-                                        try {
-                                          setState(() => _isLoading = true);
-                                          final success = await _authService
-                                              .signInWithGoogle();
-                                          if (mounted && success) {
-                                            Navigator.pushReplacementNamed(
-                                              context,
-                                              '/home',
-                                            );
-                                          } else if (mounted) {
-                                            ScaffoldMessenger.of(context)
-                                                .showSnackBar(
-                                              const SnackBar(
-                                                content: Text(
-                                                    'Failed to sign in with Google'),
-                                                backgroundColor: Colors.red,
-                                              ),
-                                            );
-                                          }
-                                        } catch (e) {
-                                          if (mounted) {
-                                            ScaffoldMessenger.of(context)
-                                                .showSnackBar(
-                                              SnackBar(
-                                                content: Text(
-                                                    'Error signing in with Google: ${e.toString()}'),
-                                                backgroundColor: Colors.red,
-                                              ),
-                                            );
-                                          }
-                                        } finally {
-                                          if (mounted) {
-                                            setState(() => _isLoading = false);
-                                          }
-                                        }
-                                      },
-                                      child: const Padding(
-                                        padding: EdgeInsets.all(12.0),
-                                        child: Center(
-                                          child: Icon(
-                                            Icons
-                                                .g_mobiledata, // Replace with actual Google icon
-                                            size: 32,
-                                            color: Color(
-                                              0xFFDB4437,
-                                            ), // Google red
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                )
-                                    .animate()
-                                    .fadeIn(duration: 600.ms, delay: 950.ms)
-                                    .scale(
-                                      begin: const Offset(0.9, 0.9),
-                                      end: const Offset(1, 1),
-                                      curve: Curves.easeOutBack,
-                                    ),
-
-                                // Facebook Login Button
-                                Container(
-                                  width: 60,
-                                  height: 60,
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    borderRadius: BorderRadius.circular(20),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.black.withOpacity(
-                                          0.03,
-                                        ),
-                                        blurRadius: 15,
-                                        spreadRadius: -8,
-                                        offset: const Offset(0, 8),
-                                      ),
-                                    ],
-                                    border: Border.all(
-                                      color: AppColors.borderColor
-                                          .withOpacity(0.1),
-                                      width: 1,
-                                    ),
-                                  ),
-                                  child: Material(
-                                    color: Colors.transparent,
-                                    borderRadius: BorderRadius.circular(20),
-                                    child: InkWell(
-                                      borderRadius: BorderRadius.circular(
-                                        20,
-                                      ),
-                                      onTap: () {
-                                        HapticFeedback.lightImpact();
-                                        // TODO: Implement Facebook login
-                                      },
-                                      child: const Padding(
-                                        padding: EdgeInsets.all(12.0),
-                                        child: Center(
-                                          child: Icon(
-                                            Icons.facebook,
-                                            size: 32,
-                                            color: Color(
-                                              0xFF1877F2,
-                                            ), // Facebook blue
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                )
-                                    .animate()
-                                    .fadeIn(duration: 600.ms, delay: 1000.ms)
-                                    .scale(
-                                      begin: const Offset(0.9, 0.9),
-                                      end: const Offset(1, 1),
-                                      curve: Curves.easeOutBack,
-                                    ),
-
-                                // Apple Login Button
-                                Container(
-                                  width: 60,
-                                  height: 60,
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    borderRadius: BorderRadius.circular(20),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.black.withOpacity(
-                                          0.03,
-                                        ),
-                                        blurRadius: 15,
-                                        spreadRadius: -8,
-                                        offset: const Offset(0, 8),
-                                      ),
-                                    ],
-                                    border: Border.all(
-                                      color: AppColors.borderColor
-                                          .withOpacity(0.1),
-                                      width: 1,
-                                    ),
-                                  ),
-                                  child: Material(
-                                    color: Colors.transparent,
-                                    borderRadius: BorderRadius.circular(20),
-                                    child: InkWell(
-                                      borderRadius: BorderRadius.circular(
-                                        20,
-                                      ),
-                                      onTap: () {
-                                        HapticFeedback.lightImpact();
-                                        // TODO: Implement Apple login
-                                      },
-                                      child: const Padding(
-                                        padding: EdgeInsets.all(12.0),
-                                        child: Center(
-                                          child: Icon(
-                                            Icons.apple,
-                                            size: 32,
-                                            color: Colors.black,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                )
-                                    .animate()
-                                    .fadeIn(duration: 600.ms, delay: 1050.ms)
-                                    .scale(
-                                      begin: const Offset(0.9, 0.9),
-                                      end: const Offset(1, 1),
-                                      curve: Curves.easeOutBack,
-                                    ),
-                              ],
-                            ),
-                          ),
-
-                          SizedBox(height: screenHeight * 0.045),
+                          SizedBox(height: screenHeight * 0.07),
 
                           // Sign Up Link
                           Container(

@@ -14,7 +14,10 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
+import 'package:url_launcher/url_launcher.dart';
 
+import '../services/map_tile_cache_service.dart'
+    if (dart.library.html) '../services/map_tile_cache_service_web.dart';
 import '../models/site_visit.dart';
 import '../models/visit_status.dart';
 import '../services/site_visit_service.dart';
@@ -35,11 +38,16 @@ import '../widgets/app_menu_overlay.dart';
 import '../widgets/modern_app_header.dart';
 import '../widgets/modern_card.dart';
 import '../widgets/custom_drawer_menu.dart';
+import '../widgets/offline_sync_indicator.dart';
 import '../services/notification_service.dart';
+import '../services/offline_data_service.dart';
 import 'components/report_form_sheet.dart';
 import 'components/visit_assignment_sheet.dart';
 import 'components/visit_details_sheet.dart';
 import 'components/mmp_files_sheet.dart';
+import '../theme/app_design_system.dart';
+import '../widgets/app_widgets.dart';
+import '../utils/error_handler.dart';
 
 class FieldOperationsEnhancedScreen extends StatefulWidget {
   const FieldOperationsEnhancedScreen({super.key});
@@ -59,6 +67,7 @@ class _FieldOperationsEnhancedScreenState
 
   // Map controller
   late final MapController _mapController; // flutter_map controller
+  bool _isMapReady = false; // Track if map is fully initialized
 
   Set<Marker> _markers = {}; // flutter_map markers
   Set<Polyline> _journeyPolylines = {}; // flutter_map polylines
@@ -93,7 +102,7 @@ class _FieldOperationsEnhancedScreenState
 
   // Task data
   List<SiteVisitWithDistance> _nearbyTasks = [];
-  List<SiteVisit> _acceptedTasks = [];
+  final List<SiteVisit> _acceptedTasks = [];
   bool _isLoadingTasks = false;
 
   // Journey tracking state
@@ -122,9 +131,14 @@ class _FieldOperationsEnhancedScreenState
     // Listen for new MMP files
     _mmpFileSubscription = _mmpFileService.onNewFiles.listen((files) {
       if (files.isNotEmpty) {
+        final firstFile = files.first;
         NotificationService.showMMPFileNotification(
           title: 'New MMP Files',
-          body: '${files.length} new MMP files have been uploaded',
+          body:
+              '${files.length} new MMP file${files.length > 1 ? 's have' : ' has'} been uploaded',
+          fileId: firstFile['id']?.toString() ??
+              DateTime.now().millisecondsSinceEpoch.toString(),
+          fileName: firstFile['title']?.toString() ?? 'MMP File',
         );
       }
     });
@@ -179,10 +193,14 @@ class _FieldOperationsEnhancedScreenState
 
     // Update collector status
     if (_authService.currentUser != null) {
-      await _authService.supabase
-          .from('Users')
-          .update({'status': hasConnectivity ? 'online' : 'offline'}).eq(
-              'UID', _authService.currentUser!.id);
+      try {
+        await _authService.supabase
+            .from('user_roles')
+            .update({'status': hasConnectivity ? 'online' : 'offline'}).eq(
+                'user_id', _authService.currentUser!.id);
+      } catch (e) {
+        debugPrint('Error updating user status: $e');
+      }
     }
   }
 
@@ -202,8 +220,9 @@ class _FieldOperationsEnhancedScreenState
           await _locationService.hasPermission();
       if (permissionGranted == location_package.PermissionStatus.denied) {
         permissionGranted = await _locationService.requestPermission();
-        if (permissionGranted != location_package.PermissionStatus.granted)
+        if (permissionGranted != location_package.PermissionStatus.granted) {
           return;
+        }
       }
 
       _getCurrentLocation();
@@ -212,9 +231,7 @@ class _FieldOperationsEnhancedScreenState
       _startLocationStream();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error initializing location: $e')),
-        );
+        context.showError(e, onRetry: _initializeLocationTracking);
       }
     }
   }
@@ -242,27 +259,29 @@ class _FieldOperationsEnhancedScreenState
   // Get current location
   Future<void> _getCurrentLocation() async {
     try {
-      // First, try to get the last known position for instant feedback
-      Position? lastKnown;
-      try {
-        lastKnown = await Geolocator.getLastKnownPosition();
-        if (lastKnown != null && mounted) {
-          setState(() {
-            _currentLocation =
-                latlong.LatLng(lastKnown!.latitude, lastKnown.longitude);
-          });
-          _updateMapCamera();
-          _updateMarkers();
-          debugPrint(
-              'Using last known location: ${lastKnown.latitude}, ${lastKnown.longitude}');
+      // Try to get the last known position for instant feedback (not supported on web)
+      if (!kIsWeb) {
+        Position? lastKnown;
+        try {
+          lastKnown = await Geolocator.getLastKnownPosition();
+          if (lastKnown != null && mounted) {
+            setState(() {
+              _currentLocation =
+                  latlong.LatLng(lastKnown!.latitude, lastKnown.longitude);
+            });
+            // Don't call _updateMapCamera here - map not ready yet
+            _updateMarkers();
+            debugPrint(
+                'Using last known location: ${lastKnown.latitude}, ${lastKnown.longitude}');
+          }
+        } catch (e) {
+          debugPrint('No last known position: $e');
         }
-      } catch (e) {
-        debugPrint('No last known position: $e');
       }
 
       // Now get fresh, accurate position
       final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.best,
+        desiredAccuracy: kIsWeb ? LocationAccuracy.high : LocationAccuracy.best,
         forceAndroidLocationManager:
             false, // Use FusedLocationProvider on Android for better accuracy
       );
@@ -276,19 +295,18 @@ class _FieldOperationsEnhancedScreenState
               latlong.LatLng(position.latitude, position.longitude);
         });
 
-        _updateMapCamera();
+        // Don't call _updateMapCamera here - let the map use initialCenter
+        // Camera updates will happen via onMapReady or manual user interaction
         _updateMarkers();
       }
     } catch (e) {
       debugPrint('Error getting current location: $e');
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-                'Location error: ${e.toString()}. Using default location.'),
-            backgroundColor: Colors.orange,
-          ),
+        AppSnackBar.show(
+          context,
+          message: 'Location error. Using default location.',
+          type: SnackBarType.warning,
         );
       }
     }
@@ -325,12 +343,26 @@ class _FieldOperationsEnhancedScreenState
 
   // Update map camera
   void _updateMapCamera() {
-    _mapController.move(_currentLocation,
-        17.0); // Higher zoom for better accuracy visualization
+    // Only update camera if map is fully ready
+    if (!mounted || !_isMapReady) {
+      debugPrint('Skipping camera update - map not ready yet');
+      return;
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_isMapReady) return;
+      try {
+        _mapController.move(_currentLocation, 17.0);
+      } catch (e) {
+        debugPrint('Error updating map camera: $e');
+      }
+    });
   }
 
   // Update map markers
   void _updateMarkers() {
+    if (!mounted) return;
+
     final markers = <Marker>{};
 
     // Add current location marker (with custom icon if tracking)
@@ -548,7 +580,8 @@ class _FieldOperationsEnhancedScreenState
           visitData.map((data) => SiteVisit.fromJson(data)).toList();
 
       // Show all assigned visits (removed location filtering for reliability)
-      final filteredVisits = allVisits; // when implementing geofencing based on city change this 
+      final filteredVisits =
+          allVisits; // when implementing geofencing based on city change this
 
       if (mounted) {
         setState(() {
@@ -566,12 +599,10 @@ class _FieldOperationsEnhancedScreenState
         setState(() {
           _isLoading = false;
         });
-        // Use addPostFrameCallback to show snackbar after build
+        // Use addPostFrameCallback to show error after build
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) {
-            ScaffoldMessenger.of(
-              context,
-            ).showSnackBar(SnackBar(content: Text('Error loading visits: $e')));
+            context.showError(e, onRetry: _loadVisits);
           }
         });
       }
@@ -638,7 +669,7 @@ class _FieldOperationsEnhancedScreenState
   }
 
   // Show visit details sheet
-  void _showVisitDetailsSheet(SiteVisit visit) {
+  void _showVisitDetailsSheet(SiteVisit visit, {bool reportSubmitted = false}) {
     final isTrackedVisit = _currentTrackedTask?.id == visit.id;
     final isNear = isTrackedVisit && _isNearDestination(visit);
 
@@ -654,6 +685,11 @@ class _FieldOperationsEnhancedScreenState
         isNearDestination: isNear,
         onArrived: isTrackedVisit ? _handleArrived : null,
         onGetDirections: () => _getDirectionsToVisit(visit),
+        reportSubmitted: reportSubmitted,
+        onSubmitReportRequested: () {
+          // Open report form for this visit
+          _showReportFormSheet(visit);
+        },
       ),
     );
   }
@@ -664,8 +700,18 @@ class _FieldOperationsEnhancedScreenState
     String newStatus,
   ) async {
     try {
+      // Avoid redundant updates
+      if (visit.status.toLowerCase() == newStatus.toLowerCase()) {
+        debugPrint('Visit ${visit.id} already in status $newStatus; skipping');
+        return;
+      }
       final visitStatus = visitStatusFromString(newStatus);
-      final updatedVisit = visit.copyWith(status: newStatus);
+      // Ensure the visit carries the current user's ID for RLS-compliant updates
+      final userId = _authService.currentUser?.id;
+      final updatedVisit = visit.copyWith(
+        status: newStatus,
+        userId: visit.userId ?? userId,
+      );
 
       // If visit was in-progress and is now completed, stop tracking
       if (visitStatus == VisitStatus.completed &&
@@ -684,6 +730,7 @@ class _FieldOperationsEnhancedScreenState
 
       // Show report form if completed
       if (visitStatus == VisitStatus.completed) {
+        debugPrint('Visit ${visit.id} marked completed; opening report form');
         _showReportFormSheet(updatedVisit);
       }
 
@@ -691,9 +738,7 @@ class _FieldOperationsEnhancedScreenState
       await _loadVisits();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error updating visit: $e')));
+        context.showError(e);
       }
     }
   }
@@ -707,8 +752,24 @@ class _FieldOperationsEnhancedScreenState
       builder: (context) => ReportFormSheet(
         visit: visit,
         onReportSubmitted: (report) {
-          // Reload visits after report submission
-          _loadVisits();
+          // Reload visits after report submission, then show capture location
+          _loadVisits().then((_) async {
+            try {
+              final refreshed =
+                  await _siteVisitService.getSiteVisitById(visit.id);
+              if (!mounted) return;
+              if (refreshed != null) {
+                // Reopen details with reportSubmitted=true so capture button is shown
+                _showVisitDetailsSheet(refreshed, reportSubmitted: true);
+              } else {
+                // Fallback: show original with flag
+                _showVisitDetailsSheet(visit, reportSubmitted: true);
+              }
+            } catch (_) {
+              if (!mounted) return;
+              _showVisitDetailsSheet(visit, reportSubmitted: true);
+            }
+          });
         },
       ),
     );
@@ -742,9 +803,7 @@ class _FieldOperationsEnhancedScreenState
       await _loadVisits();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error assigning visit: $e')));
+        context.showError(e);
       }
     }
   }
@@ -792,23 +851,24 @@ class _FieldOperationsEnhancedScreenState
         });
 
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Task accepted successfully')),
+          AppSnackBar.show(
+            context,
+            message: 'Task accepted successfully',
+            type: SnackBarType.success,
           );
         }
       } else {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-                content: Text(response.message ?? 'Failed to accept task')),
+          AppSnackBar.show(
+            context,
+            message: response.message ?? 'Failed to accept task',
+            type: SnackBarType.error,
           );
         }
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error accepting task: $e')),
-        );
+        context.showError(e, onRetry: () => _handleTaskAccepted(task));
       }
     }
   }
@@ -830,15 +890,15 @@ class _FieldOperationsEnhancedScreenState
       });
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Task declined')),
+        AppSnackBar.show(
+          context,
+          message: 'Task declined',
+          type: SnackBarType.info,
         );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error declining task: $e')),
-        );
+        context.showError(e);
       }
     }
   }
@@ -903,19 +963,16 @@ class _FieldOperationsEnhancedScreenState
       });
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Journey started - location tracking active'),
-            backgroundColor: AppColors.primaryOrange,
-          ),
+        AppSnackBar.show(
+          context,
+          message: 'Journey started - location tracking active',
+          type: SnackBarType.success,
         );
       }
     } catch (e) {
       debugPrint('Error starting journey: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error starting journey: $e')),
-        );
+        context.showError(e, onRetry: () => _startJourneyForTask(task));
       }
     }
   }
@@ -980,7 +1037,7 @@ class _FieldOperationsEnhancedScreenState
       };
 
       // Update visit in Supabase with arrival data
-      await _siteVisitService.supabase.from('visits').update({
+      await _siteVisitService.supabase.from('site_visits').update({
         'arrival_latitude': _currentLocation.latitude,
         'arrival_longitude': _currentLocation.longitude,
         'arrival_timestamp': DateTime.now().toUtc(),
@@ -988,8 +1045,7 @@ class _FieldOperationsEnhancedScreenState
             .map((point) => {'lat': point.latitude, 'lng': point.longitude})
             .toList(),
         'arrival_recorded': true,
-        'status': VisitStatus.inProgress.toString(),
-        'last_modified': DateTime.now().toUtc(),
+        'status': 'in_progress',
       }).eq('id', _currentTrackedTask!.id);
 
       // Also update local visitData for consistency
@@ -998,7 +1054,7 @@ class _FieldOperationsEnhancedScreenState
           ..._currentTrackedTask!.visitData ?? {},
           'arrival': arrivalData,
         },
-        status: VisitStatus.inProgress.toString(),
+        status: 'in_progress',
       );
 
       // Stop tracking but keep the path visible
@@ -1016,11 +1072,10 @@ class _FieldOperationsEnhancedScreenState
       });
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Arrival recorded! You can now complete your task.'),
-            backgroundColor: AppColors.accentGreen,
-          ),
+        AppSnackBar.show(
+          context,
+          message: 'Arrival recorded! You can now complete your task.',
+          type: SnackBarType.success,
         );
 
         // Close the details sheet and reload
@@ -1030,18 +1085,39 @@ class _FieldOperationsEnhancedScreenState
     } catch (e) {
       debugPrint('Error recording arrival: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error recording arrival: $e')),
-        );
+        context.showError(e, onRetry: _handleArrived);
       }
     }
   }
 
   // Get directions to visit using OSRM
   Future<void> _getDirectionsToVisit(SiteVisit visit) async {
-    if (visit.latitude == null || visit.longitude == null) return;
+    if (visit.latitude == null || visit.longitude == null) {
+      if (mounted) context.showError('This visit has no coordinates');
+      return;
+    }
 
     try {
+      // Ensure we have current location permissions and position
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (!serviceEnabled ||
+          permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        permission = await Geolocator.requestPermission();
+      }
+
+      // If still not granted, fallback to external maps intent
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        final uri = Uri.parse(
+            'https://www.google.com/maps/dir/?api=1&destination=${visit.latitude},${visit.longitude}');
+        if (await canLaunchUrl(uri)) {
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+          return;
+        }
+      }
+
       final start =
           '${_currentLocation.longitude},${_currentLocation.latitude}';
       final end = '${visit.longitude},${visit.latitude}';
@@ -1080,19 +1156,26 @@ class _FieldOperationsEnhancedScreenState
         }
 
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Directions loaded')),
+          AppSnackBar.show(
+            context,
+            message: 'Directions loaded',
+            type: SnackBarType.success,
           );
         }
       } else {
+        // Fallback to opening Google Maps when OSRM fails
+        final uri = Uri.parse(
+            'https://www.google.com/maps/dir/?api=1&origin=${_currentLocation.latitude},${_currentLocation.longitude}&destination=${visit.latitude},${visit.longitude}&travelmode=driving');
+        if (await canLaunchUrl(uri)) {
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+          return;
+        }
         throw Exception('Failed to load directions');
       }
     } catch (e) {
       debugPrint('Error getting directions: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error loading directions: $e')),
-        );
+        context.showError(e, onRetry: () => _getDirectionsToVisit(visit));
       }
     }
   }
@@ -1113,15 +1196,15 @@ class _FieldOperationsEnhancedScreenState
       await _loadVisits();
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Sync completed successfully')),
+        AppSnackBar.show(
+          context,
+          message: 'Sync completed successfully',
+          type: SnackBarType.success,
         );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error during sync: $e')));
+        context.showError(e, onRetry: _forceSyncData);
       }
     } finally {
       setState(() => _isSyncing = false);
@@ -1135,9 +1218,9 @@ class _FieldOperationsEnhancedScreenState
     try {
       // Save status to Supabase
       await _authService.supabase
-          .from('Users')
+          .from('user_roles')
           .update({'status': newStatus ? 'online' : 'offline'}).eq(
-              'UID', _authService.currentUser!.id);
+              'user_id', _authService.currentUser!.id);
 
       setState(() {
         _isOnline = newStatus;
@@ -1155,19 +1238,15 @@ class _FieldOperationsEnhancedScreenState
 
       // Show confirmation
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('You are now ${newStatus ? 'online' : 'offline'}'),
-            backgroundColor:
-                newStatus ? AppColors.accentGreen : AppColors.accentRed,
-          ),
+        AppSnackBar.show(
+          context,
+          message: 'You are now ${newStatus ? 'online' : 'offline'}',
+          type: newStatus ? SnackBarType.success : SnackBarType.warning,
         );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error changing status: $e')));
+        context.showError(e);
       }
     }
   }
@@ -1244,41 +1323,68 @@ class _FieldOperationsEnhancedScreenState
         FlutterMap(
           mapController: _mapController,
           options: MapOptions(
-            center: _currentLocation,
-            zoom: 14.0,
-            onMapReady: () => _updateMapCamera(),
+            initialCenter: _currentLocation,
+            initialZoom: 14.0,
+            onMapReady: () {
+              debugPrint('Map ready');
+              setState(() => _isMapReady = true);
+              if (mounted) {
+                _updateMarkers();
+                _updateMapCamera();
+              }
+            },
+            // If tiles fail we still want gestures active
+            interactionOptions: const InteractionOptions(
+              flags: InteractiveFlag.all,
+            ),
           ),
           children: [
-            // Mapbox Tile Layer for better quality (free tier: 50,000 loads/month)
+            // Use OpenStreetMap tiles across all platforms
             TileLayer(
-              urlTemplate:
-                  'https://api.mapbox.com/styles/v1/mapbox/streets-v11/tiles/{z}/{x}/{y}?access_token=pk.eyJ1Ijoia2F6b2ZmaWNpYWwiLCJhIjoiY21oM3JsdzF4MWR4cmYxc2JmdGgwbTFuayJ9.OfGK_50FoWlBkgh3t76Vbw',
-              additionalOptions: {
-                'accessToken':
-                    'pk.eyJ1Ijoia2F6b2ZmaWNpYWwiLCJhIjoiY21oM3JsdzF4MWR4cmYxc2JmdGgwbTFuayJ9.OfGK_50FoWlBkgh3t76Vbw',
-              },
+              urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
               userAgentPackageName: 'com.example.pact_mobile',
+              tileProvider: MapTileCacheService.getTileProvider(
+                'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+              ),
+              // Graceful per-tile error logging
+              errorTileCallback: (tile, error, stack) {
+                debugPrint('Tile load error: $error');
+              },
             ),
+            // Markers & polylines
             MarkerLayer(markers: _markers.toList()),
-            PolylineLayer(
-                polylines: {..._journeyPolylines, ..._routePolylines}.toList()),
+            if (_journeyPolylines.isNotEmpty || _routePolylines.isNotEmpty)
+              PolylineLayer(
+                polylines: {..._journeyPolylines, ..._routePolylines}.toList(),
+              ),
           ],
         ),
 
         // Overlay UI
-        Column(
-          children: [
-            // Status card
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: _buildStatusCard(),
-            ),
+        Positioned.fill(
+          child: Column(
+            children: [
+              // Status card
+              Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: _buildStatusCard(),
+              ),
 
-            const Spacer(),
+              // Offline sync indicator
+              const OfflineSyncIndicator(),
 
-            // Bottom panel with visits
-            _buildVisitsPanel(),
-          ],
+              const Spacer(),
+
+              // Bottom panel with visits
+              ConstrainedBox(
+                constraints: const BoxConstraints(
+                  maxHeight: 200, // Reduced from 220 to fit content
+                ),
+                child: _buildVisitsPanel(),
+              ),
+              const SizedBox(height: 8), // Add bottom padding
+            ],
+          ),
         ),
 
         // My location button
@@ -1507,9 +1613,9 @@ class _FieldOperationsEnhancedScreenState
   Widget _buildVisitsPanel() {
     return Container(
       width: double.infinity,
-      margin: const EdgeInsets.all(16.0),
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 8), // Reduced bottom margin
       child: ModernCard(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(8), // Reduced from 12
         borderRadius: 20,
         boxShadow: [
           BoxShadow(
@@ -1545,8 +1651,8 @@ class _FieldOperationsEnhancedScreenState
               )
             : null,
         animationDelay: 200.ms,
-        child: SizedBox(
-          height: 120,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxHeight: 140), // Reduced from 160
           child: _myVisits.isEmpty
               ? Center(
                   child: Text(
@@ -1573,92 +1679,99 @@ class _FieldOperationsEnhancedScreenState
   }
 
   Widget _buildVisitCard(SiteVisit visit) {
-    // Determine color based on visit status
+    // Determine color and status type based on visit status
     Color statusColor;
+    StatusType statusType;
+    IconData statusIcon;
     final status = visitStatusFromString(visit.status);
+
     switch (status) {
       case VisitStatus.assigned:
         statusColor = AppColors.primaryBlue;
+        statusType = StatusType.info;
+        statusIcon = Icons.assignment;
         break;
       case VisitStatus.inProgress:
         statusColor = Colors.amber.shade700;
+        statusType = StatusType.warning;
+        statusIcon = Icons.pending_actions;
         break;
       case VisitStatus.completed:
         statusColor = AppColors.accentGreen;
+        statusType = StatusType.success;
+        statusIcon = Icons.check_circle;
         break;
       default:
         statusColor = Colors.grey;
+        statusType = StatusType.pending;
+        statusIcon = Icons.help_outline;
     }
 
-    return GestureDetector(
+    return AppCard(
       onTap: () => _selectVisit(visit),
+      shadows: AppDesignSystem.shadowMD,
       child: Container(
-        width: 180,
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: statusColor.withOpacity(0.05),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: statusColor.withOpacity(0.3), width: 1),
-        ),
+        width: 170, // Reduced from 180
+        padding:
+            const EdgeInsets.symmetric(horizontal: 8, vertical: 8), // Was 10
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  visit.siteName ?? 'Unnamed Site',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.poppins(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textDark,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  visit.locationString.isNotEmpty
-                      ? visit.locationString
-                      : 'No location',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.poppins(
-                    fontSize: 12,
-                    color: Colors.grey.shade600,
-                  ),
-                ),
-              ],
+            // Status icon
+            Container(
+              width: 24, // Reduced from 28
+              height: 24, // Reduced from 28
+              margin: const EdgeInsets.only(bottom: 2), // Reduced from 4
+              decoration: BoxDecoration(
+                color: statusColor.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                statusIcon,
+                color: statusColor,
+                size: 14, // Reduced from 16
+              ),
             ),
+            Text(
+              visit.siteName ?? 'Unnamed Site',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppDesignSystem.titleMedium
+                  .copyWith(fontSize: 11), // Reduced from 12
+            ),
+            const SizedBox(height: 2), // Reduced from 3
+            Text(
+              visit.locationString.isNotEmpty
+                  ? visit.locationString
+                  : 'No location',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppDesignSystem.bodySmall.copyWith(
+                color: Colors.grey.shade600,
+                fontSize: 9, // Reduced from 10
+              ),
+            ),
+            const SizedBox(height: 2), // Reduced from 3
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: statusColor.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    _getStatusLabel(visit.status),
-                    style: GoogleFonts.poppins(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w500,
-                      color: statusColor,
-                    ),
+                Flexible(
+                  child: StatusBadge(
+                    text: _getStatusLabel(visit.status),
+                    type: statusType,
+                    compact: true,
                   ),
                 ),
-                Icon(Icons.chevron_right, size: 18, color: statusColor),
+                const SizedBox(width: 4),
+                Icon(Icons.chevron_right,
+                    size: 12, color: statusColor), // Reduced from 16
               ],
             ),
           ],
         ),
       ),
-    );
+    ).animate().fadeIn(duration: 400.ms).slideX(begin: 0.1, end: 0);
   }
 
   String _getStatusLabel(String status) {

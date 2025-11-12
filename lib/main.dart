@@ -10,18 +10,23 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'authentication/login_screen.dart';
-import 'authentication/register_screen.dart';
+import 'authentication/improved_register_screen.dart';
 import 'authentication/forgot_password_screen.dart';
 import 'screens/main_screen.dart';
 import 'screens/field_operations_enhanced_screen.dart';
+import 'screens/comprehensive_monitoring_form_screen.dart';
 import 'theme/app_colors.dart';
-import 'utils/environment.dart';
 import 'l10n/app_localizations.dart';
 import 'providers/locale_provider.dart';
 import 'providers/sync_provider.dart';
 import 'services/connectivity_service.dart';
 import 'services/local_storage_service.dart';
 import 'services/data_migration_service.dart';
+import 'services/offline_data_service.dart';
+import 'services/notification_service.dart';
+import 'services/update_service.dart';
+import 'services/map_tile_cache_service.dart'
+    if (dart.library.html) 'services/map_tile_cache_service_web.dart';
 
 // Conditionally import web plugins only when needed
 // This prevents errors on non-web platforms
@@ -108,9 +113,50 @@ void main() async {
   final connectivityService = ConnectivityService(Connectivity());
   await connectivityService.initialize();
 
+  // Initialize offline data services
+  await OfflineDataService.initialize();
+
+  // Initialize map tile cache service (mobile only, not supported on web)
+  if (!kIsWeb) {
+    await MapTileCacheService.initialize();
+  }
+
   // Migrate data from SharedPreferences to Hive
   final migrationService = DataMigrationService(localStorageService);
   await migrationService.migrateAllData();
+
+  // Initialize notification service
+  await NotificationService.initialize(
+    onNotificationTap: (response) {
+      // Handle notification tap based on payload
+      final payload = response.payload;
+      if (payload != null) {
+        if (payload.startsWith('chat:')) {
+          // Navigate to specific chat
+          final chatId = payload.substring(5);
+          navigatorKey.currentState?.pushNamed('/chat', arguments: chatId);
+        } else if (payload.startsWith('mmp:')) {
+          // Navigate to MMP file details
+          final fileId = payload.substring(4);
+          navigatorKey.currentState
+              ?.pushNamed('/mmp-detail', arguments: fileId);
+        } else if (payload.startsWith('update:')) {
+          // Handle update notification tap
+          UpdateService().downloadAndInstallUpdate();
+        }
+      }
+    },
+  );
+
+  // Initialize update service and check for updates
+  final updateService = UpdateService();
+  await updateService.checkForUpdatesOnStartup();
+  updateService.startPeriodicUpdateCheck(); // Check every 30 minutes
+
+  // Initialize realtime notification service for chat and MMP files
+  // Note: This will be activated after user logs in
+
+  debugPrint('📱 Notification services initialized');
 
   // Runs the main application
   runApp(
@@ -195,10 +241,12 @@ class MyApp extends StatelessWidget {
           routes: {
             '/': (_) => LoginScreen(),
             '/login': (_) => LoginScreen(),
-            '/register': (_) => RegisterScreen(),
+            '/register': (_) => ImprovedRegisterScreen(),
             '/forgot-password': (_) => ForgotPasswordScreen(),
             '/main': (_) => MainScreen(),
             '/field-operations': (_) => FieldOperationsEnhancedScreen(),
+            '/comprehensive-monitoring': (_) =>
+                ComprehensiveMonitoringFormScreen(),
           },
 
           // Backup with onGenerateRoute for dynamic routes and better debugging
@@ -217,7 +265,7 @@ class MyApp extends StatelessWidget {
                 final routeBuilders = {
                   '/': (_) => LoginScreen(),
                   '/login': (_) => LoginScreen(),
-                  '/register': (_) => RegisterScreen(),
+                  '/register': (_) => ImprovedRegisterScreen(),
                   '/forgot-password': (_) => ForgotPasswordScreen(),
                   '/main': (_) => MainScreen(),
                 };

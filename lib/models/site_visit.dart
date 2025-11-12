@@ -1,5 +1,6 @@
 class SiteVisit {
   final String id;
+  final String? userId;  // User who created/owns this site visit
   final String siteName;
   final String siteCode;
   final String status;
@@ -42,6 +43,7 @@ class SiteVisit {
 
   SiteVisit({
     required this.id,
+    this.userId,
     required this.siteName,
     required this.siteCode,
     required this.status,
@@ -69,10 +71,10 @@ class SiteVisit {
     this.journeyPath,
     this.arrivalRecorded = false,
   });
-
   factory SiteVisit.fromJson(Map<String, dynamic> json) {
     return SiteVisit(
       id: json['id'] ?? '',
+      userId: json['user_id'],
       siteName: json['site_name'] ?? '',
       siteCode: json['site_code'] ?? '',
       status: json['status'] ?? 'pending',
@@ -92,9 +94,12 @@ class SiteVisit {
       assignedAt: json['assigned_at'] != null
           ? DateTime.parse(json['assigned_at'])
           : null,
-      attachments: json['attachments'] != null
-          ? List<String>.from(json['attachments'])
-          : null,
+    attachments: json['attachments'] != null
+      ? (json['attachments'] as List)
+        .where((e) => e != null)
+        .map((e) => e.toString())
+        .toList()
+      : null,
       completedAt: json['completed_at'] != null
           ? DateTime.parse(json['completed_at'])
           : null,
@@ -112,10 +117,10 @@ class SiteVisit {
       arrivalRecorded: json['arrival_recorded'] ?? false,
     );
   }
-
   Map<String, dynamic> toJson() {
     return {
       'id': id,
+      'user_id': userId,
       'site_name': siteName,
       'site_code': siteCode,
       'status': status,
@@ -147,6 +152,7 @@ class SiteVisit {
 
   SiteVisit copyWith({
     String? id,
+    String? userId,
     String? siteName,
     String? siteCode,
     String? status,
@@ -176,6 +182,7 @@ class SiteVisit {
   }) {
     return SiteVisit(
       id: id ?? this.id,
+      userId: userId ?? this.userId,
       siteName: siteName ?? this.siteName,
       siteCode: siteCode ?? this.siteCode,
       status: status ?? this.status,

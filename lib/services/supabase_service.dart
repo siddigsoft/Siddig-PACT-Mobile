@@ -43,11 +43,11 @@ class SupabaseService {
         redirectTo: 'io.supabase.pactmobile://login-callback/',
       );
       if (!response) throw AuthException('Failed to sign in with Google');
-      
+
       // Wait for the session to be established
-      final session = await _client.auth.currentSession;
+      final session = _client.auth.currentSession;
       if (session == null) throw AuthException('No session established');
-      
+
       return AuthResponse(
         session: session,
         user: session.user,
@@ -67,7 +67,7 @@ class SupabaseService {
         .from(table)
         .select()
         .eq('user_id', _client.auth.currentUser?.id ?? '');
-    return response as List<Map<String, dynamic>>;
+    return response;
     return response;
   }
 
@@ -90,6 +90,6 @@ class SupabaseService {
         .from(table)
         .stream(primaryKey: ['id'])
         .eq('user_id', userId)
-        .map((data) => data.map((e) => e as Map<String, dynamic>).toList());
+        .map((data) => data.map((e) => e).toList());
   }
 }

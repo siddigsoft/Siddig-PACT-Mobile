@@ -43,9 +43,7 @@ class MMPFileService {
           .select()
           .order('created_at', ascending: false);
 
-      if (response is List) {
-        return response.map((item) => Map<String, dynamic>.from(item)).toList();
-      }
+      return response.map((item) => Map<String, dynamic>.from(item)).toList();
 
       return [];
     } catch (e) {

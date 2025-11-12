@@ -166,7 +166,8 @@ class AppMenuOverlay extends StatelessWidget {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Unable to open website. Please check your internet connection.'),
+            content: Text(
+                'Unable to open website. Please check your internet connection.'),
           ),
         );
       }
@@ -196,7 +197,8 @@ class AppMenuOverlay extends StatelessWidget {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Unable to open email app. Please check if you have an email app installed.'),
+            content: Text(
+                'Unable to open email app. Please check if you have an email app installed.'),
           ),
         );
       }

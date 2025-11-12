@@ -1,15 +1,17 @@
 // lib/screens/chat_screen.dart
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/chat.dart';
 import '../models/chat_message.dart';
 import '../models/chat_participant.dart';
+import '../models/chat_contact.dart';
 import '../services/chat_service.dart';
+import '../services/chat_contact_service.dart';
 import '../theme/app_colors.dart';
+import '../utils/error_handler.dart';
 
 class ChatScreen extends StatefulWidget {
   final Chat chat;
@@ -22,6 +24,7 @@ class ChatScreen extends StatefulWidget {
 
 class _ChatScreenState extends State<ChatScreen> {
   final ChatService _chatService = ChatService();
+  final ChatContactService _contactService = ChatContactService();
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   List<ChatMessage> _messages = [];
@@ -30,6 +33,8 @@ class _ChatScreenState extends State<ChatScreen> {
   String? _currentUserId;
   List<ChatParticipant> _participants = [];
   bool _participantsLoaded = false;
+  ChatContact? _chatContact;
+  String? _contactUserId;
 
   @override
   void initState() {
@@ -37,6 +42,7 @@ class _ChatScreenState extends State<ChatScreen> {
     _currentUserId = Supabase.instance.client.auth.currentUser?.id;
     _loadMessages();
     _loadParticipants();
+    _loadContactInfo();
     _markMessagesAsRead();
   }
 
@@ -71,6 +77,76 @@ class _ChatScreenState extends State<ChatScreen> {
       _participants = participants;
       _participantsLoaded = true;
     });
+
+    // Get the contact user ID if this is a private chat
+    if (widget.chat.chatType == 'private' && _currentUserId != null) {
+      final otherParticipant = participants.firstWhere(
+        (p) => p.userId != _currentUserId,
+        orElse: () => participants.isNotEmpty
+            ? participants.first
+            : ChatParticipant(
+                chatId: widget.chat.id,
+                userId: '',
+                userName: 'Unknown',
+                joinedAt: DateTime.now(),
+              ),
+      );
+      _contactUserId = otherParticipant.userId;
+    }
+  }
+
+  // Load contact information from chat_contacts table
+  Future<void> _loadContactInfo() async {
+    if (_currentUserId == null || widget.chat.chatType != 'private') return;
+
+    // Wait for participants to load first to get the contact user ID
+    await Future.delayed(const Duration(milliseconds: 100));
+
+    if (_contactUserId == null || _contactUserId!.isEmpty) return;
+
+    try {
+      final contact =
+          await _contactService.getContact(_currentUserId!, _contactUserId!);
+
+      // If contact doesn't exist, create it with default name
+      if (contact == null && _contactUserId!.isNotEmpty) {
+        final defaultName =
+            await _contactService.fetchUserProfileName(_contactUserId!);
+        final newContact = await _contactService.saveContact(
+          userId: _currentUserId!,
+          contactUserId: _contactUserId!,
+          defaultName: defaultName,
+        );
+        setState(() {
+          _chatContact = newContact;
+        });
+      } else if (contact != null) {
+        setState(() {
+          _chatContact = contact;
+        });
+      }
+    } catch (e) {
+      print('Error loading contact info: $e');
+    }
+  }
+
+  // Get sender name from participants list
+  String _getSenderName(String senderId) {
+    if (senderId == _currentUserId) {
+      return 'You';
+    }
+
+    final participant = _participants.firstWhere(
+      (p) => p.userId == senderId,
+      orElse: () => ChatParticipant(
+        chatId: widget.chat.id,
+        userId: senderId,
+        userName: 'Unknown User',
+        joinedAt: DateTime.now(),
+      ),
+    );
+
+    return participant.userName ?? 'User ${senderId.substring(0, 8)}';
   }
 
   Future<void> _markMessagesAsRead() async {
@@ -94,9 +170,7 @@ class _ChatScreenState extends State<ChatScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to send message: $e')),
-        );
+        context.showError(e, onRetry: _sendMessage);
       }
     } finally {
       setState(() => _isSending = false);
@@ -115,7 +189,12 @@ class _ChatScreenState extends State<ChatScreen> {
 
   String _getChatTitle() {
     if (widget.chat.chatType == 'private') {
-      // For private chats, show the other participant's name
+      // Use contact's custom name if available
+      if (_chatContact != null) {
+        return _chatContact!.displayName;
+      }
+
+      // Otherwise fall back to participant name
       if (!_participantsLoaded || _participants.isEmpty) {
         return 'Loading...';
       }
@@ -153,11 +232,167 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  // Show dialog to edit contact name
+  Future<void> _editContactName() async {
+    if (_currentUserId == null || _contactUserId == null) return;
+
+    final TextEditingController nameController = TextEditingController(
+      text: _chatContact?.customName ?? '',
+    );
+
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(
+          'Edit Contact Name',
+          style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+        ),
+        content: TextField(
+          controller: nameController,
+          decoration: InputDecoration(
+            hintText: 'Enter custom name',
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Cancel', style: GoogleFonts.poppins()),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context, nameController.text.trim());
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            child:
+                Text('Save', style: GoogleFonts.poppins(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (result != null && result.isNotEmpty) {
+      try {
+        final updatedContact = await _contactService.updateContactName(
+          userId: _currentUserId!,
+          contactUserId: _contactUserId!,
+          customName: result,
+          defaultName: _chatContact?.defaultName,
+        );
+
+        setState(() {
+          _chatContact = updatedContact;
+        });
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Contact name updated to "$result"'),
+              backgroundColor: AppColors.success,
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to update contact name: $e'),
+              backgroundColor: AppColors.error,
+            ),
+          );
+        }
+      }
+    }
+
+    nameController.dispose();
+  }
+
+  // Confirm and delete the entire chat
+  Future<void> _confirmDeleteChat() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(
+          'Delete Chat',
+          style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+        ),
+        content: Text(
+          'Are you sure you want to delete this entire chat? This action cannot be undone.',
+          style: GoogleFonts.poppins(),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('Cancel', style: GoogleFonts.poppins()),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.error,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            child:
+                Text('Delete', style: GoogleFonts.poppins(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await _deleteChat();
+    }
+  }
+
+  // Delete the chat and navigate back
+  Future<void> _deleteChat() async {
+    try {
+      await _chatService.deleteChat(widget.chat.id);
+
+      // Also delete the contact if it exists
+      if (_currentUserId != null && _contactUserId != null) {
+        await _contactService.deleteContact(_currentUserId!, _contactUserId!);
+      }
+
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Chat deleted successfully'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to delete chat: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.backgroundGray,
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: AppColors.textDark),
+          onPressed: () => Navigator.pop(context),
+        ),
         title: Text(
           _getChatTitle(),
           style: GoogleFonts.poppins(
@@ -167,11 +402,21 @@ class _ChatScreenState extends State<ChatScreen> {
         ),
         backgroundColor: Colors.white,
         elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          color: AppColors.textDark,
-          onPressed: () => Navigator.pop(context),
-        ),
+        actions: [
+          // Edit contact name button (only for private chats)
+          if (widget.chat.chatType == 'private')
+            IconButton(
+              icon: const Icon(Icons.edit, color: AppColors.primary),
+              onPressed: _editContactName,
+              tooltip: 'Edit contact name',
+            ),
+          // Delete chat button
+          IconButton(
+            icon: const Icon(Icons.delete_outline, color: AppColors.error),
+            onPressed: _confirmDeleteChat,
+            tooltip: 'Delete chat',
+          ),
+        ],
       ),
       body: Column(
         children: [
@@ -257,59 +502,146 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Widget _buildMessageBubble(ChatMessage message, bool isCurrentUser) {
+    final senderName = _getSenderName(message.senderId);
+
     return Align(
       alignment: isCurrentUser ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 8),
-        constraints: BoxConstraints(
-          maxWidth: MediaQuery.of(context).size.width * 0.75,
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          gradient: isCurrentUser ? AppColors.primaryGradient : null,
-          color: isCurrentUser ? null : Colors.white,
-          borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(16),
-            topRight: const Radius.circular(16),
-            bottomLeft: isCurrentUser
-                ? const Radius.circular(16)
-                : const Radius.circular(4),
-            bottomRight: isCurrentUser
-                ? const Radius.circular(4)
-                : const Radius.circular(16),
+      child: GestureDetector(
+        onLongPress: () => _confirmDeleteMessage(message),
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          constraints: BoxConstraints(
+            maxWidth: MediaQuery.of(context).size.width * 0.75,
           ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.1),
-              blurRadius: 4,
-              offset: const Offset(0, 2),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            gradient: isCurrentUser ? AppColors.primaryGradient : null,
+            color: isCurrentUser ? null : Colors.white,
+            borderRadius: BorderRadius.only(
+              topLeft: const Radius.circular(16),
+              topRight: const Radius.circular(16),
+              bottomLeft: isCurrentUser
+                  ? const Radius.circular(16)
+                  : const Radius.circular(4),
+              bottomRight: isCurrentUser
+                  ? const Radius.circular(4)
+                  : const Radius.circular(16),
             ),
-          ],
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.1),
+                blurRadius: 4,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Show sender name for group chats or non-current user
+              if (!isCurrentUser || widget.chat.chatType == 'group')
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Text(
+                    senderName,
+                    style: GoogleFonts.poppins(
+                      color: isCurrentUser
+                          ? Colors.white.withOpacity(0.9)
+                          : AppColors.primary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              Text(
+                message.content ?? '',
+                style: GoogleFonts.poppins(
+                  color: isCurrentUser ? Colors.white : AppColors.textDark,
+                  fontSize: 16,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                _formatMessageTime(message.createdAt),
+                style: GoogleFonts.poppins(
+                  color: isCurrentUser
+                      ? Colors.white.withOpacity(0.7)
+                      : AppColors.textLight,
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              message.content ?? '',
-              style: GoogleFonts.poppins(
-                color: isCurrentUser ? Colors.white : AppColors.textDark,
-                fontSize: 16,
+      ).animate().fadeIn(duration: 300.ms),
+    );
+  }
+
+  // Confirm and delete a single message
+  Future<void> _confirmDeleteMessage(ChatMessage message) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(
+          'Delete Message',
+          style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+        ),
+        content: Text(
+          'Are you sure you want to delete this message?',
+          style: GoogleFonts.poppins(),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('Cancel', style: GoogleFonts.poppins()),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.error,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
               ),
             ),
-            const SizedBox(height: 4),
-            Text(
-              _formatMessageTime(message.createdAt),
-              style: GoogleFonts.poppins(
-                color: isCurrentUser
-                    ? Colors.white.withOpacity(0.7)
-                    : AppColors.textLight,
-                fontSize: 12,
-              ),
-            ),
-          ],
-        ),
+            child:
+                Text('Delete', style: GoogleFonts.poppins(color: Colors.white)),
+          ),
+        ],
       ),
-    ).animate().fadeIn(duration: 300.ms);
+    );
+
+    if (confirmed == true) {
+      await _deleteMessage(message);
+    }
+  }
+
+  // Delete a single message
+  Future<void> _deleteMessage(ChatMessage message) async {
+    try {
+      await _chatService.deleteMessage(message.id);
+
+      setState(() {
+        _messages.removeWhere((m) => m.id == message.id);
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Message deleted'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to delete message: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
   }
 
   Widget _buildEmptyState() {

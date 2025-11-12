@@ -1,18 +1,28 @@
 // lib/screens/components/visit_details_sheet.dart
 
 import 'package:flutter/material.dart';
+import 'dart:async'; // For TimeoutException
 import 'package:flutter_animate/flutter_animate.dart';
 import '../../models/site_visit.dart';
 import '../../models/visit_status.dart';
 import '../../theme/app_colors.dart';
+import 'package:geolocator/geolocator.dart';
+import '../../services/staff_tracking_service.dart';
+import '../../services/location_tracking_service.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../services/offline_data_service.dart';
 
 class VisitDetailsSheet extends StatefulWidget {
   final SiteVisit visit;
-  final Function(String) onStatusChanged;
+  final Future<void> Function(String) onStatusChanged;
   final bool isTrackingJourney;
   final bool isNearDestination;
   final VoidCallback? onArrived;
   final VoidCallback? onGetDirections;
+  // New: whether the visit's report has already been submitted
+  final bool reportSubmitted;
+  // Callback to request opening the report submission form
+  final VoidCallback? onSubmitReportRequested;
 
   const VisitDetailsSheet({
     super.key,
@@ -22,6 +32,8 @@ class VisitDetailsSheet extends StatefulWidget {
     this.isNearDestination = false,
     this.onArrived,
     this.onGetDirections,
+    this.reportSubmitted = false,
+    this.onSubmitReportRequested,
   });
 
   @override
@@ -30,18 +42,206 @@ class VisitDetailsSheet extends StatefulWidget {
 
 class _VisitDetailsSheetState extends State<VisitDetailsSheet> {
   late SiteVisit _visit;
+  bool _isUpdating = false;
+  bool _isEndingVisit = false;
+  bool _hasReport = false;
+  bool _checkedReport = false;
 
   @override
   void initState() {
     super.initState();
     _visit = widget.visit;
+    // If already completed and we didn't get an explicit flag, probe for report existence
+    if (_visit.status.toLowerCase() == 'completed' && !widget.reportSubmitted) {
+      _probeReportExists();
+    }
   }
 
-  void _updateVisitStatus(String newStatus) {
-    widget.onStatusChanged(newStatus);
+  Future<void> _probeReportExists() async {
+    try {
+      final supabase = Supabase.instance.client;
+      // Try online first
+      try {
+        final res = await supabase
+            .from('reports')
+            .select('id')
+            .eq('site_visit_id', _visit.id)
+            .limit(1);
+        if (mounted) {
+          setState(() {
+            _hasReport = (res.isNotEmpty);
+            _checkedReport = true;
+          });
+        }
+        return;
+      } catch (_) {}
 
-    if (newStatus.toLowerCase() == 'completed') {
-      _showReportDialog();
+      // Fallback to offline cache
+      final offline = OfflineDataService();
+      final cached = await offline.getCachedReports();
+      final exists = cached.any((r) => r['site_visit_id'] == _visit.id);
+      if (mounted) {
+        setState(() {
+          _hasReport = exists;
+          _checkedReport = true;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _checkedReport = true;
+        });
+      }
+    }
+  }
+
+  Future<void> _onEndVisitCaptureLocation() async {
+    if (_isEndingVisit) return;
+    setState(() => _isEndingVisit = true);
+
+    // Show small progress dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const _ProgressDialog(
+          title: 'Ending visit',
+          message: 'Capturing site location and stopping tracking...'),
+    );
+
+    try {
+      // 1) Get precise current location
+      final hasService = await Geolocator.isLocationServiceEnabled();
+      if (!hasService) {
+        throw Exception('Location services are disabled');
+      }
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        throw Exception('Location permission not granted');
+      }
+      final position = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.best);
+
+      // 2) Persist actual site coordinates in dedicated table
+      // Reuse StaffTrackingService API which writes to `site_locations`
+      // Acquire Supabase client explicitly (web build needs direct import) and record site location
+      final staffService = StaffTrackingService(Supabase.instance.client);
+      final ok = await staffService.recordSiteLocation(
+        siteId: _visit.id,
+        position: position,
+        notes: 'Captured at end of visit',
+      );
+
+      if (!ok) {
+        throw Exception('Failed to save site location');
+      }
+
+      // Optional: verify row exists (depends on RLS policies)
+      try {
+        final row = await Supabase.instance.client
+            .from('site_locations')
+            .select('site_id, latitude, longitude, accuracy, recorded_at')
+            .eq('site_id', _visit.id)
+            .single();
+        debugPrint(
+            '✅ Verified site location saved: lat=${row['latitude']}, lng=${row['longitude']}');
+      } catch (e) {
+        debugPrint('⚠️ Verification read failed (may be blocked by RLS): $e');
+      }
+
+      // 3) Stop ongoing user location tracking
+      await LocationTrackingService().stopJourneyTracking();
+
+      if (mounted) {
+        Navigator.of(context).pop(); // Close progress dialog
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Site location saved and tracking stopped.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.of(context).pop(); // Close dialog
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to end visit: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isEndingVisit = false);
+    }
+  }
+
+  void _updateVisitStatus(String newStatus) async {
+    if (_isUpdating) return; // Guard against re-entry
+    setState(() => _isUpdating = true);
+    // Show a small progress dialog while updating
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const _ProgressDialog(
+          title: 'Please wait', message: 'Updating visit status...'),
+    );
+
+    try {
+      bool shouldCloseSheet = false;
+      // Ensure we don't hang forever if backend is slow
+      await widget
+          .onStatusChanged(newStatus)
+          .timeout(const Duration(seconds: 20));
+      // If we successfully marked as completed, close this bottom sheet so the parent can show the report form cleanly
+      if (newStatus.toLowerCase() == 'completed') {
+        shouldCloseSheet = true;
+      }
+    } on TimeoutException {
+      // Inform and proceed to close the dialog anyway
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+                'Updating took too long. Please check network and try again.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+    } catch (e) {
+      // Surface error
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: const [
+                Icon(Icons.error, color: Colors.white),
+                SizedBox(width: 8),
+                Expanded(child: Text('Failed to update visit status')),
+              ],
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      // Always close the progress dialog if it's still open
+      if (mounted) {
+        try {
+          Navigator.of(context, rootNavigator: true).pop();
+        } catch (_) {
+          // ignore if already closed
+        }
+        // If we marked completed, also close this sheet so the parent can present the report form without flicker
+        try {
+          // Using maybePop prevents exceptions if already closed
+          Navigator.of(context).maybePop();
+        } catch (_) {}
+      }
+      if (mounted) setState(() => _isUpdating = false);
     }
   }
 
@@ -435,12 +635,40 @@ class _VisitDetailsSheetState extends State<VisitDetailsSheet> {
         );
 
       case 'completed':
-        return _buildButton(
-          label: 'Submit Report',
-          icon: Icons.assignment,
-          color: AppColors.primaryBlue,
-          onPressed: _showReportDialog,
-        );
+        // Show capture site location ONLY after report has been submitted.
+        final allowCapture = widget.reportSubmitted || _hasReport;
+        if (allowCapture) {
+          return Column(
+            children: [
+              _buildButton(
+                label: 'Capture Site Location',
+                icon: Icons.location_on,
+                color: Colors.orange,
+                onPressed: _onEndVisitCaptureLocation,
+              ),
+            ],
+          );
+        } else {
+          return Column(
+            children: [
+              _buildButton(
+                label: 'Submit Report',
+                icon: Icons.description,
+                color: AppColors.primaryBlue,
+                onPressed: () {
+                  // Delegate to parent to open the report form
+                  widget.onSubmitReportRequested?.call();
+                },
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Submit the visit report first. After successful submission, you can capture the definitive site location.',
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          );
+        }
 
       case 'cancelled':
       case 'rejected':
@@ -466,7 +694,7 @@ class _VisitDetailsSheetState extends State<VisitDetailsSheet> {
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton.icon(
-        onPressed: onPressed,
+        onPressed: _isUpdating ? null : onPressed,
         icon: Icon(icon, color: filled ? Colors.white : color),
         label: Text(label),
         style: ElevatedButton.styleFrom(
@@ -483,5 +711,35 @@ class _VisitDetailsSheetState extends State<VisitDetailsSheet> {
         .animate()
         .fadeIn(duration: 300.ms)
         .slideY(begin: 0.1, end: 0, duration: 250.ms);
+  }
+}
+
+class _ProgressDialog extends StatelessWidget {
+  final String title;
+  final String message;
+  const _ProgressDialog({required this.title, required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const CircularProgressIndicator(),
+            const SizedBox(height: 16),
+            Text(title,
+                style:
+                    const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 8),
+            Text(message,
+                style: TextStyle(fontSize: 14, color: Colors.grey.shade700)),
+          ],
+        ),
+      ),
+    );
   }
 }

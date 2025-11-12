@@ -10,6 +10,9 @@ import '../services/local_storage_service.dart';
 import '../providers/sync_provider.dart';
 import '../theme/app_colors.dart';
 import '../l10n/app_localizations.dart';
+import '../theme/app_design_system.dart';
+import '../widgets/app_widgets.dart';
+import '../utils/error_handler.dart';
 
 class EquipmentScreen extends StatefulWidget {
   const EquipmentScreen({super.key});
@@ -52,11 +55,15 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
     // Apply filters
     List<Equipment> filteredEquipment = allEquipment;
     if (_selectedFilter != 'All') {
-      filteredEquipment = filteredEquipment.where((eq) => eq.status == _selectedFilter).toList();
+      filteredEquipment = filteredEquipment
+          .where((eq) => eq.status == _selectedFilter)
+          .toList();
     }
     if (_searchQuery.isNotEmpty) {
-      filteredEquipment = filteredEquipment.where((eq) =>
-        eq.name.toLowerCase().contains(_searchQuery.toLowerCase())).toList();
+      filteredEquipment = filteredEquipment
+          .where((eq) =>
+              eq.name.toLowerCase().contains(_searchQuery.toLowerCase()))
+          .toList();
     }
 
     setState(() {
@@ -90,7 +97,7 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<String>(
-                value: selectedStatus,
+                initialValue: selectedStatus,
                 items: ['OK', 'Needs Service']
                     .map(
                       (status) =>
@@ -100,7 +107,8 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
                 onChanged: (value) {
                   selectedStatus = value!;
                 },
-                decoration: InputDecoration(labelText: AppLocalizations.of(context)!.status),
+                decoration: InputDecoration(
+                    labelText: AppLocalizations.of(context)!.status),
               ),
               const SizedBox(height: 16),
               TextField(
@@ -218,9 +226,11 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
                 );
 
                 // Get current equipment and add inspection
-                final currentEquipment = _localStorage.getEquipment(equipment.id);
+                final currentEquipment =
+                    _localStorage.getEquipment(equipment.id);
                 if (currentEquipment != null) {
-                  final updatedInspections = List<Inspection>.from(currentEquipment.inspections ?? []);
+                  final updatedInspections =
+                      List<Inspection>.from(currentEquipment.inspections ?? []);
                   updatedInspections.add(inspection);
 
                   final updatedEquipment = Equipment(
@@ -291,7 +301,8 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
                                       inspections:
                                           _equipment[index].inspections,
                                     );
-                                    await _localStorage.saveEquipment(updatedEquipment);
+                                    await _localStorage
+                                        .saveEquipment(updatedEquipment);
                                     _loadEquipment();
                                   },
                                   onTap: () =>
@@ -300,32 +311,45 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
                               ),
                             if (_equipment.isEmpty)
                               Center(
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(
-                                      Icons.inventory_2_outlined,
-                                      size: 64,
-                                      color: AppColors.textLight,
-                                    ),
-                                    const SizedBox(height: 16),
-                                    Text(
-                                      AppLocalizations.of(context)!.noEquipmentFound,
-                                      style: GoogleFonts.poppins(
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.w500,
-                                        color: AppColors.textLight,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      AppLocalizations.of(context)!.tapPlusButtonToAddEquipment,
-                                      style: GoogleFonts.poppins(
-                                        fontSize: 14,
-                                        color: AppColors.textLight,
-                                      ),
-                                    ),
-                                  ],
+                                child: Padding(
+                                  padding:
+                                      EdgeInsets.all(AppDesignSystem.spaceLG),
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Container(
+                                        padding: EdgeInsets.all(
+                                            AppDesignSystem.spaceLG),
+                                        decoration: BoxDecoration(
+                                          color: AppColors.primaryOrange
+                                              .withOpacity(0.1),
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: Icon(
+                                          Icons.inventory_2_outlined,
+                                          size: 64,
+                                          color: AppColors.primaryOrange,
+                                        ),
+                                      ).animate().scale(
+                                          duration: 600.ms,
+                                          curve: Curves.elasticOut),
+                                      SizedBox(height: AppDesignSystem.spaceMD),
+                                      Text(
+                                        AppLocalizations.of(context)!
+                                            .noEquipmentFound,
+                                        style: AppDesignSystem.headlineMedium,
+                                      ).animate().fadeIn(delay: 200.ms),
+                                      SizedBox(height: AppDesignSystem.spaceSM),
+                                      Text(
+                                        AppLocalizations.of(context)!
+                                            .tapPlusButtonToAddEquipment,
+                                        style:
+                                            AppDesignSystem.bodyMedium.copyWith(
+                                          color: AppColors.textLight,
+                                        ),
+                                      ).animate().fadeIn(delay: 300.ms),
+                                    ],
+                                  ),
                                 ),
                               ),
                           ],
@@ -336,14 +360,21 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton(
+      floatingActionButton: FloatingActionButton.extended(
         onPressed: () {
           HapticFeedback.mediumImpact();
           _showAddEquipmentDialog();
         },
         backgroundColor: AppColors.primaryOrange,
-        child: const Icon(Icons.add, color: Colors.white),
-      ),
+        icon: const Icon(Icons.add, color: Colors.white),
+        label: Text(
+          'Add Equipment',
+          style: AppDesignSystem.labelLarge.copyWith(
+            color: Colors.white,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ).animate().scale(delay: 400.ms, duration: 400.ms),
     );
   }
 
@@ -362,28 +393,6 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
       ),
       child: Row(
         children: [
-          Container(
-            decoration: BoxDecoration(
-              color: AppColors.backgroundGray,
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 6,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: IconButton(
-              onPressed: () {
-                HapticFeedback.lightImpact();
-                // Navigation logic would go here
-              },
-              icon: const Icon(Icons.arrow_back),
-              color: AppColors.textDark,
-            ),
-          ),
-          const SizedBox(width: 16),
           Text(
             AppLocalizations.of(context)!.equipment,
             style: GoogleFonts.poppins(
@@ -441,7 +450,8 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
                       _loadEquipment();
                     },
                     decoration: InputDecoration(
-                      hintText: AppLocalizations.of(context)!.enterEquipmentNameSearch,
+                      hintText: AppLocalizations.of(context)!
+                          .enterEquipmentNameSearch,
                       prefixIcon: Icon(Icons.search),
                     ),
                   ),
@@ -470,7 +480,8 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
           _buildFilterChip(AppLocalizations.of(context)!.all, true),
           _buildFilterChip(AppLocalizations.of(context)!.available, false),
           _buildFilterChip(AppLocalizations.of(context)!.inUse, false),
-          _buildFilterChip(AppLocalizations.of(context)!.needsMaintenance, false),
+          _buildFilterChip(
+              AppLocalizations.of(context)!.needsMaintenance, false),
         ],
       ),
     ).animate().fadeIn(duration: 500.ms, delay: 100.ms);
@@ -516,244 +527,69 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
     required Function(bool) onCheckedChanged,
     required VoidCallback onTap,
   }) {
-    return GestureDetector(
+    return AppCard(
+      margin: EdgeInsets.only(bottom: AppDesignSystem.spaceMD),
+      shadows: AppDesignSystem.shadowSM,
       onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 16),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 10,
-              offset: const Offset(0, 2),
+      child: Row(
+        children: [
+          // Status Icon
+          Container(
+            padding: EdgeInsets.all(AppDesignSystem.spaceMD),
+            decoration: BoxDecoration(
+              color: statusColor.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(AppDesignSystem.radiusMD),
             ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    name,
-                    style: GoogleFonts.poppins(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
+            child: Icon(
+              status == 'OK' ? Icons.check_circle : Icons.warning,
+              color: statusColor,
+              size: 28,
+            ),
+          ),
+          SizedBox(width: AppDesignSystem.spaceMD),
+          // Equipment Info
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name,
+                  style: AppDesignSystem.titleLarge.copyWith(
+                    fontWeight: FontWeight.w600,
                   ),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: statusColor.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          status,
-                          style: GoogleFonts.poppins(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                            color: statusColor,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
+                ),
+                SizedBox(height: AppDesignSystem.spaceXS),
+                Row(
+                  children: [
+                    StatusBadge(
+                      text: status,
+                      type: status == 'OK'
+                          ? StatusType.success
+                          : StatusType.error,
+                    ),
+                    SizedBox(width: AppDesignSystem.spaceSM),
+                    Expanded(
+                      child: Text(
                         '${AppLocalizations.of(context)!.next}: $nextMaintenance',
-                        style: GoogleFonts.poppins(
-                          fontSize: 12,
+                        style: AppDesignSystem.bodySmall.copyWith(
                           color: AppColors.textLight,
                         ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            Switch(
-              value: isCheckedIn,
-              onChanged: onCheckedChanged,
-              activeColor: AppColors.primaryOrange,
-            ),
-          ],
-        ),
-      ),
-    ).animate().fadeIn(duration: 300.ms);
-    child:
-    Container(
-          margin: const EdgeInsets.only(bottom: 16),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.05),
-                blurRadius: 10,
-                offset: const Offset(0, 2),
-                spreadRadius: 0,
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: status == 'OK'
-                            ? AppColors.accentGreen.withOpacity(0.1)
-                            : AppColors.accentRed.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Icon(
-                        Icons.build_outlined,
-                        color: status == 'OK'
-                            ? AppColors.accentGreen
-                            : AppColors.accentRed,
-                        size: 28,
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            name,
-                            style: GoogleFonts.poppins(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.textDark,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: statusColor.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  status == 'OK'
-                                      ? Icons.check_circle
-                                      : Icons.warning,
-                                  color: statusColor,
-                                  size: 16,
-                                ),
-                                const SizedBox(width: 6),
-                                Flexible(
-                                  child: Text(
-                                    status,
-                                    style: GoogleFonts.poppins(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w500,
-                                      color: statusColor,
-                                    ),
-                                    overflow: TextOverflow.ellipsis,
-                                    maxLines: 1,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    // Wrapped in a container with constraints to prevent overflow
-                    Container(
-                      constraints: const BoxConstraints(maxWidth: 150),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Flexible(
-                            child: Text(
-                              isCheckedIn ? AppLocalizations.of(context)!.checkedIn : AppLocalizations.of(context)!.checkedOut,
-                              style: GoogleFonts.poppins(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                                color: AppColors.textLight,
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Switch(
-                            value: isCheckedIn,
-                            onChanged: (value) {
-                              // Update check-in status
-                            },
-                            activeThumbColor: AppColors.primaryOrange,
-                            activeTrackColor: AppColors.primaryOrange
-                                .withOpacity(0.3),
-                            inactiveThumbColor: Colors.white,
-                            inactiveTrackColor: AppColors.textLight.withOpacity(
-                              0.3,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const Divider(height: 1),
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16.0,
-                  vertical: 12.0,
-                ),
-                child: Row(
-                  mainAxisSize:
-                      MainAxisSize.min, // Prevent unnecessary stretching
-                  children: [
-                    Text(
-                      '${AppLocalizations.of(context)!.nextMaintenance}: ',
-                      style: GoogleFonts.poppins(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                        color: AppColors.textLight,
-                      ),
-                    ),
-                    Flexible(
-                      // Allow text to wrap if needed
-                      child: Text(
-                        nextMaintenance,
-                        style: GoogleFonts.poppins(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textDark,
-                        ),
                         overflow: TextOverflow.ellipsis,
-                        maxLines: 1,
                       ),
                     ),
                   ],
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        )
-        .animate()
-        .fadeIn(duration: 500.ms, delay: 200.ms)
-        .slideY(begin: 0.1, end: 0, duration: 300.ms);
+          // Check-in Switch
+          Switch(
+            value: isCheckedIn,
+            onChanged: onCheckedChanged,
+            activeThumbColor: AppColors.primaryOrange,
+          ),
+        ],
+      ),
+    ).animate().fadeIn(duration: 300.ms).slideX(begin: 0.2, end: 0);
   }
 }

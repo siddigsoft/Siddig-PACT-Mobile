@@ -5,11 +5,9 @@ import 'base_repository.dart';
 
 class SafetyChecklistRepository extends BaseRepository<SafetyChecklist> {
   SafetyChecklistRepository({
-    required Database database,
-    required SupabaseService supabaseService,
+    required super.database,
+    required super.supabaseService,
   }) : super(
-          database: database,
-          supabaseService: supabaseService,
           tableName: 'safety_checklists',
         );
 
@@ -17,7 +15,8 @@ class SafetyChecklistRepository extends BaseRepository<SafetyChecklist> {
   Map<String, dynamic> toMap(SafetyChecklist item) => item.toJson();
 
   @override
-  SafetyChecklist fromMap(Map<String, dynamic> map) => SafetyChecklist.fromJson(map);
+  SafetyChecklist fromMap(Map<String, dynamic> map) =>
+      SafetyChecklist.fromJson(map);
 
   Stream<List<SafetyChecklist>> subscribeToUpdates() {
     return supabaseService

@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import '../models/location_log_model.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'offline_data_service.dart';
 
 class StaffTrackingService {
   final SupabaseClient _supabase;
@@ -98,16 +99,32 @@ class StaffTrackingService {
     String? notes,
   }) async {
     try {
-      final response = await _supabase.from('site_locations').upsert({
+      final userId = _supabase.auth.currentUser?.id;
+      final payload = {
         'site_id': siteId,
+        'user_id': userId,
         'latitude': position.latitude,
         'longitude': position.longitude,
         'accuracy': position.accuracy,
         'recorded_at': DateTime.now().toIso8601String(),
         'notes': notes,
-      });
+      };
 
-      return true;
+      // If offline, queue for later sync
+      final connectivity = await Connectivity().checkConnectivity();
+      final hasConnection = connectivity != ConnectivityResult.none;
+      if (!hasConnection) {
+        await OfflineDataService().queueSiteLocation(payload);
+        return true; // queued successfully
+      }
+
+      // Online path: upsert immediately
+      final inserted = await _supabase
+          .from('site_locations')
+          .upsert(payload, onConflict: 'site_id')
+          .select()
+          .single();
+      return inserted['site_id'] == siteId;
     } catch (e) {
       developer.log('Error recording site location: $e');
       return false;
@@ -414,7 +431,7 @@ class StaffTrackingService {
       await _markLogsAsSynced(logs);
     } catch (e) {
       developer.log('Error uploading log batch: $e');
-      throw e; // Re-throw to handle in caller
+      rethrow; // Re-throw to handle in caller
     }
   }
 

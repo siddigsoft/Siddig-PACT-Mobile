@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../theme/app_colors.dart';
-import '../l10n/app_localizations.dart';
 import '../providers/locale_provider.dart';
 
 class LanguageSwitcher extends StatelessWidget {

@@ -2,6 +2,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:geolocator/geolocator.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
+import 'offline_data_service.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/site_visit.dart';
@@ -31,16 +33,62 @@ class SiteVisitService {
   }
 
   Future<void> updateSiteVisitStatus(String visitId, String status) async {
-    await _supabase
-        .from('site_visits')
-        .update({'status': status}).eq('id', visitId);
+    try {
+      print('🔄 Updating visit status: $visitId -> $status');
+      // Check connectivity
+      final connectivity = await Connectivity().checkConnectivity();
+      final hasConnection = connectivity != ConnectivityResult.none;
+      if (!hasConnection) {
+        // Queue offline
+        await OfflineDataService().queueVisitStatusUpdate(
+          visitId: visitId,
+          newStatus: status,
+          extra: {
+            'queued_at': DateTime.now().toIso8601String(),
+          },
+        );
+        print('📦 Visit status queued for sync (offline).');
+        return;
+      }
+      await _supabase.from('site_visits').update({
+        'status': status,
+        'user_id': _supabase.auth.currentUser?.id,
+        'last_modified': DateTime.now().toIso8601String(),
+      }).eq('id', visitId);
+      print('✅ Visit status updated in Supabase');
+    } catch (e) {
+      print('❌ Failed to update visit status: $e');
+      rethrow;
+    }
   }
 
   Future<void> updateSiteVisit(SiteVisit visit) async {
-    await _supabase
-        .from('site_visits')
-        .update(visit.toJson())
-        .eq('id', visit.id);
+    try {
+      print('🔄 Updating visit: ${visit.id}');
+      final connectivity = await Connectivity().checkConnectivity();
+      final hasConnection = connectivity != ConnectivityResult.none;
+      final visitData = visit.toJson();
+      if (!hasConnection) {
+        // For now, only queue status field (avoid large payloads). Extend if needed.
+        await OfflineDataService().queueVisitStatusUpdate(
+          visitId: visit.id,
+          newStatus: visit.status,
+          extra: {
+            'queued_full_update': true,
+            'payload': {
+              'status': visit.status,
+            },
+          },
+        );
+        print('📦 Full visit update (status only) queued offline.');
+        return;
+      }
+      await _supabase.from('site_visits').update(visitData).eq('id', visit.id);
+      print('✅ Visit updated in Supabase');
+    } catch (e) {
+      print('❌ Failed to update visit: $e');
+      rethrow;
+    }
   }
 
   Future<List<SiteVisit>> getAvailableSiteVisits() async {
@@ -157,7 +205,7 @@ class SiteVisitService {
       if (cachedVisits != null) {
         return cachedVisits.map((visit) => visit.toJson()).toList();
       }
-      throw e; // Re-throw if no cache available
+      rethrow; // Re-throw if no cache available
     }
   }
 
@@ -178,7 +226,7 @@ class SiteVisitService {
       if (cachedVisits != null) {
         return cachedVisits;
       }
-      throw e; // Re-throw if no cache available
+      rethrow; // Re-throw if no cache available
     }
   }
 
@@ -194,7 +242,7 @@ class SiteVisitService {
       // If remote fails, queue for later sync
       print('Remote update failed, queuing for sync: $e');
       await _queueVisitForSync(visit);
-      throw e;
+      rethrow;
     }
   }
 
@@ -322,7 +370,8 @@ class SiteVisitService {
 
   // ===== ADDITIONAL METHODS FROM SITE VISITS SERVICE =====
 
-  Future<List<Map<String, dynamic>>> getAssignedSiteVisitsForCurrentUser() async {
+  Future<List<Map<String, dynamic>>>
+      getAssignedSiteVisitsForCurrentUser() async {
     final user = _supabase.auth.currentUser;
     if (user == null) return [];
 
@@ -361,7 +410,9 @@ class SiteVisitService {
     if (currentCity == null) return allVisits;
 
     // Filter by site_code matching current city
-    return allVisits.where((visit) => visit['site_code'] == currentCity).toList();
+    return allVisits
+        .where((visit) => visit['site_code'] == currentCity)
+        .toList();
   }
 
   Future<void> confirmArrival(String visitId) async {
@@ -377,14 +428,11 @@ class SiteVisitService {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('arrival_$visitId', gpsData.toString());
 
-      await _supabase
-          .from('site_visits')
-          .update({
-            'status': 'arrived',
-            'arrival_recorded': true,
-            'arrival_timestamp': DateTime.now().toIso8601String(),
-          })
-          .eq('id', visitId);
+      await _supabase.from('site_visits').update({
+        'status': 'arrived',
+        'arrival_recorded': true,
+        'arrival_timestamp': DateTime.now().toIso8601String(),
+      }).eq('id', visitId);
       return;
     }
 
@@ -394,16 +442,13 @@ class SiteVisitService {
       );
 
       // Update visit with arrival data
-      await _supabase
-          .from('site_visits')
-          .update({
-            'status': 'arrived',
-            'arrival_recorded': true,
-            'arrival_latitude': position.latitude,
-            'arrival_longitude': position.longitude,
-            'arrival_timestamp': DateTime.now().toIso8601String(),
-          })
-          .eq('id', visitId);
+      await _supabase.from('site_visits').update({
+        'status': 'arrived',
+        'arrival_recorded': true,
+        'arrival_latitude': position.latitude,
+        'arrival_longitude': position.longitude,
+        'arrival_timestamp': DateTime.now().toIso8601String(),
+      }).eq('id', visitId);
 
       // Store locally for backup
       final prefs = await SharedPreferences.getInstance();

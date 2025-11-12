@@ -2,13 +2,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../lib/models/task.dart';
-import '../lib/models/equipment.dart';
-import '../lib/models/safety_report.dart';
-import '../lib/services/local_storage_service.dart';
-import '../lib/services/connectivity_service.dart';
-import '../lib/services/offline_sync_service.dart';
-import '../lib/services/data_migration_service.dart';
+import 'package:pact_mobile/models/task.dart';
+import 'package:pact_mobile/models/equipment.dart';
+import 'package:pact_mobile/models/safety_report.dart';
+import 'package:pact_mobile/services/local_storage_service.dart';
+import 'package:pact_mobile/services/connectivity_service.dart';
+import 'package:pact_mobile/services/offline_sync_service.dart';
+import 'package:pact_mobile/services/data_migration_service.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -125,7 +125,8 @@ void main() {
       final allTasks = localStorage.getAllTasks();
 
       expect(allTasks.length, greaterThanOrEqualTo(2));
-      expect(allTasks.where((task) => task.id.startsWith('bulk_task_')).length, equals(2));
+      expect(allTasks.where((task) => task.id.startsWith('bulk_task_')).length,
+          equals(2));
     });
 
     test('Should handle sync status tracking', () async {
@@ -174,7 +175,8 @@ void main() {
 
       await freshMigrationService.forceMigrate();
 
-      final migratedEquipment = localStorage.getEquipment('migrated_equipment_1');
+      final migratedEquipment =
+          localStorage.getEquipment('migrated_equipment_1');
       expect(migratedEquipment, isNotNull);
       expect(migratedEquipment!.name, equals('Migrated Equipment'));
     });

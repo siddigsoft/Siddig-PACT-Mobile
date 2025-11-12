@@ -6,11 +6,9 @@ import 'base_repository.dart';
 
 class IncidentRepository extends BaseRepository<IncidentReport> {
   IncidentRepository({
-    required Database database,
-    required SupabaseService supabaseService,
+    required super.database,
+    required super.supabaseService,
   }) : super(
-          database: database,
-          supabaseService: supabaseService,
           tableName: 'incidents',
         );
 
@@ -18,10 +16,12 @@ class IncidentRepository extends BaseRepository<IncidentReport> {
   Map<String, dynamic> toMap(IncidentReport item) => item.toJson();
 
   @override
-  IncidentReport fromMap(Map<String, dynamic> map) => IncidentReport.fromJson(map);
+  IncidentReport fromMap(Map<String, dynamic> map) =>
+      IncidentReport.fromJson(map);
 
   // Add new incident report with media files
-  Future<void> addIncidentReport(IncidentReport report, List<String>? imagePaths) async {
+  Future<void> addIncidentReport(
+      IncidentReport report, List<String>? imagePaths) async {
     // First, upload any media files to Supabase storage
     List<String>? mediaUrls;
     if (imagePaths != null && imagePaths.isNotEmpty) {
@@ -31,9 +31,10 @@ class IncidentRepository extends BaseRepository<IncidentReport> {
         final bytes = await file.readAsBytes();
         final fileName = path.split('/').last;
         final storageKey = 'incidents/${report.id}/$fileName';
-        
+
         // Upload to Supabase storage
-        final url = await supabaseService.uploadFile('incident-media', storageKey, bytes);
+        final url = await supabaseService.uploadFile(
+            'incident-media', storageKey, bytes);
         mediaUrls.add(url);
       }
     }
@@ -54,7 +55,7 @@ class IncidentRepository extends BaseRepository<IncidentReport> {
 
     // Save to local database
     await database.insert(tableName, toMap(reportWithMedia));
-    
+
     // Trigger sync with Supabase
     await syncWithSupabase();
   }

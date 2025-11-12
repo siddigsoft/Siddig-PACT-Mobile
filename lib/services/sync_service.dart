@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:flutter/foundation.dart';
 import 'package:workmanager/workmanager.dart';
 import '../repositories/equipment_repository.dart';
 import '../repositories/incident_repository.dart';
@@ -16,12 +17,19 @@ class SyncService {
   SyncService(this._databaseService, this._supabaseService);
 
   Future<void> initialize() async {
+    if (kIsWeb) {
+      // Web: Workmanager unsupported; rely on connectivity + manual triggers
+      debugPrint('Skipping Workmanager init on web platform');
+      _setupConnectivityListener();
+      return;
+    }
     await Workmanager().initialize(callbackDispatcher);
     await _setupPeriodicSync();
     _setupConnectivityListener();
   }
 
   Future<void> _setupPeriodicSync() async {
+    if (kIsWeb) return; // Guard
     await Workmanager().registerPeriodicTask(
       syncTaskKey,
       syncTaskKey,

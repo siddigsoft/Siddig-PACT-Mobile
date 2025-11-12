@@ -42,14 +42,15 @@ extension SiteVisitSync on SiteVisit {
 
     // Merge metadata and notes
     final mergedMetadata = {...(metadata ?? {}), ...(other.metadata ?? {})};
-    final mergedNotes = [...(notes ?? []), ...(other.notes ?? [])].toSet().toList();
+    final mergedNotes =
+        <dynamic>{...(notes ?? []), ...(other.notes ?? [])}.toList();
 
     // Create new instance with merged data
     return SiteVisit(
       id: id,
-      siteName: other.siteName,  // Prefer server data for basic fields
+      siteName: other.siteName, // Prefer server data for basic fields
       siteCode: other.siteCode,
-      status: other.status,      // Prefer server status unless handled above
+      status: other.status, // Prefer server status unless handled above
       locality: other.locality,
       state: other.state,
       activity: other.activity,
@@ -58,10 +59,10 @@ extension SiteVisitSync on SiteVisit {
       assignedTo: other.assignedTo,
       latitude: other.latitude,
       longitude: other.longitude,
-      metadata: mergedMetadata,   // Use merged metadata
-      notes: mergedNotes,         // Use merged notes
+      metadata: mergedMetadata, // Use merged metadata
+      notes: mergedNotes, // Use merged notes
       lastModified: DateTime.now(),
-      localModifications: false,  // Reset local modifications flag
+      localModifications: false, // Reset local modifications flag
     );
   }
 
@@ -88,7 +89,7 @@ extension SiteVisitSync on SiteVisit {
       metadata: metadata ?? this.metadata,
       notes: notes ?? this.notes,
       lastModified: DateTime.now(),
-      localModifications: true,  // Mark as locally modified
+      localModifications: true, // Mark as locally modified
     );
   }
 }
