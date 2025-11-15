@@ -22,6 +22,11 @@ class NotificationService {
   static const String _updateChannelDescription =
       'Notifications for app updates';
 
+  static const String _userChannelId = 'user_notifications';
+  static const String _userChannelName = 'User Notifications';
+  static const String _userChannelDescription =
+    'Notifications for account activity and alerts';
+
   // Callback for notification tap
   static void Function(NotificationResponse)? _onNotificationTap;
 
@@ -181,6 +186,53 @@ class NotificationService {
       body,
       platformDetails,
       payload: 'mmp:$fileId', // For navigation when tapped
+    );
+  }
+
+  // ==================== USER NOTIFICATIONS ====================
+
+  static Future<void> showUserNotification({
+    required String notificationId,
+    required String title,
+    required String body,
+    String type = 'info',
+  }) async {
+    await initialize();
+
+    final Importance importance =
+        type == 'warning' || type == 'error' ? Importance.max : Importance.high;
+
+    final AndroidNotificationDetails androidDetails =
+        AndroidNotificationDetails(
+      _userChannelId,
+      _userChannelName,
+      channelDescription: _userChannelDescription,
+      importance: importance,
+      priority: Priority.high,
+      icon: '@mipmap/ic_launcher',
+      enableVibration: true,
+      playSound: true,
+      styleInformation: BigTextStyleInformation(body),
+    );
+
+    const DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+    );
+
+    final NotificationDetails platformDetails = NotificationDetails(
+      android: androidDetails,
+      iOS: iosDetails,
+      macOS: iosDetails,
+    );
+
+    await _notifications.show(
+      notificationId.hashCode,
+      title,
+      body,
+      platformDetails,
+      payload: 'notif:$notificationId',
     );
   }
 

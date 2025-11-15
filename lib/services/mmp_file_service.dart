@@ -1,22 +1,104 @@
 import 'dart:io';
 import 'dart:async';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/services.dart';
+import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:open_file/open_file.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+
+import '../models/mmp_file.dart';
 import 'security/logger_service.dart';
 
 class MMPFileService {
+  static const String _storageBucket = 'mmps';
+
   final SupabaseClient _supabase = Supabase.instance.client;
   final _newFilesController =
       StreamController<List<Map<String, dynamic>>>.broadcast();
   StreamSubscription? _subscription;
+  Directory? _cachedDirectory;
+  Directory? _fallbackTempDirectory;
 
   Stream<List<Map<String, dynamic>>> get onNewFiles =>
       _newFilesController.stream;
 
   MMPFileService() {
     _initializeRealtimeSubscription();
+  }
+
+  String _safeFileName(String? rawName, {String fallbackExtension = '.xlsx'}) {
+    final base = (rawName ?? '').trim();
+    if (base.isEmpty) {
+      return 'document$fallbackExtension';
+    }
+
+    final sanitized = base.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
+    if (!sanitized.contains('.')) {
+      return '$sanitized$fallbackExtension';
+    }
+    return sanitized;
+  }
+
+  Future<Directory> _ensureCacheDirectory() async {
+    if (_cachedDirectory != null) {
+      return _cachedDirectory!;
+    }
+
+    if (kIsWeb) {
+      throw UnsupportedError('Local file caching is not supported on web platforms.');
+    }
+
+    Directory baseDirectory;
+    try {
+      baseDirectory = await getApplicationDocumentsDirectory();
+    } on MissingPluginException catch (error) {
+      LoggerService.log(
+        'path_provider unavailable, falling back to temp directory: $error',
+        level: LogLevel.warning,
+      );
+
+      if (_fallbackTempDirectory == null) {
+        final systemTemp = Directory.systemTemp;
+        try {
+          final resolvedPath = await systemTemp.resolveSymbolicLinks();
+          _fallbackTempDirectory = Directory(resolvedPath);
+        } catch (_) {
+          _fallbackTempDirectory = systemTemp;
+        }
+      }
+      baseDirectory = _fallbackTempDirectory!;
+    }
+
+  final cacheDir = Directory(p.join(baseDirectory.path, 'mmp_cache'));
+    if (!await cacheDir.exists()) {
+      await cacheDir.create(recursive: true);
+    }
+
+    _cachedDirectory = cacheDir;
+    return cacheDir;
+  }
+
+  Future<Map<String, dynamic>?> _getLocalFileRecord(String fileId) async {
+    final localFilesBox = await _getLocalFilesBox();
+    final raw = localFilesBox.get('local_$fileId');
+    if (raw == null) return null;
+    if (raw is Map<String, dynamic>) return Map<String, dynamic>.from(raw);
+    if (raw is Map) return Map<String, dynamic>.from(raw as Map);
+    return null;
+  }
+
+  Future<void> _saveLocalFileRecord(String fileId, Map<String, dynamic> record) async {
+    final localFilesBox = await _getLocalFilesBox();
+    await localFilesBox.put('local_$fileId', record);
+  }
+
+  Future<void> _touchLocalFileRecord(String fileId) async {
+    final record = await _getLocalFileRecord(fileId);
+    if (record == null) return;
+    record['last_accessed'] = DateTime.now().toIso8601String();
+    await _saveLocalFileRecord(fileId, record);
   }
 
   void _initializeRealtimeSubscription() {
@@ -85,24 +167,37 @@ class MMPFileService {
   }
 
   Future<void> downloadAndOpenFile(String fileId, String fileName) async {
+    LoggerService.log('Starting file download: $fileName');
+
+    Map<String, dynamic>? fileData;
     try {
-      LoggerService.log('Starting file download: $fileName');
+      final remoteData = await getMMPFileDetails(fileId);
+      fileData = remoteData;
+      await cacheFileDetailsLocally(fileId, remoteData);
+    } catch (error) {
+      LoggerService.log(
+        'Remote file metadata unavailable for $fileId, falling back to cache: $error',
+        level: LogLevel.warning,
+      );
+      fileData = await getCachedFileDetails(fileId);
+    }
 
-      final directory = await getApplicationDocumentsDirectory();
-      final filePath = '${directory.path}/$fileName';
-      final file = File(filePath);
+    if (fileData == null) {
+      LoggerService.log(
+        'Missing file metadata for $fileId; cannot download while offline.',
+        level: LogLevel.error,
+      );
+      throw OfflineFileUnavailableException(
+        'We could not find the information needed to download this document. Connect to the internet and try again.',
+      );
+    }
 
-      if (await file.exists()) {
-        await file.delete();
-      }
+    final mmpFile = MMPFile.fromJson(fileData);
 
-      final bytes = await _supabase.storage.from('mmp_files').download(fileId);
-      await file.writeAsBytes(bytes);
-
-      final result = await OpenFile.open(filePath);
-      if (result.type != ResultType.done) {
-        throw Exception('Could not open file: ${result.message}');
-      }
+    try {
+      await downloadAndOpenFileCached(mmpFile, forceRefresh: true);
+    } on OfflineFileUnavailableException {
+      rethrow;
     } catch (e) {
       LoggerService.log('Error downloading/opening file: ${e.toString()}',
           level: LogLevel.error);
@@ -352,34 +447,67 @@ class MMPFileService {
   }
 
   /// Download and cache file locally
-  Future<String> downloadAndCacheFile(String fileId, String fileName) async {
+  Future<String> downloadAndCacheFile({
+    required String fileId,
+    required String storagePath,
+    required String fileName,
+    DateTime? remoteUpdatedAt,
+  }) async {
     try {
-      LoggerService.log('Downloading and caching file: $fileName');
+      LoggerService.log('Downloading and caching file: $fileName from $storagePath');
 
-      final directory = await getApplicationDocumentsDirectory();
-      final filePath = '${directory.path}/$fileName';
-      final file = File(filePath);
+      final cacheDir = await _ensureCacheDirectory();
+      final safeName = _safeFileName(fileName);
+      final cacheFile = File(p.join(cacheDir.path, '$fileId-$safeName'));
 
-      // Download file
-      final bytes = await _supabase.storage.from('mmp_files').download(fileId);
-      await file.writeAsBytes(bytes);
+      // Download from Supabase storage
+      LoggerService.log('Downloading from storage bucket: $_storageBucket, path: $storagePath');
+      
+      final bytes = await _supabase.storage
+          .from(_storageBucket)
+          .download(storagePath);
+      
+      LoggerService.log('Downloaded ${bytes.length} bytes for $fileName');
+      
+      // Write to cache file
+      await cacheFile.writeAsBytes(bytes, flush: true);
+      LoggerService.log('Wrote file to cache: ${cacheFile.path}');
 
-      // Cache file metadata
-      final localFilesBox = await _getLocalFilesBox();
-      await localFilesBox.put('local_$fileId', {
+      // Verify file was written correctly
+      if (!await cacheFile.exists()) {
+        throw Exception('File was not saved correctly to cache');
+      }
+
+      final fileSize = await cacheFile.length();
+      LoggerService.log('Cached file size: $fileSize bytes');
+
+      // Save metadata
+      await _saveLocalFileRecord(fileId, {
         'file_id': fileId,
-        'file_name': fileName,
-        'local_path': filePath,
-        'file_size': bytes.length,
+        'storage_path': storagePath,
+        'file_name': safeName,
+        'local_path': cacheFile.path,
+        'file_size': fileSize,
         'downloaded_at': DateTime.now().toIso8601String(),
         'last_accessed': DateTime.now().toIso8601String(),
+        'remote_updated_at': remoteUpdatedAt?.toIso8601String(),
       });
 
-      LoggerService.log('File cached locally: $filePath');
+      LoggerService.log('File successfully cached: ${cacheFile.path}');
 
-      return filePath;
+      return cacheFile.path;
+    } on UnsupportedError catch (e) {
+      LoggerService.log('Unsupported caching operation: $e',
+          level: LogLevel.error);
+      throw OfflineFileUnavailableException(
+        'This device does not support offline caching for these documents yet.',
+      );
+    } on StorageException catch (e) {
+      LoggerService.log('Supabase storage error downloading $fileName: ${e.message}',
+          level: LogLevel.error);
+      throw StorageException('Failed to download file: ${e.message}');
     } catch (e) {
-      LoggerService.log('Error downloading and caching file: $e',
+      LoggerService.log('Error downloading and caching file $fileName: $e',
           level: LogLevel.error);
       rethrow;
     }
@@ -388,26 +516,23 @@ class MMPFileService {
   /// Open cached file if available
   Future<bool> openCachedFile(String fileId) async {
     try {
-      final localFilesBox = await _getLocalFilesBox();
-      final cachedFile = localFilesBox.get('local_$fileId');
+      final cachedFile = await _getLocalFileRecord(fileId);
 
       if (cachedFile != null) {
-        final filePath = cachedFile['local_path'];
-        final file = File(filePath);
-
-        if (await file.exists()) {
-          final result = await OpenFile.open(filePath);
-          if (result.type == ResultType.done) {
-            // Update last accessed time
-            cachedFile['last_accessed'] = DateTime.now().toIso8601String();
-            await localFilesBox.put('local_$fileId', cachedFile);
-
-            LoggerService.log('Opened cached file: $filePath');
-            return true;
+        final filePath = cachedFile['local_path'] as String?;
+        if (filePath != null) {
+          final file = File(filePath);
+          if (await file.exists()) {
+            final result = await OpenFile.open(filePath);
+            if (result.type == ResultType.done) {
+              await _touchLocalFileRecord(fileId);
+              LoggerService.log('Opened cached file: $filePath');
+              return true;
+            }
+          } else {
+            final localFilesBox = await _getLocalFilesBox();
+            await localFilesBox.delete('local_$fileId');
           }
-        } else {
-          // File doesn't exist, remove from cache
-          await localFilesBox.delete('local_$fileId');
         }
       }
 
@@ -419,28 +544,149 @@ class MMPFileService {
   }
 
   /// Download and open file with local caching
-  Future<void> downloadAndOpenFileCached(String fileId, String fileName) async {
+  Future<void> downloadAndOpenFileCached(MMPFile file,
+      {bool forceRefresh = false}) async {
     try {
-      // Try to open cached file first
-      final openedFromCache = await openCachedFile(fileId);
-      if (openedFromCache) {
-        return;
-      }
-
-      // Not cached, download and cache
-      await downloadAndCacheFile(fileId, fileName);
-
-      // Now open it
-      final opened = await openCachedFile(fileId);
-      if (!opened) {
-        throw Exception('Failed to open downloaded file');
+      final localPath = await ensureFileAvailable(file, forceRefresh: forceRefresh);
+      final result = await OpenFile.open(localPath);
+      if (result.type != ResultType.done) {
+        throw Exception('Could not open file: ${result.message}');
       }
     } catch (e) {
       LoggerService.log('Error in cached download/open: $e',
           level: LogLevel.error);
-      // Fall back to regular download
-      await downloadAndOpenFile(fileId, fileName);
+      rethrow;
     }
+  }
+
+  /// Return the cached file path if it exists on disk.
+  Future<String?> getCachedFilePath(String fileId) async {
+    try {
+      final record = await _getLocalFileRecord(fileId);
+      if (record == null) {
+        LoggerService.log('No cache record found for file $fileId');
+        return null;
+      }
+
+      final path = record['local_path'] as String?;
+      if (path == null) {
+        LoggerService.log('Cache record exists but no path for file $fileId');
+        return null;
+      }
+
+      final file = File(path);
+      final exists = await file.exists();
+      
+      if (exists) {
+        final size = await file.length();
+        LoggerService.log('Cached file found for $fileId at $path (size: $size bytes)');
+        return path;
+      } else {
+        LoggerService.log('Cached file path exists but file not found on disk for $fileId: $path');
+        // Clean up invalid record
+        final localFilesBox = await _getLocalFilesBox();
+        await localFilesBox.delete('local_$fileId');
+        return null;
+      }
+    } catch (e) {
+      LoggerService.log('Error checking cached file path for $fileId: $e', level: LogLevel.error);
+      return null;
+    }
+  }
+
+  /// Ensure a file is present on the device, downloading and caching if needed.
+  Future<String> ensureFileAvailable(MMPFile file,
+      {bool forceRefresh = false}) async {
+    // Check if file is already cached
+    final existingPath = await getCachedFilePath(file.id);
+    
+    if (existingPath != null && !forceRefresh) {
+      // File exists locally, check if we need to update it
+      final record = await _getLocalFileRecord(file.id);
+      final remoteTimestamp = file.verifiedAt ?? file.approvedAt ?? file.createdAt;
+      final remoteSignature = remoteTimestamp.toIso8601String();
+      final cachedSignature = record?['remote_updated_at'] as String?;
+      
+      // If signatures match or we don't have a cached signature, use the cached file
+      if (cachedSignature == null || cachedSignature == remoteSignature) {
+        await _touchLocalFileRecord(file.id);
+        LoggerService.log('Using cached file for ${file.name ?? file.id}');
+        return existingPath;
+      }
+      
+      // File needs updating, try to download new version
+      LoggerService.log('Cached file outdated, attempting update for ${file.name ?? file.id}');
+    }
+
+    // File not cached or needs updating, attempt download
+    final storagePath = file.fileUrl ?? file.filePath;
+    if (storagePath == null) {
+      throw Exception('Storage path not available for file ${file.name ?? file.id}');
+    }
+
+    try {
+      final remoteTimestamp = file.verifiedAt ?? file.approvedAt ?? file.createdAt;
+      final downloadedPath = await downloadAndCacheFile(
+        fileId: file.id,
+        storagePath: storagePath,
+        fileName: file.originalFilename ?? file.name ?? '${file.id}.xlsx',
+        remoteUpdatedAt: remoteTimestamp,
+      );
+      LoggerService.log('Successfully downloaded and cached ${file.name ?? file.id}');
+      return downloadedPath;
+    } on SocketException catch (e) {
+      // Offline - use cached version if available
+      if (existingPath != null) {
+        LoggerService.log('Offline, using cached version for ${file.name ?? file.id}');
+        await _touchLocalFileRecord(file.id);
+        return existingPath;
+      }
+      LoggerService.log('File not cached and device is offline: ${file.name ?? file.id}', level: LogLevel.error);
+      throw OfflineFileUnavailableException(
+        'This document is not available offline yet. Connect to the internet to download it once and try again.',
+      );
+    } on StorageException catch (e) {
+      // Storage error - use cached version if available
+      if (existingPath != null) {
+        LoggerService.log('Storage error, using cached version for ${file.name ?? file.id}: ${e.message}', level: LogLevel.warning);
+        await _touchLocalFileRecord(file.id);
+        return existingPath;
+      }
+      throw Exception('Unable to download file from storage: ${e.message}');
+    } catch (e) {
+      // General error - use cached version if available
+      if (existingPath != null) {
+        LoggerService.log('Error downloading file, using cached version for ${file.name ?? file.id}: $e', level: LogLevel.warning);
+        await _touchLocalFileRecord(file.id);
+        return existingPath;
+      }
+      LoggerService.log('Failed to download file and no cache available: ${file.name ?? file.id}: $e', level: LogLevel.error);
+      rethrow;
+    }
+  }
+
+  /// Prefetch and cache a list of MMP files for offline use.
+  Future<void> prefetchMMPFiles(List<MMPFile> files,
+      {bool forceRefresh = false}) async {
+    LoggerService.log('Starting automatic download for ${files.length} MMP files');
+    int successCount = 0;
+    int failCount = 0;
+    
+    for (final file in files) {
+      try {
+        await ensureFileAvailable(file, forceRefresh: forceRefresh);
+        successCount++;
+        LoggerService.log('Auto-download success for ${file.name ?? file.id} ($successCount/${files.length})');
+      } catch (e) {
+        failCount++;
+        LoggerService.log(
+          'Auto-download failed for ${file.name ?? file.id}: $e',
+          level: LogLevel.warning,
+        );
+      }
+    }
+    
+    LoggerService.log('Auto-download complete: $successCount succeeded, $failCount failed out of ${files.length}');
   }
 
   /// Get locally cached files
@@ -512,4 +758,12 @@ class MMPFileService {
       return {};
     }
   }
+}
+
+class OfflineFileUnavailableException implements Exception {
+  final String message;
+  OfflineFileUnavailableException(this.message);
+
+  @override
+  String toString() => message;
 }

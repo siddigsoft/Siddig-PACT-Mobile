@@ -48,6 +48,7 @@ class SiteVisitService {
           },
         );
         print('📦 Visit status queued for sync (offline).');
+        await _updateCachedVisitStatus(visitId, status);
         return;
       }
       await _supabase.from('site_visits').update({
@@ -56,6 +57,7 @@ class SiteVisitService {
         'last_modified': DateTime.now().toIso8601String(),
       }).eq('id', visitId);
       print('✅ Visit status updated in Supabase');
+      await _updateCachedVisitStatus(visitId, status);
     } catch (e) {
       print('❌ Failed to update visit status: $e');
       rethrow;
@@ -67,26 +69,20 @@ class SiteVisitService {
       print('🔄 Updating visit: ${visit.id}');
       final connectivity = await Connectivity().checkConnectivity();
       final hasConnection = connectivity != ConnectivityResult.none;
-      final visitData = visit.toJson();
       if (!hasConnection) {
-        // For now, only queue status field (avoid large payloads). Extend if needed.
-        await OfflineDataService().queueVisitStatusUpdate(
-          visitId: visit.id,
-          newStatus: visit.status,
-          extra: {
-            'queued_full_update': true,
-            'payload': {
-              'status': visit.status,
-            },
-          },
-        );
-        print('📦 Full visit update (status only) queued offline.');
+        await _queueVisitForSync(visit);
+        await _updateLocalCacheWithVisit(visit);
+        print('📦 Visit update queued for sync (offline).');
         return;
       }
+      final visitData = visit.toJson();
       await _supabase.from('site_visits').update(visitData).eq('id', visit.id);
       print('✅ Visit updated in Supabase');
+      await _updateLocalCacheWithVisit(visit);
     } catch (e) {
       print('❌ Failed to update visit: $e');
+      await _queueVisitForSync(visit);
+      await _updateLocalCacheWithVisit(visit);
       rethrow;
     }
   }
@@ -184,6 +180,11 @@ class SiteVisitService {
     }
   }
 
+  Future<List<SiteVisit>> getAssignedSiteVisitsFromCache(String userId) async {
+    final cached = await getCachedVisits('assigned_$userId');
+    return cached ?? [];
+  }
+
   /// Get assigned site visits with local caching
   Future<List<Map<String, dynamic>>> getAssignedSiteVisitsCached(
     String userId,
@@ -242,6 +243,7 @@ class SiteVisitService {
       // If remote fails, queue for later sync
       print('Remote update failed, queuing for sync: $e');
       await _queueVisitForSync(visit);
+      await _updateLocalCacheWithVisit(visit);
       rethrow;
     }
   }
@@ -305,6 +307,39 @@ class SiteVisitService {
       }
     } catch (e) {
       print('Error updating local cache: $e');
+    }
+  }
+
+  Future<void> _updateCachedVisitStatus(String visitId, String status) async {
+    try {
+      final box = await _getVisitsBox();
+      for (final key in box.keys) {
+        final cached = box.get(key);
+        if (cached == null || cached['data'] == null) continue;
+        final List<dynamic> visitsJson = List<dynamic>.from(cached['data']);
+        bool updated = false;
+        final updatedVisits = visitsJson.map((json) {
+          if (json['id'] == visitId) {
+            updated = true;
+            return {
+              ...json,
+              'status': status,
+              'last_modified': DateTime.now().toIso8601String(),
+            };
+          }
+          return json;
+        }).toList();
+
+        if (updated) {
+          await box.put(key, {
+            'data': updatedVisits,
+            'cached_at': DateTime.now().toIso8601String(),
+            'count': updatedVisits.length,
+          });
+        }
+      }
+    } catch (e) {
+      print('Error updating cached visit status: $e');
     }
   }
 

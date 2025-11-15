@@ -1,5 +1,7 @@
 // lib/screens/forms_screen.dart
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -9,8 +11,8 @@ import '../services/mmp_file_service.dart';
 import '../services/auth_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/modern_app_header.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../l10n/app_localizations.dart';
+import '../widgets/mmp_preview_bottom_sheet.dart';
 
 class FormsScreen extends StatefulWidget {
   const FormsScreen({super.key});
@@ -70,7 +72,7 @@ class _FormsScreenState extends State<FormsScreen> {
 
   Future<void> _loadMMPFiles() async {
     try {
-      final files = await _mmpFileService.getMMPFiles();
+      final files = await _mmpFileService.getMMPFilesCached();
 
       if (mounted) {
         final parsedFiles = files
@@ -92,6 +94,14 @@ class _FormsScreenState extends State<FormsScreen> {
           _mmpFiles = parsedFiles;
           _isLoading = false;
         });
+
+        if (parsedFiles.isNotEmpty) {
+          unawaited(
+            _mmpFileService.prefetchMMPFiles(parsedFiles).catchError((error) {
+              debugPrint('Prefetch error: $error');
+            }),
+          );
+        }
       }
     } catch (e, stackTrace) {
       debugPrint('Error loading MMP files: $e');
@@ -251,59 +261,26 @@ class _FormsScreenState extends State<FormsScreen> {
   }
 
   Future<void> _handleFileTap(MMPFile file) async {
-    if (file.fileUrl == null || file.fileUrl!.isEmpty) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context)!.noFileUrlAvailable)));
-      }
-      return;
-    }
-
     try {
-      String urlStr = file.fileUrl!.trim();
-
-      // Ensure the URL has a protocol
-      if (!urlStr.startsWith('http://') && !urlStr.startsWith('https://')) {
-        urlStr = 'https://$urlStr';
+      final localPath = await _mmpFileService.ensureFileAvailable(file);
+      if (!mounted) return;
+      MMPPreviewBottomSheet.show(context, file: file, localPath: localPath);
+    } on OfflineFileUnavailableException catch (offlineError) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(offlineError.message),
+            duration: const Duration(seconds: 3),
+          ),
+        );
       }
-
-      // Encode the URL properly
-      final encodedUrl = Uri.encodeFull(urlStr);
-      final uri = Uri.parse(encodedUrl);
-      if (!uri.hasScheme || !uri.hasAuthority) {
-        throw FormatException('Could not parse URL');
-      }
-
-      // Validate the URL can be launched
-      if (!await canLaunchUrl(uri)) {
-        throw Exception('Could not launch URL');
-      }
-
-      // Launch in external browser
-      await launchUrl(
-        uri,
-        mode: LaunchMode.externalApplication,
-        webOnlyWindowName: '_blank',
-      );
     } catch (e) {
       if (mounted) {
-        String errorMessage = AppLocalizations.of(context)!.couldNotOpenFile;
-        if (e is FormatException) {
-          errorMessage = AppLocalizations.of(context)!.invalidFileUrlFormat;
-        } else if (e is StateError) {
-          errorMessage = AppLocalizations.of(context)!.errorAccessingFileUrl;
-        }
+        final errorMessage = AppLocalizations.of(context)!.couldNotOpenFile;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(errorMessage),
             duration: const Duration(seconds: 3),
-            action: SnackBarAction(
-              label: AppLocalizations.of(context)!.dismiss,
-              onPressed: () {
-                ScaffoldMessenger.of(context).hideCurrentSnackBar();
-              },
-            ),
           ),
         );
       }

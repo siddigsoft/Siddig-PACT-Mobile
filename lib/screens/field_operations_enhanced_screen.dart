@@ -40,6 +40,8 @@ import '../widgets/modern_card.dart';
 import '../widgets/custom_drawer_menu.dart';
 import '../widgets/offline_sync_indicator.dart';
 import '../services/notification_service.dart';
+import '../services/user_notification_service.dart';
+import '../models/user_notification.dart';
 import '../services/offline_data_service.dart';
 import 'components/report_form_sheet.dart';
 import 'components/visit_assignment_sheet.dart';
@@ -84,10 +86,12 @@ class _FieldOperationsEnhancedScreenState
   late final TaskAssignmentService _taskAssignmentService;
   late final JourneyService _journeyService;
   late final LocationTrackingService _locationTrackingService;
+  final UserNotificationService _notificationService = UserNotificationService();
 
   // Listen for new MMP files
   StreamSubscription? _mmpFileSubscription;
   StreamSubscription<Position>? _locationStreamSubscription;
+  StreamSubscription<List<UserNotification>>? _notificationSubscription;
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   // Location
@@ -127,6 +131,7 @@ class _FieldOperationsEnhancedScreenState
 
     // Initialize notifications
     NotificationService.initialize();
+    _notificationService.initialize();
 
     // Listen for new MMP files
     _mmpFileSubscription = _mmpFileService.onNewFiles.listen((files) {
@@ -162,6 +167,7 @@ class _FieldOperationsEnhancedScreenState
     _connectivitySubscription.cancel();
     _mmpFileSubscription?.cancel();
     _locationStreamSubscription?.cancel();
+    _notificationSubscription?.cancel();
     _journeyProgressSubscription?.cancel();
     if (_isTrackingJourney) {
       _journeyService.stopJourney();
@@ -575,7 +581,31 @@ class _FieldOperationsEnhancedScreenState
         throw Exception('User not authenticated');
       }
 
-      final visitData = await _siteVisitService.getAssignedSiteVisits(userId);
+      final connectivityStatus = await Connectivity().checkConnectivity();
+      if (connectivityStatus != ConnectivityResult.none) {
+        unawaited(_siteVisitService.syncQueuedVisits());
+      }
+
+      List<SiteVisit> cachedVisits = [];
+      try {
+        cachedVisits =
+            await _siteVisitService.getAssignedSiteVisitsFromCache(userId);
+      } catch (cacheError) {
+        debugPrint('Failed to load cached visits: $cacheError');
+      }
+
+      if (cachedVisits.isNotEmpty && mounted) {
+        setState(() {
+          _availableVisits = cachedVisits;
+          _myVisits =
+              cachedVisits.where((v) => v.assignedTo == userId).toList();
+          _isLoading = false;
+        });
+        _updateMarkers();
+      }
+
+      final visitData =
+          await _siteVisitService.getAssignedSiteVisitsCached(userId);
       final allVisits =
           visitData.map((data) => SiteVisit.fromJson(data)).toList();
 
@@ -596,14 +626,23 @@ class _FieldOperationsEnhancedScreenState
     } catch (e) {
       debugPrint('Error loading visits: $e');
       if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-        // Use addPostFrameCallback to show error after build
+        if (_availableVisits.isEmpty) {
+          setState(() {
+            _isLoading = false;
+          });
+        }
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) {
-            context.showError(e, onRetry: _loadVisits);
-          }
+          if (!mounted) return;
+          final hasCached = _availableVisits.isNotEmpty;
+          final message = hasCached
+              ? 'Offline mode: showing last synced site visits.'
+              : 'Unable to load site visits. Check your connection and try again.';
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(message),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
         });
       }
     }
@@ -725,8 +764,8 @@ class _FieldOperationsEnhancedScreenState
         await _locationTrackingService.startTracking(visit.id);
       }
 
-      // Update visit in Supabase
-      await _siteVisitService.updateSiteVisit(updatedVisit);
+      // Update visit in Supabase (with offline cache support)
+      await _siteVisitService.updateSiteVisitCached(updatedVisit);
 
       // Show report form if completed
       if (visitStatus == VisitStatus.completed) {
@@ -796,8 +835,8 @@ class _FieldOperationsEnhancedScreenState
         assignedTo: _authService.currentUser?.id,
       );
 
-      // Update visit in Supabase
-      await _siteVisitService.updateSiteVisit(updatedVisit);
+      // Update visit in Supabase (with offline cache support)
+      await _siteVisitService.updateSiteVisitCached(updatedVisit);
 
       // Reload visits and update UI
       await _loadVisits();
@@ -805,6 +844,267 @@ class _FieldOperationsEnhancedScreenState
       if (mounted) {
         context.showError(e);
       }
+    }
+  }
+
+  // Show notifications panel
+  void _showNotificationsPanel() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.7,
+        minChildSize: 0.5,
+        maxChildSize: 0.95,
+        builder: (context, scrollController) => Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(20),
+              topRight: Radius.circular(20),
+            ),
+          ),
+          child: Column(
+            children: [
+              // Handle bar
+              Container(
+                margin: const EdgeInsets.symmetric(vertical: 12),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              // Header
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Notifications',
+                      style: GoogleFonts.poppins(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textDark,
+                      ),
+                    ),
+                    if (_notificationService.unreadCount > 0)
+                      TextButton(
+                        onPressed: () async {
+                          final notifications = _notificationService.currentNotifications;
+                          final unreadIds = notifications
+                              .where((n) => !n.isRead)
+                              .map((n) => n.id)
+                              .toList();
+                          if (unreadIds.isNotEmpty) {
+                            await _notificationService.markManyAsRead(unreadIds);
+                          }
+                        },
+                        child: Text(
+                          'Mark all read',
+                          style: TextStyle(color: AppColors.primaryBlue),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1),
+              // Notifications list
+              Expanded(
+                child: StreamBuilder<List<UserNotification>>(
+                  stream: _notificationService.watchNotifications(),
+                  builder: (context, snapshot) {
+                    final notifications = _notificationService.currentNotifications;
+                    
+                    if (notifications.isEmpty) {
+                      return Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.notifications_none,
+                              size: 64,
+                              color: Colors.grey[400],
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              'No notifications',
+                              style: GoogleFonts.poppins(
+                                fontSize: 16,
+                                color: Colors.grey[600],
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+
+                    return ListView.separated(
+                      controller: scrollController,
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      itemCount: notifications.length,
+                      separatorBuilder: (context, index) => const Divider(height: 1),
+                      itemBuilder: (context, index) {
+                        final notification = notifications[index];
+                        return _buildNotificationItem(notification);
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNotificationItem(UserNotification notification) {
+    final isUnread = !notification.isRead;
+    
+    return InkWell(
+      onTap: () async {
+        if (isUnread) {
+          await _notificationService.markAsRead(notification.id);
+        }
+        // Handle navigation based on notification type or link
+        if (notification.link != null) {
+          // TODO: Navigate to specific screen based on link
+          debugPrint('Navigate to: ${notification.link}');
+        }
+      },
+      child: Container(
+        color: isUnread ? AppColors.primaryBlue.withOpacity(0.05) : Colors.transparent,
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Icon based on notification type
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: _getNotificationColor(notification.type).withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                _getNotificationIcon(notification.type),
+                color: _getNotificationColor(notification.type),
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 12),
+            // Content
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          notification.title,
+                          style: GoogleFonts.poppins(
+                            fontSize: 14,
+                            fontWeight: isUnread ? FontWeight.w600 : FontWeight.w500,
+                            color: AppColors.textDark,
+                          ),
+                        ),
+                      ),
+                      if (isUnread)
+                        Container(
+                          width: 8,
+                          height: 8,
+                          margin: const EdgeInsets.only(left: 8),
+                          decoration: BoxDecoration(
+                            color: AppColors.primaryBlue,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    notification.message,
+                    style: GoogleFonts.poppins(
+                      fontSize: 13,
+                      color: AppColors.textLight,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    _formatNotificationTime(notification.createdAt),
+                    style: GoogleFonts.poppins(
+                      fontSize: 11,
+                      color: Colors.grey[500],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  IconData _getNotificationIcon(String type) {
+    switch (type.toLowerCase()) {
+      case 'warning':
+        return Icons.warning_rounded;
+      case 'error':
+        return Icons.error_rounded;
+      case 'success':
+        return Icons.check_circle_rounded;
+      case 'mmp':
+        return Icons.description_rounded;
+      case 'chat':
+        return Icons.chat_rounded;
+      case 'task':
+        return Icons.task_rounded;
+      default:
+        return Icons.info_rounded;
+    }
+  }
+
+  Color _getNotificationColor(String type) {
+    switch (type.toLowerCase()) {
+      case 'warning':
+        return AppColors.accentYellow;
+      case 'error':
+        return AppColors.accentRed;
+      case 'success':
+        return AppColors.accentGreen;
+      case 'mmp':
+        return AppColors.primaryOrange;
+      case 'chat':
+        return AppColors.primaryBlue;
+      case 'task':
+        return Colors.purple;
+      default:
+        return AppColors.primaryBlue;
+    }
+  }
+
+  String _formatNotificationTime(DateTime dateTime) {
+    final now = DateTime.now();
+    final difference = now.difference(dateTime);
+
+    if (difference.inMinutes < 1) {
+      return 'Just now';
+    } else if (difference.inMinutes < 60) {
+      return '${difference.inMinutes}m ago';
+    } else if (difference.inHours < 24) {
+      return '${difference.inHours}h ago';
+    } else if (difference.inDays < 7) {
+      return '${difference.inDays}d ago';
+    } else {
+      return '${dateTime.day}/${dateTime.month}/${dateTime.year}';
     }
   }
 
@@ -1418,14 +1718,52 @@ class _FieldOperationsEnhancedScreenState
       title: 'Field Ops',
       actions: [
         const SizedBox(width: 8),
-        HeaderActionButton(
-          icon: Icons.refresh,
-          tooltip: 'Refresh',
-          backgroundColor: Colors.white,
-          color: AppColors.primaryBlue,
-          onPressed: () {
-            HapticFeedback.lightImpact();
-            _loadVisits();
+        StreamBuilder<List<UserNotification>>(
+          stream: _notificationService.watchNotifications(),
+          builder: (context, snapshot) {
+            final unreadCount = _notificationService.unreadCount;
+            
+            return Stack(
+              clipBehavior: Clip.none,
+              children: [
+                HeaderActionButton(
+                  icon: Icons.notifications,
+                  tooltip: 'Notifications',
+                  backgroundColor: Colors.white,
+                  color: AppColors.primaryBlue,
+                  onPressed: () {
+                    HapticFeedback.lightImpact();
+                    _showNotificationsPanel();
+                  },
+                ),
+                if (unreadCount > 0)
+                  Positioned(
+                    right: 0,
+                    top: 0,
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: AppColors.accentRed,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 2),
+                      ),
+                      constraints: const BoxConstraints(
+                        minWidth: 18,
+                        minHeight: 18,
+                      ),
+                      child: Text(
+                        unreadCount > 99 ? '99+' : unreadCount.toString(),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
+              ],
+            );
           },
         ),
         const SizedBox(width: 8),

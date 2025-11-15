@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:workmanager/workmanager.dart';
 import '../repositories/equipment_repository.dart';
 import '../repositories/incident_repository.dart';
@@ -81,6 +82,8 @@ class SyncService {
 
 @pragma('vm:entry-point')
 void callbackDispatcher() {
+  WidgetsFlutterBinding.ensureInitialized();
+
   Workmanager().executeTask((taskName, inputData) async {
     switch (taskName) {
       case SyncService.syncTaskKey:

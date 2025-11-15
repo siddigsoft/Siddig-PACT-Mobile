@@ -51,6 +51,8 @@
 		<string>http</string>
 		<string>mailto</string>
 	</array>
+	<key>NSFaceIDUsageDescription</key>
+	<string>We use Face ID to let you sign in securely without your password.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>This app needs access to location to show your position on the map.</string>
 	<key>NSLocationAlwaysUsageDescription</key>

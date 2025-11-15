@@ -23,6 +23,11 @@ class _ChatListScreenState extends State<ChatListScreen> {
   bool _isLoading = true;
   Map<String, int> _unreadCounts = {};
 
+  String _fallbackLabel(String id) {
+    final shortId = id.length > 8 ? id.substring(0, 8) : id;
+    return 'User $shortId';
+  }
+
   @override
   void initState() {
     super.initState();
@@ -30,21 +35,48 @@ class _ChatListScreenState extends State<ChatListScreen> {
   }
 
   Future<void> _loadChats() async {
+    if (!mounted) return;
+
     setState(() => _isLoading = true);
 
-    final chats = await _chatService.getUserChats();
-
-    // Load unread counts for each chat
-    final unreadCounts = <String, int>{};
-    for (final chat in chats) {
-      unreadCounts[chat.id] = await _chatService.getUnreadCount(chat.id);
+    final cachedChats = await _chatService.getCachedUserChats();
+    if (cachedChats.isNotEmpty && mounted) {
+      setState(() {
+        _chats = cachedChats;
+        _unreadCounts = {
+          for (final chat in cachedChats) chat.id: _unreadCounts[chat.id] ?? 0
+        };
+        _isLoading = false;
+      });
     }
 
-    setState(() {
-      _chats = chats;
-      _unreadCounts = unreadCounts;
-      _isLoading = false;
-    });
+    try {
+      final chats = await _chatService.getUserChats();
+
+      // Load unread counts for each chat
+      final unreadCounts = <String, int>{};
+      for (final chat in chats) {
+        unreadCounts[chat.id] = await _chatService.getUnreadCount(chat.id);
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _chats = chats;
+        _unreadCounts = unreadCounts;
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      if (_chats.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Unable to load chats right now.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _startNewChat() async {
@@ -111,169 +143,167 @@ class _ChatListScreenState extends State<ChatListScreen> {
                     final chat = _chats[index];
                     final unreadCount = _unreadCounts[chat.id] ?? 0;
 
-                    return FutureBuilder<List<ChatParticipant>>(
-                      future: _chatService.getChatParticipants(chat.id),
-                      builder: (context, snapshot) {
-                        if (snapshot.connectionState ==
-                            ConnectionState.waiting) {
-                          return AppCard(
-                            margin: EdgeInsets.only(
-                                bottom: AppDesignSystem.spaceSM),
-                            child: ListTile(
-                              title: Text('Loading...',
-                                  style: AppDesignSystem.bodyLarge),
-                              subtitle: Text('Private Chat',
-                                  style: AppDesignSystem.bodySmall),
-                            ),
-                          ).animate().fadeIn();
-                        }
+                    final participants = chat.participants;
+                    final currentUserId = _chatService.getCurrentUserId();
 
-                        if (snapshot.hasError || !snapshot.hasData) {
-                          return AppCard(
-                            margin: EdgeInsets.only(
-                                bottom: AppDesignSystem.spaceSM),
-                            child: ListTile(
-                              title: Text('Chat',
-                                  style: AppDesignSystem.bodyLarge),
-                              subtitle: Text('Private Chat',
-                                  style: AppDesignSystem.bodySmall),
-                            ),
-                          );
-                        }
+                    String chatTitle = chat.name;
+                    String chatSubtitle = '';
 
-                        final participants = snapshot.data!;
-                        final currentUserId = _chatService.getCurrentUserId();
+                    if (chat.chatType == 'private') {
+                      String? displayName = chat.otherParticipantName;
+                      String? counterpartId = chat.otherParticipantId;
 
-                        // Get chat title based on type
-                        String chatTitle = chat.name ?? 'Chat';
-                        String chatSubtitle = '';
-
-                        if (chat.chatType == 'private' &&
-                            participants.isNotEmpty) {
-                          ChatParticipant? otherParticipant;
-
-                          if (participants.length == 1) {
-                            // Only one participant (edge case)
-                            otherParticipant = participants.first;
-                          } else {
-                            // Find participant that is NOT the current user
-                            otherParticipant = participants.firstWhere(
-                              (p) => p.userId != currentUserId,
-                              orElse: () => participants.first,
-                            );
+                      if ((displayName == null || displayName.isEmpty) &&
+                          counterpartId != null) {
+                        ChatParticipant? participant;
+                        for (final item in participants) {
+                          if (item.userId == counterpartId) {
+                            participant = item;
+                            break;
                           }
-
-                          chatTitle = otherParticipant.userName ??
-                              otherParticipant.userId ??
-                              'Unknown User';
-                          chatSubtitle = 'Private Chat';
-                        } else if (chat.chatType == 'group') {
-                          chatSubtitle = '${participants.length} members';
                         }
+                        displayName = participant?.userName;
+                      }
 
-                        return AppCard(
-                          margin:
-                              EdgeInsets.only(bottom: AppDesignSystem.spaceSM),
-                          shadows: AppDesignSystem.shadowSM,
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => ChatScreen(chat: chat),
-                              ),
-                            ).then(
-                                (_) => _loadChats()); // Refresh when returning
-                          },
-                          child: Padding(
-                            padding: EdgeInsets.all(AppDesignSystem.spaceSM),
-                            child: Row(
-                              children: [
-                                // Avatar
-                                Container(
-                                  width: 50,
-                                  height: 50,
-                                  decoration: BoxDecoration(
-                                    gradient: AppColors.primaryGradient,
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: Center(
-                                    child: Text(
-                                      chatTitle.isNotEmpty
-                                          ? chatTitle[0].toUpperCase()
-                                          : '?',
-                                      style: AppDesignSystem.headlineMedium
-                                          .copyWith(
-                                        color: Colors.white,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                SizedBox(width: AppDesignSystem.spaceMD),
-                                // Chat info
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        chatTitle,
-                                        style:
-                                            AppDesignSystem.titleLarge.copyWith(
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      if (chatSubtitle.isNotEmpty) ...[
-                                        SizedBox(
-                                            height: AppDesignSystem.spaceXS),
-                                        Text(
-                                          chatSubtitle,
-                                          style: AppDesignSystem.bodySmall
-                                              .copyWith(
-                                            color: AppColors.textLight,
-                                          ),
-                                        ),
-                                      ],
-                                    ],
-                                  ),
-                                ),
-                                // Unread badge
-                                if (unreadCount > 0)
-                                  Container(
-                                    padding: EdgeInsets.symmetric(
-                                      horizontal: AppDesignSystem.spaceSM,
-                                      vertical: AppDesignSystem.spaceXS,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      gradient: AppColors.primaryGradient,
-                                      borderRadius: BorderRadius.circular(
-                                        AppDesignSystem.radiusFull,
-                                      ),
-                                    ),
-                                    child: Text(
-                                      unreadCount > 99
-                                          ? '99+'
-                                          : unreadCount.toString(),
-                                      style:
-                                          AppDesignSystem.labelSmall.copyWith(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ).animate().scale(
-                                        duration: 300.ms,
-                                        curve: Curves.elasticOut,
-                                      ),
-                              ],
-                            ),
+                      if ((displayName == null || displayName.isEmpty) &&
+                          counterpartId == null &&
+                          participants.isNotEmpty) {
+                        ChatParticipant? other;
+                        for (final participant in participants) {
+                          if (participant.userId != currentUserId) {
+                            other = participant;
+                            break;
+                          }
+                        }
+                        other ??= participants.first;
+                        counterpartId = other.userId;
+                        displayName = other.userName;
+                      }
+
+                      if ((displayName == null || displayName.isEmpty) &&
+                          chat.createdByName != null &&
+                          chat.createdByName!.isNotEmpty &&
+                          chat.createdBy != currentUserId) {
+                        displayName = chat.createdByName;
+                        counterpartId ??= chat.createdBy;
+                      }
+
+                      if ((displayName == null || displayName.isEmpty) &&
+                          counterpartId != null) {
+                        displayName = _fallbackLabel(counterpartId);
+                      }
+
+                      chatTitle = displayName ?? _fallbackLabel(chat.id);
+                      chatSubtitle = 'Private Chat';
+                    } else if (chat.chatType == 'group') {
+                      chatSubtitle = '${participants.length} members';
+                      if (chatTitle.isEmpty &&
+                          chat.createdByName != null &&
+                          chat.createdByName!.isNotEmpty) {
+                        chatTitle = chat.createdByName!;
+                      }
+                    } else if (chat.createdByName != null &&
+                        chat.createdByName!.isNotEmpty) {
+                      chatTitle = chat.createdByName!;
+                    }
+
+                    if (chatTitle.isEmpty) {
+                      chatTitle = _fallbackLabel(chat.id);
+                    }
+
+                    return AppCard(
+                      margin:
+                          EdgeInsets.only(bottom: AppDesignSystem.spaceSM),
+                      shadows: AppDesignSystem.shadowSM,
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => ChatScreen(chat: chat),
                           ),
-                        )
-                            .animate()
-                            .fadeIn(duration: 400.ms, delay: (index * 50).ms)
-                            .slideX(begin: 0.2, end: 0);
+                        ).then((_) => _loadChats());
                       },
-                    );
+                      child: Padding(
+                        padding: EdgeInsets.all(AppDesignSystem.spaceSM),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 50,
+                              height: 50,
+                              decoration: BoxDecoration(
+                                gradient: AppColors.primaryGradient,
+                                shape: BoxShape.circle,
+                              ),
+                              child: Center(
+                                child: Text(
+                                  chatTitle.isNotEmpty
+                                      ? chatTitle[0].toUpperCase()
+                                      : '?',
+                                  style:
+                                      AppDesignSystem.headlineMedium.copyWith(
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            SizedBox(width: AppDesignSystem.spaceMD),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    chatTitle,
+                                    style:
+                                        AppDesignSystem.titleLarge.copyWith(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  if (chatSubtitle.isNotEmpty) ...[
+                                    SizedBox(height: AppDesignSystem.spaceXS),
+                                    Text(
+                                      chatSubtitle,
+                                      style: AppDesignSystem.bodySmall.copyWith(
+                                        color: AppColors.textLight,
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                            if (unreadCount > 0)
+                              Container(
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: AppDesignSystem.spaceSM,
+                                  vertical: AppDesignSystem.spaceXS,
+                                ),
+                                decoration: BoxDecoration(
+                                  gradient: AppColors.primaryGradient,
+                                  borderRadius: BorderRadius.circular(
+                                    AppDesignSystem.radiusFull,
+                                  ),
+                                ),
+                                child: Text(
+                                  unreadCount > 99
+                                      ? '99+'
+                                      : unreadCount.toString(),
+                                  style: AppDesignSystem.labelSmall.copyWith(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ).animate().scale(
+                                    duration: 300.ms,
+                                    curve: Curves.elasticOut,
+                                  ),
+                          ],
+                        ),
+                      ),
+                    )
+                        .animate()
+                        .fadeIn(duration: 400.ms, delay: (index * 50).ms)
+                        .slideX(begin: 0.2, end: 0);
                   },
                 ),
       floatingActionButton: FloatingActionButton.extended(

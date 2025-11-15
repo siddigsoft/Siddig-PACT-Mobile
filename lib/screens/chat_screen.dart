@@ -68,29 +68,58 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _loadParticipants() async {
-    final participants = await _chatService.getChatParticipants(widget.chat.id);
+  final participants =
+    await _chatService.getChatParticipants(widget.chat.id);
     // Debug: print participants loaded
     // ignore: avoid_print
     print('_loadParticipants for ${widget.chat.id}: $participants');
 
+    final updatedParticipants = List<ChatParticipant>.from(participants);
+
+    if (widget.chat.otherParticipantId != null &&
+        !updatedParticipants.any(
+          (participant) =>
+              participant.userId == widget.chat.otherParticipantId,
+        )) {
+      updatedParticipants.add(
+        ChatParticipant(
+          chatId: widget.chat.id,
+          userId: widget.chat.otherParticipantId!,
+          userName: widget.chat.otherParticipantName,
+          joinedAt: DateTime.now(),
+        ),
+      );
+    }
+
     setState(() {
-      _participants = participants;
+      _participants = updatedParticipants;
       _participantsLoaded = true;
     });
 
     // Get the contact user ID if this is a private chat
     if (widget.chat.chatType == 'private' && _currentUserId != null) {
-      final otherParticipant = participants.firstWhere(
+      final searchParticipants = updatedParticipants.isNotEmpty
+          ? updatedParticipants
+          : participants;
+
+      final otherParticipant = searchParticipants.firstWhere(
         (p) => p.userId != _currentUserId,
-        orElse: () => participants.isNotEmpty
-            ? participants.first
+        orElse: () => searchParticipants.isNotEmpty
+            ? searchParticipants.first
             : ChatParticipant(
                 chatId: widget.chat.id,
-                userId: '',
-                userName: 'Unknown',
+                userId: widget.chat.otherParticipantId ?? '',
+                userName: widget.chat.otherParticipantName ?? 'Unknown',
                 joinedAt: DateTime.now(),
               ),
       );
+      widget.chat.otherParticipantId ??= otherParticipant.userId.isNotEmpty
+          ? otherParticipant.userId
+          : widget.chat.otherParticipantId;
+      if (otherParticipant.userName != null &&
+          otherParticipant.userName!.isNotEmpty) {
+        widget.chat.otherParticipantName ??= otherParticipant.userName;
+      }
       _contactUserId = otherParticipant.userId;
     }
   }
@@ -136,17 +165,27 @@ class _ChatScreenState extends State<ChatScreen> {
       return 'You';
     }
 
-    final participant = _participants.firstWhere(
-      (p) => p.userId == senderId,
-      orElse: () => ChatParticipant(
-        chatId: widget.chat.id,
-        userId: senderId,
-        userName: 'Unknown User',
-        joinedAt: DateTime.now(),
-      ),
-    );
+    ChatParticipant? participant;
+    for (final item in _participants) {
+      if (item.userId == senderId) {
+        participant = item;
+        break;
+      }
+    }
 
-    return participant.userName ?? 'User ${senderId.substring(0, 8)}';
+    final candidateName = participant?.userName;
+    if (candidateName != null && candidateName.isNotEmpty) {
+      return candidateName;
+    }
+
+    if (widget.chat.otherParticipantId == senderId &&
+        widget.chat.otherParticipantName != null &&
+        widget.chat.otherParticipantName!.isNotEmpty) {
+      return widget.chat.otherParticipantName!;
+    }
+
+    final shortId = senderId.length > 8 ? senderId.substring(0, 8) : senderId;
+    return 'User $shortId';
   }
 
   Future<void> _markMessagesAsRead() async {
@@ -194,9 +233,19 @@ class _ChatScreenState extends State<ChatScreen> {
         return _chatContact!.displayName;
       }
 
+      if (widget.chat.otherParticipantName != null &&
+          widget.chat.otherParticipantName!.isNotEmpty) {
+        return widget.chat.otherParticipantName!;
+      }
+
       // Otherwise fall back to participant name
       if (!_participantsLoaded || _participants.isEmpty) {
         return 'Loading...';
+      }
+
+      String fallbackFromId(String id) {
+        final shortId = id.length > 8 ? id.substring(0, 8) : id;
+        return 'User $shortId';
       }
 
       ChatParticipant otherParticipant;
@@ -225,7 +274,16 @@ class _ChatScreenState extends State<ChatScreen> {
         otherParticipant = found;
       }
 
-      return otherParticipant.userName ?? 'Unknown User';
+      if (otherParticipant.userName != null &&
+          otherParticipant.userName!.isNotEmpty) {
+        return otherParticipant.userName!;
+      }
+
+      final candidateId = otherParticipant.userId.isNotEmpty
+          ? otherParticipant.userId
+          : (widget.chat.otherParticipantId ?? widget.chat.id);
+
+      return fallbackFromId(candidateId);
     } else {
       // For group chats, show the chat name
       return widget.chat.name ?? 'Group Chat';

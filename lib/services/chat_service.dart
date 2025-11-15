@@ -1,3 +1,4 @@
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/chat.dart';
 import '../models/chat_message.dart';
@@ -5,10 +6,324 @@ import '../models/chat_participant.dart';
 
 class ChatService {
   final SupabaseClient _supabase = Supabase.instance.client;
+  static const String _chatCacheBoxName = 'chat_cache_box';
+  static const String _chatCacheKey = 'chat_list';
+
+  final Map<String, List<ChatParticipant>> _participantCache = {};
 
   // Get current user ID
   String? getCurrentUserId() {
     return _supabase.auth.currentUser?.id;
+  }
+
+  Future<Box> _openChatCacheBox() async {
+    return Hive.openBox(_chatCacheBoxName);
+  }
+
+  Future<void> _cacheChats(List<Chat> chats) async {
+    try {
+      final box = await _openChatCacheBox();
+      await box.put(
+        _chatCacheKey,
+        {
+          'updated_at': DateTime.now().toIso8601String(),
+          'chats': chats.map((chat) => chat.toCacheJson()).toList(),
+        },
+      );
+    } catch (e) {
+      // ignore: avoid_print
+      print('Error caching chats: $e');
+    }
+  }
+
+  Future<void> _removeChatFromCache(String chatId) async {
+    try {
+      final box = await _openChatCacheBox();
+      final cache = box.get(_chatCacheKey);
+      if (cache is! Map) return;
+
+      final rawChats = cache['chats'];
+      if (rawChats is! List) return;
+
+      final updated = <Map<String, dynamic>>[];
+      for (final item in rawChats) {
+        if (item is! Map) continue;
+        final map = Map<String, dynamic>.from(item as Map);
+        if (map['id'] != chatId) {
+          updated.add(map);
+        }
+      }
+
+      await box.put(
+        _chatCacheKey,
+        {
+          'updated_at': DateTime.now().toIso8601String(),
+          'chats': updated,
+        },
+      );
+    } catch (e) {
+      // ignore: avoid_print
+      print('Error removing chat from cache: $e');
+    }
+  }
+
+  Future<List<Chat>> getCachedUserChats() async {
+    try {
+      final box = await _openChatCacheBox();
+      final cache = box.get(_chatCacheKey);
+      if (cache is! Map) return [];
+
+      final rawChats = cache['chats'];
+      if (rawChats is! List) return [];
+
+      final chats = <Chat>[];
+      for (final item in rawChats) {
+        if (item is! Map) continue;
+        chats.add(Chat.fromJson(Map<String, dynamic>.from(item as Map)));
+      }
+
+      for (final chat in chats) {
+        if (chat.otherParticipantId != null &&
+            (chat.otherParticipantName == null ||
+                chat.otherParticipantName!.isEmpty)) {
+          final counterpartId = chat.otherParticipantId!;
+          final shortId = counterpartId.length > 8
+              ? counterpartId.substring(0, 8)
+              : counterpartId;
+          chat.otherParticipantName = 'User $shortId';
+        }
+
+        if (chat.participants.isNotEmpty) {
+          _participantCache[chat.id] = chat.participants
+              .map(
+                (participant) => ChatParticipant(
+                  chatId: participant.chatId,
+                  userId: participant.userId,
+                  userName: participant.userName,
+                  joinedAt: participant.joinedAt,
+                ),
+              )
+              .toList();
+        }
+      }
+
+      return chats;
+    } catch (e) {
+      // ignore: avoid_print
+      print('Error loading cached chats: $e');
+      return [];
+    }
+  }
+
+  String _buildInFilterPayload(Iterable<String> values) {
+    final quoted = values.map((value) => '"$value"').join(',');
+    return '($quoted)';
+  }
+
+  bool _isValidUuid(String? value) {
+    if (value == null || value.isEmpty) {
+      return false;
+    }
+    return RegExp(
+      r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+    ).hasMatch(value);
+  }
+
+  Future<Map<String, String>> _fetchProfileNames(Set<String> userIds) async {
+    if (userIds.isEmpty) return {};
+
+    final validIds = userIds.where(_isValidUuid).toSet();
+    if (validIds.isEmpty) {
+      return {};
+    }
+
+    try {
+    final response = await _supabase
+      .from('profiles')
+      .select('id, username, full_name, email')
+          .filter(
+            'id',
+            'in',
+            _buildInFilterPayload(validIds),
+          );
+
+      final names = <String, String>{};
+      for (final item in response) {
+        if (item is! Map) continue;
+        final map = Map<String, dynamic>.from(item as Map);
+        final id = map['id'] as String?;
+        if (id == null) continue;
+        final username = (map['username'] as String?)?.trim();
+        final fullName = (map['full_name'] as String?)?.trim();
+        final email = (map['email'] as String?)?.trim();
+        if (username != null && username.isNotEmpty) {
+          names[id] = username;
+        } else if (fullName != null && fullName.isNotEmpty) {
+          names[id] = fullName;
+        } else if (email != null && email.isNotEmpty) {
+          names[id] = email;
+        } else {
+          final shortId = id.length > 8 ? id.substring(0, 8) : id;
+          names[id] = 'User $shortId';
+        }
+      }
+      return names;
+    } catch (e) {
+      // ignore: avoid_print
+      print('Error fetching profile names: $e');
+      return {};
+    }
+  }
+
+  ChatParticipant? _findParticipantById(
+    List<ChatParticipant> participants,
+    String userId,
+  ) {
+    for (final participant in participants) {
+      if (participant.userId == userId) {
+        return participant;
+      }
+    }
+    return null;
+  }
+
+  String? _parseOtherParticipantFromPairKey(
+    String? pairKey,
+    String currentUserId,
+  ) {
+    if (pairKey == null || pairKey.isEmpty) {
+      return null;
+    }
+    final uuidPattern = RegExp(
+      r'[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}',
+    );
+
+    final matches = uuidPattern.allMatches(pairKey);
+    for (final match in matches) {
+      final candidate = pairKey.substring(match.start, match.end);
+      if (candidate != currentUserId) {
+        return candidate;
+      }
+    }
+    return null;
+  }
+
+  Future<String?> _findOtherParticipantFromMessages(
+    String chatId,
+    String currentUserId,
+  ) async {
+    try {
+      final response = await _supabase
+          .from('chat_messages')
+          .select('sender_id')
+          .eq('chat_id', chatId)
+          .order('created_at', ascending: false)
+          .limit(25);
+
+      for (final item in response) {
+        if (item is! Map) continue;
+        final map = Map<String, dynamic>.from(item as Map);
+        final senderId = map['sender_id'] as String?;
+        if (senderId != null && senderId != currentUserId) {
+          return senderId;
+        }
+      }
+    } catch (e) {
+      // ignore: avoid_print
+      print('Error finding participant via messages: $e');
+    }
+
+    return null;
+  }
+
+  Future<List<ChatParticipant>> _completeParticipantList(
+    String chatId,
+    List<ChatParticipant> participants,
+  ) async {
+    if (participants.length == 1) {
+      try {
+        final messages = await _supabase
+            .from('chat_messages')
+            .select(
+                'sender_id, profiles!chat_messages_sender_id_fkey(full_name, email, username)')
+            .eq('chat_id', chatId)
+            .order('created_at', ascending: false)
+            .limit(10);
+
+        for (final message in messages) {
+          if (message is! Map) continue;
+          final map = Map<String, dynamic>.from(message as Map);
+          final senderId = map['sender_id'] as String?;
+          if (senderId == null ||
+              participants.any((participant) => participant.userId == senderId)) {
+            continue;
+          }
+
+          final profile = map['profiles'];
+          final profileMap =
+              profile is Map ? Map<String, dynamic>.from(profile as Map) : null;
+          final username = (profileMap?['username'] as String?)?.trim();
+          final fullName = (profileMap?['full_name'] as String?)?.trim();
+          final email = (profileMap?['email'] as String?)?.trim();
+
+          participants.add(
+            ChatParticipant(
+              chatId: chatId,
+              userId: senderId,
+              userName: username?.isNotEmpty == true
+                  ? username
+                  : (fullName?.isNotEmpty == true
+                      ? fullName
+                      : (email?.isNotEmpty == true ? email : null)),
+              joinedAt: DateTime.now(),
+            ),
+          );
+        }
+      } catch (e) {
+        // ignore: avoid_print
+        print('Error fetching participants from messages: $e');
+      }
+    }
+
+    final missingNameIds = participants
+        .where((participant) =>
+            participant.userName == null ||
+            participant.userName!.trim().isEmpty)
+        .map((participant) => participant.userId)
+        .toSet();
+
+    if (missingNameIds.isNotEmpty) {
+          final fallbackNames = await _fetchProfileNames(missingNameIds);
+      for (final participant in participants) {
+        final name = fallbackNames[participant.userId];
+        if (name != null && name.isNotEmpty) {
+          participant.userName = name;
+        }
+      }
+    }
+
+    for (final participant in participants) {
+      if (participant.userName == null ||
+          participant.userName!.trim().isEmpty) {
+        final shortId = participant.userId.length > 8
+            ? participant.userId.substring(0, 8)
+            : participant.userId;
+        participant.userName = 'User $shortId';
+      }
+    }
+
+    _participantCache[chatId] = participants
+        .map(
+          (participant) => ChatParticipant(
+            chatId: participant.chatId,
+            userId: participant.userId,
+            userName: participant.userName,
+            joinedAt: participant.joinedAt,
+          ),
+        )
+        .toList();
+
+    return participants;
   }
 
   // Get all chats for current user
@@ -23,20 +338,135 @@ class ChatService {
           .select('chat_id, chats(*)')
           .eq('user_id', currentUser.id);
 
-      final chats = <Chat>[];
+  final chats = <Chat>[];
+  final profileIds = <String>{};
       for (final row in response) {
-        if (row['chats'] != null) {
-          final chat = Chat.fromJson(row['chats']);
-          // Load participants for this chat
+        final chatData = row['chats'];
+        if (chatData != null) {
+          final chat = Chat.fromJson(Map<String, dynamic>.from(chatData));
+
+          if (chat.createdBy != null) {
+            profileIds.add(chat.createdBy!);
+          }
+
+          // Load participants for this chat, using cache when possible
           final participants = await getChatParticipants(chat.id);
-          chat.participants.addAll(participants);
+          chat.participants = List<ChatParticipant>.from(participants);
+
+          for (final participant in chat.participants) {
+            if (participant.userName == null ||
+                participant.userName!.isEmpty) {
+              profileIds.add(participant.userId);
+            }
+          }
+
+          if (!chat.isGroup) {
+            String? counterpartId;
+
+            final counterpartFromParticipants = participants.firstWhere(
+              (participant) => participant.userId != currentUser.id,
+              orElse: () => ChatParticipant(
+                chatId: chat.id,
+                userId: currentUser.id,
+                userName: null,
+                joinedAt: DateTime.now(),
+              ),
+            );
+
+            if (counterpartFromParticipants.userId != currentUser.id) {
+              counterpartId = counterpartFromParticipants.userId;
+              chat.otherParticipantName =
+                  counterpartFromParticipants.userName ??
+                      chat.otherParticipantName;
+            }
+
+            counterpartId ??=
+                _parseOtherParticipantFromPairKey(chat.pairKey, currentUser.id);
+
+            counterpartId ??=
+                await _findOtherParticipantFromMessages(chat.id, currentUser.id);
+
+            if (counterpartId != null) {
+              chat.otherParticipantId = counterpartId;
+              profileIds.add(counterpartId);
+
+              var participant =
+                  _findParticipantById(chat.participants, counterpartId);
+              if (participant == null) {
+                participant = ChatParticipant(
+                  chatId: chat.id,
+                  userId: counterpartId,
+                  userName: chat.otherParticipantName,
+                  joinedAt: DateTime.now(),
+                );
+                chat.participants.add(participant);
+              } else if (participant.userName != null &&
+                  participant.userName!.isNotEmpty) {
+                chat.otherParticipantName ??= participant.userName;
+              }
+
+              chat.otherParticipantName ??=
+                  _findParticipantById(chat.participants, counterpartId)
+                      ?.userName;
+            }
+          }
+
           chats.add(chat);
         }
       }
 
+      if (profileIds.isNotEmpty) {
+        final resolvedNames = await _fetchProfileNames(profileIds);
+        for (final chat in chats) {
+          for (final participant in chat.participants) {
+            final resolved = resolvedNames[participant.userId];
+            if (resolved != null && resolved.isNotEmpty) {
+              participant.userName = resolved;
+            } else if (participant.userName == null ||
+                participant.userName!.isEmpty) {
+              final shortId = participant.userId.length > 8
+                  ? participant.userId.substring(0, 8)
+                  : participant.userId;
+              participant.userName = 'User $shortId';
+            }
+          }
+
+          if (chat.createdBy != null) {
+            chat.createdByName =
+                resolvedNames[chat.createdBy!] ?? chat.createdByName;
+          }
+
+          final counterpartId = chat.otherParticipantId;
+          if (counterpartId != null) {
+            final resolvedName = resolvedNames[counterpartId];
+            if (resolvedName != null && resolvedName.isNotEmpty) {
+              chat.otherParticipantName = resolvedName;
+              final participant =
+                  _findParticipantById(chat.participants, counterpartId);
+              if (participant != null) {
+                participant.userName = resolvedName;
+              }
+            } else if (chat.otherParticipantName == null ||
+                chat.otherParticipantName!.isEmpty) {
+              final shortId = counterpartId.length > 8
+                  ? counterpartId.substring(0, 8)
+                  : counterpartId;
+              chat.otherParticipantName = 'User $shortId';
+            }
+          }
+        }
+      }
+
+      await _cacheChats(chats);
+
       return chats;
     } catch (e) {
+      // ignore: avoid_print
       print('Error getting user chats: $e');
+      final cached = await getCachedUserChats();
+      if (cached.isNotEmpty) {
+        return cached;
+      }
       return [];
     }
   }
@@ -78,8 +508,45 @@ class ChatService {
       ]);
 
       // Load participants with user names
-      final participants = await getChatParticipants(chat.id);
-      chat.participants.addAll(participants);
+      final participants = await getChatParticipants(chat.id, forceRefresh: true);
+      chat.participants = List<ChatParticipant>.from(participants);
+
+      chat.otherParticipantId = otherUserId;
+
+      if (_findParticipantById(chat.participants, otherUserId) == null) {
+        chat.participants.add(
+          ChatParticipant(
+            chatId: chat.id,
+            userId: otherUserId,
+            userName: null,
+            joinedAt: DateTime.now(),
+          ),
+        );
+      }
+
+      final names = await _fetchProfileNames({
+        if (chat.createdBy != null) chat.createdBy!,
+        otherUserId,
+      });
+
+      if (chat.createdBy != null) {
+        chat.createdByName = names[chat.createdBy!];
+      }
+
+      final counterpart =
+          _findParticipantById(chat.participants, otherUserId);
+      final resolvedOtherName = names[otherUserId];
+      if (counterpart != null) {
+        counterpart.userName = resolvedOtherName ?? counterpart.userName;
+      }
+      chat.otherParticipantName = resolvedOtherName ?? counterpart?.userName;
+      if (chat.otherParticipantName == null ||
+          chat.otherParticipantName!.isEmpty) {
+        final shortId = otherUserId.length > 8
+            ? otherUserId.substring(0, 8)
+            : otherUserId;
+        chat.otherParticipantName = 'User $shortId';
+      }
 
       return chat;
     } catch (e) {
@@ -217,72 +684,58 @@ class ChatService {
   }
 
   // Get chat participants
-  Future<List<ChatParticipant>> getChatParticipants(String chatId) async {
-    try {
-      // Try to join with profiles table first
-      final response = await _supabase
-          .from('chat_participants')
-          .select('*, profiles!inner(full_name, email)')
-          .eq('chat_id', chatId);
+  Future<List<ChatParticipant>> getChatParticipants(
+    String chatId, {
+    bool forceRefresh = false,
+  }) async {
+    if (!forceRefresh && _participantCache.containsKey(chatId)) {
+      return _participantCache[chatId]!
+          .map(
+            (participant) => ChatParticipant(
+              chatId: participant.chatId,
+              userId: participant.userId,
+              userName: participant.userName,
+              joinedAt: participant.joinedAt,
+            ),
+          )
+          .toList();
+    }
 
-      // Debug: print raw response to help trace participant loading issues
-      // ignore: avoid_print
-      print('getChatParticipants response for $chatId: $response');
+    try {
+    final response = await _supabase
+        .from('chat_participants')
+        .select('*, profiles(username, full_name, email)')
+        .eq('chat_id', chatId);
 
       final participants = response.map((json) {
+        final map = Map<String, dynamic>.from(json);
+        final profile = map['profiles'];
+        final profileMap =
+            profile is Map ? Map<String, dynamic>.from(profile as Map) : null;
+        final username = (profileMap?['username'] as String?)?.trim();
+        final fullName = (profileMap?['full_name'] as String?)?.trim();
+        final email = (profileMap?['email'] as String?)?.trim();
+        final userId = map['user_id'] as String;
+        String? resolvedName;
+        if (username != null && username.isNotEmpty) {
+          resolvedName = username;
+        } else if (fullName != null && fullName.isNotEmpty) {
+          resolvedName = fullName;
+        } else if (email != null && email.isNotEmpty) {
+          resolvedName = email;
+        }
+
         return ChatParticipant(
-          chatId: json['chat_id'],
-          userId: json['user_id'],
-          userName: json['profiles']?['full_name'] ??
-              json['profiles']?['email'] ??
-              'User ${json['user_id'].substring(0, 8)}',
-          joinedAt: DateTime.parse(json['joined_at']),
+          chatId: map['chat_id'],
+          userId: userId,
+          userName: resolvedName,
+          joinedAt: DateTime.parse(map['joined_at']),
         );
       }).toList();
 
-      // If we only got one participant (current user), try to get other participants from messages
-      if (participants.length == 1) {
-        try {
-          final messages = await _supabase
-              .from('chat_messages')
-              .select(
-                  'sender_id, profiles!chat_messages_sender_id_fkey(full_name, email)')
-              .eq('chat_id', chatId)
-              .neq('sender_id', getCurrentUserId() ?? '')
-              .limit(10);
-
-          // Extract unique sender IDs
-          final senderIds = <String>{};
-          for (var msg in messages) {
-            if (msg['sender_id'] != null) {
-              senderIds.add(msg['sender_id']);
-            }
-          }
-
-          // Add message senders as participants
-          for (var msg in messages) {
-            final senderId = msg['sender_id'];
-            if (senderId != null &&
-                !participants.any((p) => p.userId == senderId)) {
-              participants.add(ChatParticipant(
-                chatId: chatId,
-                userId: senderId,
-                userName: msg['profiles']?['full_name'] ??
-                    msg['profiles']?['email'] ??
-                    'User',
-                joinedAt: DateTime.now(),
-              ));
-              break; // Only add one other participant for private chats
-            }
-          }
-        } catch (e) {
-          print('Error fetching participants from messages: $e');
-        }
-      }
-
-      return participants;
+      return _completeParticipantList(chatId, participants);
     } catch (e) {
-      // If join fails, try without join and query profiles separately
+      // ignore: avoid_print
       print('Join with profiles failed, trying separate queries: $e');
       try {
         final response = await _supabase
@@ -293,39 +746,33 @@ class ChatService {
         final participants = <ChatParticipant>[];
 
         for (final json in response) {
-          String? userName;
-
-          // Try to get user name from profiles table
-          try {
-            final profileResponse = await _supabase
-                .from('profiles')
-                .select('full_name')
-                .eq('id', json['user_id'])
-                .maybeSingle();
-
-            if (profileResponse != null &&
-                profileResponse['full_name'] != null) {
-              userName = profileResponse['full_name'];
-            }
-          } catch (e) {
-            print('Error getting profile for ${json['user_id']}: $e');
-          }
-
-          // Fallback to user ID if no name found
-          userName ??= 'User ${json['user_id'].substring(0, 8)}';
-
-          participants.add(ChatParticipant(
-            chatId: json['chat_id'],
-            userId: json['user_id'],
-            userName: userName,
-            joinedAt: DateTime.parse(json['joined_at']),
-          ));
+          final map = Map<String, dynamic>.from(json);
+          participants.add(
+            ChatParticipant(
+              chatId: map['chat_id'],
+              userId: map['user_id'],
+              userName: null,
+              joinedAt: DateTime.parse(map['joined_at']),
+            ),
+          );
         }
 
-        return participants;
+        return _completeParticipantList(chatId, participants);
       } catch (e) {
         // ignore: avoid_print
         print('Error getting chat participants: $e');
+        if (_participantCache.containsKey(chatId)) {
+          return _participantCache[chatId]!
+              .map(
+                (participant) => ChatParticipant(
+                  chatId: participant.chatId,
+                  userId: participant.userId,
+                  userName: participant.userName,
+                  joinedAt: participant.joinedAt,
+                ),
+              )
+              .toList();
+        }
         return [];
       }
     }
@@ -394,6 +841,9 @@ class ChatService {
 
       // Delete the chat itself
       await _supabase.from('chats').delete().eq('id', chatId);
+
+      _participantCache.remove(chatId);
+      await _removeChatFromCache(chatId);
     } catch (e) {
       print('Error deleting chat: $e');
       rethrow;

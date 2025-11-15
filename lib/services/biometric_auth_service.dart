@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -11,6 +12,9 @@ class BiometricAuthService {
 
   /// Check if device supports biometric authentication
   Future<bool> isBiometricAvailable() async {
+    if (kIsWeb) {
+      return false;
+    }
     try {
       final bool canAuthenticateWithBiometrics = await _localAuth.canCheckBiometrics;
       final bool canAuthenticate = canAuthenticateWithBiometrics || await _localAuth.isDeviceSupported();
@@ -18,15 +22,22 @@ class BiometricAuthService {
     } on PlatformException catch (e) {
       print('Error checking biometric availability: $e');
       return false;
+    } on MissingPluginException {
+      return false;
     }
   }
 
   /// Get list of available biometric types (fingerprint, face, etc.)
   Future<List<BiometricType>> getAvailableBiometrics() async {
+    if (kIsWeb) {
+      return [];
+    }
     try {
       return await _localAuth.getAvailableBiometrics();
     } on PlatformException catch (e) {
       print('Error getting available biometrics: $e');
+      return [];
+    } on MissingPluginException {
       return [];
     }
   }
@@ -48,6 +59,9 @@ class BiometricAuthService {
 
   /// Authenticate user with biometrics
   Future<bool> authenticate({String reason = 'Please authenticate to access the app'}) async {
+    if (kIsWeb) {
+      return false;
+    }
     try {
       // Ensure device supports biometrics or device credentials
       final canUseBiometrics = await _localAuth.canCheckBiometrics;
@@ -70,6 +84,8 @@ class BiometricAuthService {
       return didAuthenticate;
     } on PlatformException catch (e) {
       print('Error during biometric authentication: $e');
+      return false;
+    } on MissingPluginException {
       return false;
     }
   }

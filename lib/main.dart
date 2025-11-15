@@ -140,6 +140,12 @@ void main() async {
           final fileId = payload.substring(4);
           navigatorKey.currentState
               ?.pushNamed('/mmp-detail', arguments: fileId);
+        } else if (payload.startsWith('notif:')) {
+          final notificationId = payload.substring(6);
+          navigatorKey.currentState?.pushNamed(
+            '/main',
+            arguments: {'notificationId': notificationId},
+          );
         } else if (payload.startsWith('update:')) {
           // Handle update notification tap
           UpdateService().downloadAndInstallUpdate();

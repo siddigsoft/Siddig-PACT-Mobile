@@ -9,6 +9,7 @@ import '../widgets/app_widgets.dart';
 import '../services/auth_service.dart';
 import '../services/biometric_auth_service.dart';
 import '../services/realtime_notification_service.dart';
+import '../services/user_notification_service.dart';
 import '../widgets/biometric_setup_dialog.dart';
 import '../l10n/app_localizations.dart';
 
@@ -141,7 +142,14 @@ class _LoginScreenState extends State<LoginScreen>
 
       if (mounted) {
         if (response.user != null) {
-          Navigator.pushReplacementNamed(context, '/home');
+          HapticFeedback.mediumImpact();
+
+          await RealtimeNotificationService().initialize();
+          await UserNotificationService().initialize();
+
+          if (mounted) {
+            Navigator.pushReplacementNamed(context, '/main');
+          }
         } else {
           setState(() => _isLoading = false);
           ScaffoldMessenger.of(context).showSnackBar(
@@ -248,6 +256,7 @@ class _LoginScreenState extends State<LoginScreen>
 
               // Initialize realtime notifications after successful login
               await RealtimeNotificationService().initialize();
+              await UserNotificationService().initialize();
 
               // Navigate to main screen
               Navigator.pushReplacementNamed(context, '/main');
@@ -278,6 +287,7 @@ class _LoginScreenState extends State<LoginScreen>
 
                 // Initialize realtime notifications after successful login
                 await RealtimeNotificationService().initialize();
+                await UserNotificationService().initialize();
 
                 // Navigate to main screen
                 Navigator.pushReplacementNamed(context, '/main');

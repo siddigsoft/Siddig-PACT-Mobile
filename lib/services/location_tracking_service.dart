@@ -1,6 +1,7 @@
 // lib/services/location_tracking_service.dart
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:workmanager/workmanager.dart';
 import 'package:hive_flutter/hive_flutter.dart';
@@ -14,6 +15,8 @@ const String locationTrackingTask = "locationTrackingTask";
 // Background callback handler - must be a top-level function
 @pragma('vm:entry-point')
 void callbackDispatcher() {
+  WidgetsFlutterBinding.ensureInitialized();
+
   Workmanager().executeTask((task, inputData) async {
     try {
       if (task == locationTrackingTask) {

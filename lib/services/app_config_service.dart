@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 import 'package:workmanager/workmanager.dart';
 import 'auth_service.dart';
 import 'database_service.dart';
@@ -56,6 +57,8 @@ class AppConfigService {
 
 @pragma('vm:entry-point')
 void callbackDispatcher() {
+  WidgetsFlutterBinding.ensureInitialized();
+
   Workmanager().executeTask((taskName, inputData) async {
     switch (taskName) {
       case 'locationTracking':  // Match the constant from LocationTrackingService

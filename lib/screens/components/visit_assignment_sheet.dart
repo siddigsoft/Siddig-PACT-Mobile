@@ -142,13 +142,8 @@ class _VisitAssignmentSheetState extends State<VisitAssignmentSheet> {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
       ),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: () {
-          Navigator.of(context).pop();
-          widget.onVisitAssigned(visit);
-        },
-        child: Padding(
+      // Made non-clickable (offline-friendly viewing only)
+      child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -212,29 +207,28 @@ class _VisitAssignmentSheetState extends State<VisitAssignmentSheet> {
                     ),
                   ),
                   const Spacer(),
-                  ElevatedButton(
-                    onPressed: () {
-                      Navigator.of(context).pop();
-                      widget.onVisitAssigned(visit);
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primaryBlue,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 8,
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade200,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Text(
+                      'View Only',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.black54,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
-                    child: const Text('Assign to me'),
                   ),
                 ],
               ),
             ],
           ),
-        ),
       ),
     ).animate().fadeIn(duration: 300.ms, delay: 50.ms).slideY(
           begin: 0.2,
