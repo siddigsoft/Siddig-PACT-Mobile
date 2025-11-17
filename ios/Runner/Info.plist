@@ -56,6 +56,7 @@
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>This app needs access to location to show your position on the map.</string>
 	<key>NSLocationAlwaysUsageDescription</key>
+	<string>This app needs access to location to show your position on the map.</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -67,7 +68,6 @@
 			<string>pact_mobile</string>
 		</dict>
 	</array>
-	<string>This app needs access to location to show your position on the map.</string>
 	<key>io.flutter.embedded_views_preview</key>
 	<true/>
 </dict>

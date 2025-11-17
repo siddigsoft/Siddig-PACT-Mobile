@@ -597,6 +597,11 @@ class MMPFileService {
   /// Ensure a file is present on the device, downloading and caching if needed.
   Future<String> ensureFileAvailable(MMPFile file,
       {bool forceRefresh = false}) async {
+    // On web, we can't cache files locally, so we need to handle differently
+    if (kIsWeb) {
+      return await _handleWebFileAccess(file);
+    }
+
     // Check if file is already cached
     final existingPath = await getCachedFilePath(file.id);
     
@@ -757,6 +762,21 @@ class MMPFileService {
           level: LogLevel.error);
       return {};
     }
+  }
+
+  Future<String> _handleWebFileAccess(MMPFile file) async {
+    // On web, we can't cache files locally, so we return a special URL that can be used for downloading
+    final storagePath = file.fileUrl ?? file.filePath;
+    if (storagePath == null) {
+      throw Exception('Storage path not available for file ${file.name ?? file.id}');
+    }
+
+    // For web, we'll construct a download URL that can be used by the browser
+    final downloadUrl = _supabase.storage.from(_storageBucket).getPublicUrl(storagePath);
+    LoggerService.log('Web file access URL: $downloadUrl for ${file.name ?? file.id}');
+
+    // Return the download URL as the "local path" for web
+    return downloadUrl;
   }
 }
 

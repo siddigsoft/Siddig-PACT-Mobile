@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:open_file/open_file.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:url_launcher/url_launcher.dart';
 
 import '../models/mmp_file.dart';
 import 'excel_preview_widget.dart';
@@ -78,6 +80,16 @@ class _MMPPreviewContentState extends State<_MMPPreviewContent> {
   }
 
   Future<void> _openExternally() async {
+    // On web, if localPath is a URL, open it in a new tab
+    if (kIsWeb && widget.localPath.startsWith('http')) {
+      final uri = Uri.parse(widget.localPath);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+        return;
+      }
+    }
+
+    // For mobile or local files, use open_file
     final result = await OpenFile.open(widget.localPath);
     if (result.type != ResultType.done && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -90,6 +102,12 @@ class _MMPPreviewContentState extends State<_MMPPreviewContent> {
   }
 
   Future<void> _shareFile() async {
+    // On web, if localPath is a URL, share the URL directly
+    if (kIsWeb && widget.localPath.startsWith('http')) {
+      await Share.share('Check out this file: $widget.localPath', subject: _fileName);
+      return;
+    }
+
     try {
       await Share.shareXFiles([XFile(widget.localPath)], text: 'Sharing $_fileName');
     } catch (error) {
@@ -107,6 +125,10 @@ class _MMPPreviewContentState extends State<_MMPPreviewContent> {
     final lowered = _fileName.toLowerCase();
 
     if (lowered.endsWith('.xlsx')) {
+      // On web, Excel files cannot be previewed in-app due to file system limitations
+      if (kIsWeb) {
+        return _WebExcelNotice(onOpen: _openExternally, onShare: _shareFile);
+      }
       return ExcelPreviewWidget(filePath: widget.localPath);
     }
 
@@ -264,6 +286,51 @@ class _LegacyXlsNotice extends StatelessWidget {
               onPressed: onOpen,
               icon: const Icon(Icons.open_in_new),
               label: const Text('Open Externally'),
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: onShare,
+              icon: const Icon(Icons.share),
+              label: const Text('Share File'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _WebExcelNotice extends StatelessWidget {
+  final VoidCallback onOpen;
+  final VoidCallback onShare;
+
+  const _WebExcelNotice({required this.onOpen, required this.onShare});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.web, size: 40, color: Colors.blue),
+            const SizedBox(height: 12),
+            const Text(
+              'Excel Preview Unavailable on Web',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Due to web platform limitations, Excel files cannot be previewed inline. Download and open with your preferred spreadsheet application.',
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton.icon(
+              onPressed: onOpen,
+              icon: const Icon(Icons.download),
+              label: const Text('Download & Open'),
             ),
             const SizedBox(height: 8),
             OutlinedButton.icon(

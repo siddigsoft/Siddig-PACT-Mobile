@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:math' as math;
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 import 'package:archive/archive.dart';
 import 'package:excel/excel.dart' as xls;
@@ -39,9 +40,12 @@ class _ExcelPreviewWidgetState extends State<ExcelPreviewWidget> {
     super.dispose();
   }
 
-  void _loadExcel() {
+  void _loadExcel() async {
     try {
-      final bytes = File(widget.filePath).readAsBytesSync();
+      final bytes = kIsWeb
+          ? await _readFileAsBytesWeb(widget.filePath)
+          : File(widget.filePath).readAsBytesSync();
+
       final excel = xls.Excel.decodeBytes(bytes);
       if (excel.tables.isEmpty) {
         setState(() {
@@ -61,6 +65,18 @@ class _ExcelPreviewWidgetState extends State<ExcelPreviewWidget> {
         _error = 'Failed to load Excel: $e';
         _loading = false;
       });
+    }
+  }
+
+  Future<List<int>> _readFileAsBytesWeb(String filePath) async {
+    // For web, we need to handle file reading differently
+    // Since the MMP service doesn't cache on web, we might need to download fresh
+    // For now, try to read as a regular file and handle the error gracefully
+    try {
+      final file = File(filePath);
+      return await file.readAsBytes();
+    } catch (e) {
+      throw Exception('Web file reading not supported. Please use external viewer.');
     }
   }
 

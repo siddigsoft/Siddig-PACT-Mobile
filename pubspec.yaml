@@ -43,6 +43,8 @@ dependencies:
   shared_preferences: ^2.2.2  # For local storage
   flutter_secure_storage: ^9.0.0 # For storing encryption keys
   local_auth: ^2.3.0         # For biometric authentication
+  local_auth_android: ^1.0.48 # Platform-specific Android authentication
+  local_auth_darwin: ^1.4.1   # Platform-specific iOS/macOS authentication
   flutter_local_notifications: ^19.4.2 # For local notifications
   connectivity_plus: ^7.0.0  # For network connectivity
   uuid: ^4.4.0              # For generating unique IDs

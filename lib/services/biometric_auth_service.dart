@@ -1,6 +1,9 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:local_auth/local_auth.dart';
+import 'package:local_auth/error_codes.dart' as auth_error;
+import 'package:local_auth_android/local_auth_android.dart';
+import 'package:local_auth_darwin/local_auth_darwin.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class BiometricAuthService {
@@ -11,6 +14,7 @@ class BiometricAuthService {
   static const String _userEmailKey = 'biometric_user_email';
 
   /// Check if device supports biometric authentication
+  /// Uses both canCheckBiometrics and isDeviceSupported as per official docs
   Future<bool> isBiometricAvailable() async {
     if (kIsWeb) {
       return false;
@@ -28,6 +32,7 @@ class BiometricAuthService {
   }
 
   /// Get list of available biometric types (fingerprint, face, etc.)
+  /// Returns enrolled biometrics on the device
   Future<List<BiometricType>> getAvailableBiometrics() async {
     if (kIsWeb) {
       return [];
@@ -42,14 +47,25 @@ class BiometricAuthService {
     }
   }
 
+  /// Check if any biometrics are enrolled on the device
+  /// As per docs: canCheckBiometrics only checks hardware, not enrollment
+  Future<bool> hasEnrolledBiometrics() async {
+    final biometrics = await getAvailableBiometrics();
+    return biometrics.isNotEmpty;
+  }
+
   /// Get friendly name for biometric type
   String getBiometricTypeName(List<BiometricType> biometrics) {
     if (biometrics.isEmpty) return 'Biometric';
     
     if (biometrics.contains(BiometricType.face)) {
       return 'Face ID';
+    } else if (biometrics.contains(BiometricType.strong)) {
+      return 'Biometric (Strong)';
     } else if (biometrics.contains(BiometricType.fingerprint)) {
       return 'Fingerprint';
+    } else if (biometrics.contains(BiometricType.weak)) {
+      return 'Biometric (Weak)';
     } else if (biometrics.contains(BiometricType.iris)) {
       return 'Iris';
     } else {
@@ -58,7 +74,13 @@ class BiometricAuthService {
   }
 
   /// Authenticate user with biometrics
-  Future<bool> authenticate({String reason = 'Please authenticate to access the app'}) async {
+  /// Enhanced with platform-specific dialog customization and proper error handling
+  Future<bool> authenticate({
+    String reason = 'Please authenticate to access the app',
+    bool biometricOnly = false,
+    bool persistAcrossBackgrounding = false,
+    bool useCustomDialog = true,
+  }) async {
     if (kIsWeb) {
       return false;
     }
@@ -71,23 +93,89 @@ class BiometricAuthService {
         return false;
       }
 
-      // Use device biometrics if available, fallback to device PIN/pattern when allowed
+      // Platform-specific dialog customization as per official docs
+      final List<AuthMessages> authMessages = useCustomDialog
+          ? <AuthMessages>[
+              const AndroidAuthMessages(
+                signInTitle: 'Biometric Authentication Required',
+                cancelButton: 'Cancel',
+                biometricHint: 'Verify your identity',
+                biometricNotRecognized: 'Not recognized. Try again.',
+                biometricSuccess: 'Authentication successful',
+                deviceCredentialsRequiredTitle: 'Device Credential Required',
+                deviceCredentialsSetupDescription: 'Please set up device credentials',
+                goToSettingsButton: 'Go to Settings',
+                goToSettingsDescription: 'Biometric authentication is not set up on your device. Go to Settings > Security to add biometric authentication.',
+              ),
+              const IOSAuthMessages(
+                cancelButton: 'Cancel',
+                goToSettingsButton: 'Settings',
+                goToSettingsDescription: 'Biometric authentication is not set up. Please set up Touch ID or Face ID.',
+                lockOut: 'Biometric authentication is locked. Please try again later.',
+              ),
+            ]
+          : const <AuthMessages>[];
+
+      // Authenticate with configured options
       final didAuthenticate = await _localAuth.authenticate(
         localizedReason: reason,
-        options: const AuthenticationOptions(
+        authMessages: authMessages,
+        options: AuthenticationOptions(
           stickyAuth: true,
-          biometricOnly: false, // allow device credential fallback
+          biometricOnly: biometricOnly,
           useErrorDialogs: true,
           sensitiveTransaction: false,
         ),
       );
       return didAuthenticate;
     } on PlatformException catch (e) {
-      print('Error during biometric authentication: $e');
+      // Handle specific error codes as per official documentation
+      if (e.code == auth_error.notAvailable) {
+        print('Biometric authentication not available on this device');
+      } else if (e.code == auth_error.notEnrolled) {
+        print('No biometric credentials enrolled. Please set up biometric authentication in device settings.');
+      } else if (e.code == auth_error.lockedOut) {
+        print('Too many failed attempts. Biometric authentication is temporarily locked.');
+      } else if (e.code == auth_error.permanentlyLockedOut) {
+        print('Too many failed attempts. Biometric authentication is permanently locked.');
+      } else if (e.code == auth_error.passcodeNotSet) {
+        print('Passcode not set. Please set up a passcode in device settings.');
+      } else {
+        print('Error during biometric authentication: $e');
+      }
       return false;
     } on MissingPluginException {
       return false;
     }
+  }
+
+  /// Authenticate with biometric only (no device credential fallback)
+  /// As per docs: requires biometric authentication explicitly
+  Future<bool> authenticateBiometricOnly({
+    String reason = 'Please authenticate with biometrics',
+  }) async {
+    // Check if biometrics are enrolled
+    final hasEnrolled = await hasEnrolledBiometrics();
+    if (!hasEnrolled) {
+      print('No biometrics enrolled on device');
+      return false;
+    }
+
+    return authenticate(
+      reason: reason,
+      biometricOnly: true,
+    );
+  }
+
+  /// Authenticate with background handling support
+  /// As per docs: persistAcrossBackgrounding prevents cancellation when app is backgrounded
+  Future<bool> authenticateWithBackgroundHandling({
+    String reason = 'Please authenticate to access the app',
+  }) async {
+    return authenticate(
+      reason: reason,
+      persistAcrossBackgrounding: true,
+    );
   }
 
   /// Check if biometric login is enabled for the user
