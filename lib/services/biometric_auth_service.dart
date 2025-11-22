@@ -5,6 +5,7 @@ import 'package:local_auth/error_codes.dart' as auth_error;
 import 'package:local_auth_android/local_auth_android.dart';
 import 'package:local_auth_darwin/local_auth_darwin.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'dart:io' show Platform;
 
 class BiometricAuthService {
   final LocalAuthentication _localAuth = LocalAuthentication();
@@ -20,13 +21,21 @@ class BiometricAuthService {
       return false;
     }
     try {
-      final bool canAuthenticateWithBiometrics = await _localAuth.canCheckBiometrics;
-      final bool canAuthenticate = canAuthenticateWithBiometrics || await _localAuth.isDeviceSupported();
+      final bool canAuthenticateWithBiometrics =
+          await _localAuth.canCheckBiometrics;
+      final bool canAuthenticate =
+          canAuthenticateWithBiometrics || await _localAuth.isDeviceSupported();
+
+      debugPrint('🔍 Biometric Availability Check:');
+      debugPrint('  canCheckBiometrics: $canAuthenticateWithBiometrics');
+      debugPrint('  isDeviceSupported: $canAuthenticate');
+
       return canAuthenticate;
     } on PlatformException catch (e) {
-      print('Error checking biometric availability: $e');
+      debugPrint('❌ Error checking biometric availability: $e');
       return false;
-    } on MissingPluginException {
+    } on MissingPluginException catch (e) {
+      debugPrint('❌ Missing plugin for biometric check: $e');
       return false;
     }
   }
@@ -57,7 +66,7 @@ class BiometricAuthService {
   /// Get friendly name for biometric type
   String getBiometricTypeName(List<BiometricType> biometrics) {
     if (biometrics.isEmpty) return 'Biometric';
-    
+
     if (biometrics.contains(BiometricType.face)) {
       return 'Face ID';
     } else if (biometrics.contains(BiometricType.strong)) {
@@ -75,6 +84,7 @@ class BiometricAuthService {
 
   /// Authenticate user with biometrics
   /// Enhanced with platform-specific dialog customization and proper error handling
+  /// For Android, this will use device credentials as fallback if biometric fails
   Future<bool> authenticate({
     String reason = 'Please authenticate to access the app',
     bool biometricOnly = false,
@@ -88,63 +98,108 @@ class BiometricAuthService {
       // Ensure device supports biometrics or device credentials
       final canUseBiometrics = await _localAuth.canCheckBiometrics;
       final isSupported = await _localAuth.isDeviceSupported();
+
+      debugPrint('BiometricAuth Debug:');
+      debugPrint('  canUseBiometrics: $canUseBiometrics');
+      debugPrint('  isSupported: $isSupported');
+      debugPrint('  Platform: ${Platform.operatingSystem}');
+
       if (!canUseBiometrics && !isSupported) {
-        print('Biometric/device authentication not supported on this device');
+        debugPrint(
+            '❌ Biometric/device authentication not supported on this device');
         return false;
       }
 
-      // Platform-specific dialog customization as per official docs
+      // Get available biometric types for logging
+      final availableBiometrics = await getAvailableBiometrics();
+      debugPrint('  Available biometrics: $availableBiometrics');
+
+      // Platform-specific dialog customization
+      // For Android, we allow device credentials as fallback (no biometricOnly constraint)
       final List<AuthMessages> authMessages = useCustomDialog
           ? <AuthMessages>[
-              const AndroidAuthMessages(
-                signInTitle: 'Biometric Authentication Required',
+              // Android-specific configuration with better error handling
+              AndroidAuthMessages(
+                signInTitle: 'Biometric Authentication',
                 cancelButton: 'Cancel',
-                biometricHint: 'Verify your identity',
-                biometricNotRecognized: 'Not recognized. Try again.',
-                biometricSuccess: 'Authentication successful',
-                deviceCredentialsRequiredTitle: 'Device Credential Required',
-                deviceCredentialsSetupDescription: 'Please set up device credentials',
-                goToSettingsButton: 'Go to Settings',
-                goToSettingsDescription: 'Biometric authentication is not set up on your device. Go to Settings > Security to add biometric authentication.',
+                biometricHint: 'Verify your identity with biometric',
+                biometricNotRecognized: 'Biometric not recognized. Try again.',
+                biometricSuccess: 'Authentication successful! Signing in...',
+                deviceCredentialsRequiredTitle: 'Authentication Required',
+                deviceCredentialsSetupDescription:
+                    'Your device requires authentication. Please use your PIN, pattern, or password.',
+                goToSettingsButton: 'Settings',
+                goToSettingsDescription:
+                    'No biometric enrolled. Go to Settings > Security > Biometric to enroll.',
               ),
+              // iOS-specific configuration
               const IOSAuthMessages(
                 cancelButton: 'Cancel',
                 goToSettingsButton: 'Settings',
-                goToSettingsDescription: 'Biometric authentication is not set up. Please set up Touch ID or Face ID.',
-                lockOut: 'Biometric authentication is locked. Please try again later.',
+                goToSettingsDescription:
+                    'Biometric authentication is not set up. Please set up Touch ID or Face ID in Settings.',
+                lockOut:
+                    'Biometric authentication is locked due to too many failed attempts. Please try again later.',
               ),
             ]
           : const <AuthMessages>[];
+
+      // For Android, we DON'T use biometricOnly to allow device credential fallback
+      // This is crucial for devices where biometric might fail but PIN is available
+      final bool shouldUseBiometricOnly = biometricOnly && !Platform.isAndroid;
 
       // Authenticate with configured options
       final didAuthenticate = await _localAuth.authenticate(
         localizedReason: reason,
         authMessages: authMessages,
         options: AuthenticationOptions(
-          stickyAuth: true,
-          biometricOnly: biometricOnly,
+          stickyAuth: persistAcrossBackgrounding,
+          biometricOnly: shouldUseBiometricOnly,
           useErrorDialogs: true,
           sensitiveTransaction: false,
         ),
       );
+
+      if (didAuthenticate) {
+        debugPrint('✅ Authentication successful');
+      } else {
+        debugPrint('❌ Authentication cancelled or failed');
+      }
+
       return didAuthenticate;
     } on PlatformException catch (e) {
       // Handle specific error codes as per official documentation
+      debugPrint('🔴 PlatformException in authenticate: ${e.code}');
+      debugPrint('  Message: ${e.message}');
+      debugPrint('  Details: ${e.details}');
+
       if (e.code == auth_error.notAvailable) {
-        print('Biometric authentication not available on this device');
+        debugPrint('❌ Biometric authentication not available on this device');
       } else if (e.code == auth_error.notEnrolled) {
-        print('No biometric credentials enrolled. Please set up biometric authentication in device settings.');
+        debugPrint(
+            '❌ No biometric credentials enrolled. Please set up biometric authentication in device settings.');
       } else if (e.code == auth_error.lockedOut) {
-        print('Too many failed attempts. Biometric authentication is temporarily locked.');
+        debugPrint(
+            '⏳ Too many failed attempts. Biometric authentication is temporarily locked.');
       } else if (e.code == auth_error.permanentlyLockedOut) {
-        print('Too many failed attempts. Biometric authentication is permanently locked.');
+        debugPrint(
+            '❌ Too many failed attempts. Biometric authentication is permanently locked. Use device PIN.');
       } else if (e.code == auth_error.passcodeNotSet) {
-        print('Passcode not set. Please set up a passcode in device settings.');
+        debugPrint(
+            '❌ Passcode not set. Please set up a PIN/pattern/password in device settings.');
+      } else if (e.code == 'notAvailable') {
+        // Sometimes returns as string instead of constant
+        debugPrint('❌ Authentication method not available (String code)');
       } else {
-        print('Error during biometric authentication: $e');
+        debugPrint(
+            '⚠️ Error during biometric authentication: ${e.code} - ${e.message}');
       }
       return false;
-    } on MissingPluginException {
+    } on MissingPluginException catch (e) {
+      debugPrint('❌ Missing Plugin: $e');
+      return false;
+    } catch (e) {
+      debugPrint('❌ Unexpected error in authenticate: $e');
       return false;
     }
   }
@@ -181,7 +236,8 @@ class BiometricAuthService {
   /// Check if biometric login is enabled for the user
   Future<bool> isBiometricEnabled() async {
     try {
-      final String? enabled = await _secureStorage.read(key: _biometricEnabledKey);
+      final String? enabled =
+          await _secureStorage.read(key: _biometricEnabledKey);
       return enabled == 'true';
     } catch (e) {
       print('Error checking if biometric is enabled: $e');

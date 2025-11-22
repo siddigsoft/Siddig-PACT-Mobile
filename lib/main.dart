@@ -135,12 +135,15 @@ void main() async {
           // Navigate to specific chat
           final chatId = payload.substring(5);
           navigatorKey.currentState?.pushNamed('/chat', arguments: chatId);
-        } else if (payload.startsWith('mmp:')) {
-          // Navigate to MMP file details
-          final fileId = payload.substring(4);
-          navigatorKey.currentState
-              ?.pushNamed('/mmp-detail', arguments: fileId);
-        } else if (payload.startsWith('notif:')) {
+        }
+        // MMP code commented out
+        // else if (payload.startsWith('mmp:')) {
+        //   // Navigate to MMP file details
+        //   final fileId = payload.substring(4);
+        //   navigatorKey.currentState
+        //       ?.pushNamed('/mmp-detail', arguments: fileId);
+        // }
+        else if (payload.startsWith('notif:')) {
           final notificationId = payload.substring(6);
           navigatorKey.currentState?.pushNamed(
             '/main',

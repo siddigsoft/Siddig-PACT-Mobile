@@ -1,3 +1,8 @@
+// MMP File View Screen - COMMENTED OUT
+// This screen is no longer used. MMP functionality has been frozen.
+// Uncomment if you need to re-enable MMP file viewing in the future.
+
+/*
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -153,3 +158,4 @@ class MMPFileViewScreen extends StatelessWidget {
     );
   }
 }
+*/
