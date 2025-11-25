@@ -72,8 +72,45 @@ class SiteVisit {
     this.arrivalRecorded = false,
   });
   factory SiteVisit.fromJson(Map<String, dynamic> json) {
+    // Handle mmp_site_entries schema
+    if (json.containsKey('mmp_file_id')) {
+      return SiteVisit(
+        id: json['id']?.toString() ?? '',
+        userId: json['accepted_by'], // Map accepted_by to userId/assignedTo
+        siteName: json['site_name'] ?? '',
+        siteCode: json['site_code'] ?? '',
+        status: json['status'] ?? 'Pending',
+        locality: json['locality'] ?? '',
+        state: json['state'] ?? '',
+        activity: json['activity_at_site'] ?? json['main_activity'] ?? '',
+        priority: 'Medium', // Default as not in schema
+        dueDate: json['visit_date'] != null ? DateTime.tryParse(json['visit_date']) : null,
+        notes: json['comments'] ?? '',
+        mainActivity: json['main_activity'] ?? '',
+        location: null, // Location is separate now
+        fees: {
+          'enumerator_fee': json['enumerator_fee'],
+          'transport_fee': json['transport_fee'],
+        },
+        visitData: json['additional_data'],
+        assignedTo: json['accepted_by'] ?? '',
+        assignedBy: json['dispatched_by'],
+        assignedAt: json['dispatched_at'] != null ? DateTime.tryParse(json['dispatched_at']) : null,
+        attachments: null,
+        completedAt: json['status'] == 'Completed' ? DateTime.tryParse(json['updated_at']) : null,
+        rating: null,
+        mmpId: json['mmp_file_id'],
+        createdAt: json['created_at'] != null ? DateTime.parse(json['created_at']) : DateTime.now(),
+        arrivalLatitude: null,
+        arrivalLongitude: null,
+        arrivalTimestamp: null,
+        journeyPath: null,
+        arrivalRecorded: false,
+      );
+    }
+
     return SiteVisit(
-      id: json['id'] ?? '',
+      id: json['id']?.toString() ?? '',
       userId: json['user_id'],
       siteName: json['site_name'] ?? '',
       siteCode: json['site_code'] ?? '',

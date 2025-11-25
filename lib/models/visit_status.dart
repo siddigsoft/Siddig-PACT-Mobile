@@ -34,8 +34,11 @@ VisitStatus visitStatusFromString(String status) {
     case 'pending':
       return VisitStatus.pending;
     case 'available':
+    case 'dispatched': // Map dispatched to available
       return VisitStatus.available;
     case 'assigned':
+    case 'accepted': // Map accepted to assigned
+    case 'accept':
       return VisitStatus.assigned;
     case 'in_progress':
     case 'inprogress':

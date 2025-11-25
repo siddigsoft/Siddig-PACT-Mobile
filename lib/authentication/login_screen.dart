@@ -78,25 +78,49 @@ class _LoginScreenState extends State<LoginScreen>
 
   /// Check if biometric authentication is available and enabled
   Future<void> _checkBiometricAvailability() async {
-    final isAvailable = await _biometricService.isBiometricAvailable();
-    final isEnabled = await _biometricService.isBiometricEnabled();
+    try {
+      final isAvailable = await _biometricService.isBiometricAvailable();
+      final isEnabled = await _biometricService.isBiometricEnabled();
+      final hasEnrolled = await _biometricService.hasEnrolledBiometrics();
+      // Note: Device credentials are automatically checked as part of isBiometricAvailable()
 
-    if (isAvailable) {
-      final biometrics = await _biometricService.getAvailableBiometrics();
-      final typeName = _biometricService.getBiometricTypeName(biometrics);
+      debugPrint('📱 Biometric Check Results:');
+      debugPrint('  Available: $isAvailable');
+      debugPrint('  Enabled: $isEnabled');
+      debugPrint('  Has Enrolled: $hasEnrolled');
+      debugPrint('  Device Credentials: Available via fallback in authentication');
 
-      setState(() {
-        _isBiometricAvailable = isAvailable;
-        _isBiometricEnabled = isEnabled;
-        _biometricType = typeName;
-      });
+      if (isAvailable) {
+        final biometrics = await _biometricService.getAvailableBiometrics();
+        final typeName = _biometricService.getBiometricTypeName(biometrics);
+        debugPrint('  Biometric Types: $biometrics');
+        debugPrint('  Type Name: $typeName');
 
-      // Auto-attempt biometric login if enabled
-      if (isEnabled) {
-        Future.delayed(const Duration(milliseconds: 500), () {
-          _attemptBiometricLogin();
+        setState(() {
+          _isBiometricAvailable = isAvailable;
+          _isBiometricEnabled = isEnabled;
+          _biometricType = typeName;
+        });
+
+        // Auto-attempt biometric login if enabled
+        if (isEnabled) {
+          Future.delayed(const Duration(milliseconds: 500), () {
+            _attemptBiometricLogin();
+          });
+        }
+      } else {
+        debugPrint('❌ Biometrics not available on this device');
+        setState(() {
+          _isBiometricAvailable = false;
+          _isBiometricEnabled = false;
         });
       }
+    } catch (e) {
+      debugPrint('❌ Error checking biometric availability: $e');
+      setState(() {
+        _isBiometricAvailable = false;
+        _isBiometricEnabled = false;
+      });
     }
   }
 
@@ -104,12 +128,19 @@ class _LoginScreenState extends State<LoginScreen>
   Future<void> _attemptBiometricLogin() async {
     if (!_isBiometricEnabled || _isLoading) return;
 
+    debugPrint('🔐 Attempting biometric login...');
+
     try {
       final authenticated = await _biometricService.authenticate(
         reason: 'Login to PACT Mobile',
       );
 
-      if (!authenticated) return;
+      if (!authenticated) {
+        debugPrint('❌ Biometric authentication failed or cancelled');
+        return;
+      }
+
+      debugPrint('✅ Biometric authentication successful');
 
       setState(() => _isLoading = true);
 
@@ -118,8 +149,11 @@ class _LoginScreenState extends State<LoginScreen>
       final email = credentials['email'];
       final password = credentials['password'];
 
+      debugPrint('📧 Retrieved stored credentials: email=${email != null ? 'present' : 'null'}, password=${password != null ? 'present' : 'null'}');
+
       if (email == null || password == null) {
         // Credentials not found, disable biometric
+        debugPrint('❌ Stored credentials not found, disabling biometric');
         await _biometricService.disableBiometric();
         setState(() {
           _isBiometricEnabled = false;
@@ -137,11 +171,13 @@ class _LoginScreenState extends State<LoginScreen>
       }
 
       // Attempt login
+      debugPrint('🔑 Attempting login with stored credentials...');
       final response =
           await _authService.signIn(email: email, password: password);
 
       if (mounted) {
         if (response.user != null) {
+          debugPrint('✅ Biometric login successful');
           HapticFeedback.mediumImpact();
 
           await RealtimeNotificationService().initialize();
@@ -151,18 +187,27 @@ class _LoginScreenState extends State<LoginScreen>
             Navigator.pushReplacementNamed(context, '/main');
           }
         } else {
-          setState(() => _isLoading = false);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Login failed. Please try again.'),
-              backgroundColor: Colors.red,
-            ),
-          );
+          debugPrint('❌ Login failed with stored credentials');
+          // Disable biometric if login fails
+          await _biometricService.disableBiometric();
+          setState(() {
+            _isBiometricEnabled = false;
+            _isLoading = false;
+          });
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Login failed. Please try again.'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
         }
       }
     } catch (e) {
+      debugPrint('❌ Error during biometric login: $e');
+      setState(() => _isLoading = false);
       if (mounted) {
-        setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Biometric login error: $e'),

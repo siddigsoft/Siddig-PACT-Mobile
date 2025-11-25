@@ -89,9 +89,9 @@ class SiteVisitService {
 
   Future<List<SiteVisit>> getAvailableSiteVisits() async {
     final response = await _supabase
-        .from('site_visits')
+        .from('mmp_site_entries')
         .select()
-        .eq('status', 'available')
+        .eq('status', 'Dispatched')
         .order('created_at', ascending: false);
 
     return response.map((json) => SiteVisit.fromJson(json)).toList();
@@ -99,13 +99,226 @@ class SiteVisitService {
 
   Future<List<SiteVisit>> getAcceptedSiteVisits(String userId) async {
     final response = await _supabase
-        .from('site_visits')
+        .from('mmp_site_entries')
         .select()
-        .eq('assigned_to', userId)
-        .eq('status', 'accepted')
+        .eq('accepted_by', userId)
+        .inFilter('status', ['Accepted', 'Accept']) // Support both for compatibility
         .order('created_at', ascending: false);
 
     return response.map((json) => SiteVisit.fromJson(json)).toList();
+  }
+
+  Future<List<SiteVisit>> getOngoingSiteVisits(String userId) async {
+    final response = await _supabase
+        .from('mmp_site_entries')
+        .select()
+        .eq('accepted_by', userId)
+        .inFilter('status', ['Ongoing', 'In Progress'])
+        .order('created_at', ascending: false);
+
+    return response.map((json) => SiteVisit.fromJson(json)).toList();
+  }
+
+  Future<List<SiteVisit>> getCompletedSiteVisits(String userId) async {
+    final response = await _supabase
+        .from('mmp_site_entries')
+        .select()
+        .eq('accepted_by', userId)
+        .inFilter('status', ['Completed', 'Complete'])
+        .order('updated_at', ascending: false);
+
+    return response.map((json) => SiteVisit.fromJson(json)).toList();
+  }
+
+  Future<void> acceptVisit(String visitId, String userId) async {
+    print('Attempting to accept visit: $visitId by user: $userId');
+    try {
+      // First check whether the visit exists in mmp_site_entries
+      final existing = await _supabase
+          .from('mmp_site_entries')
+          .select('id, status')
+          .eq('id', visitId)
+          .maybeSingle();
+
+      if (existing == null) {
+        // The record doesn't exist in mmp_site_entries — don't silently operate on other tables
+        print('Visit $visitId not found in mmp_site_entries; updating legacy site_visits');
+        await _supabase.from('site_visits').update({
+          'status': 'assigned', // site_visits uses 'assigned' usually
+          'assigned_to': userId,
+          'assigned_at': DateTime.now().toIso8601String(),
+        }).eq('id', visitId);
+        return;
+      }
+
+      // Attempt an update on the canonical table
+      final response = await _supabase
+          .from('mmp_site_entries')
+          .update({
+            'status': 'Accepted',
+            'accepted_by': userId,
+            'accepted_at': DateTime.now().toIso8601String(),
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('id', visitId)
+          .select();
+
+      print('Update response: $response');
+
+      if (response.isEmpty) {
+        // Empty result means update did not succeed (possible RLS / permission issues)
+        final msg =
+            'Unable to update visit in mmp_site_entries. This is commonly caused by database row-level-security (RLS) or insufficient permissions for the current user.';
+        print(msg);
+        throw Exception(msg);
+      }
+      print('Successfully accepted visit: $visitId in mmp_site_entries');
+
+      // Capture and store user location to location_logs table
+      try {
+        print('📍 Capturing location for visit acceptance...');
+        final position = await Geolocator.getCurrentPosition(
+          timeLimit: const Duration(seconds: 10),
+        );
+        
+        print('✓ Location captured: ${position.latitude}, ${position.longitude}');
+        
+        // Insert location into location_logs table
+        await _supabase.from('location_logs').insert({
+          'visit_id': visitId,
+          'user_id': userId,
+          'latitude': position.latitude,
+          'longitude': position.longitude,
+          'accuracy': position.accuracy,
+          'altitude': position.altitude,
+          'speed': position.speed,
+          'heading': position.heading,
+          'timestamp': DateTime.now().toIso8601String(),
+          'location_type': 'acceptance', // Mark as acceptance location
+        });
+        
+        print('✅ Location logged to location_logs table');
+      } catch (locError) {
+        // Log location error but don't fail the accept operation
+        print('⚠️ Warning: Could not capture location during acceptance: $locError');
+        print('Visit acceptance succeeded, but location capture failed.');
+      }
+    } catch (e) {
+      print('Error accepting visit: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> rejectVisit(String visitId, String userId, String reason) async {
+    await _supabase.from('visit_rejections').insert({
+      'visit_id': visitId,
+      'user_id': userId,
+      'reason': reason,
+      'created_at': DateTime.now().toIso8601String(),
+    });
+  }
+
+  Future<void> startVisit(String visitId) async {
+    print('Starting visit: $visitId');
+    try {
+      // Verify whether this visit exists in mmp_site_entries
+      final existing = await _supabase
+          .from('mmp_site_entries')
+          .select('id, status')
+          .eq('id', visitId)
+          .maybeSingle();
+
+      if (existing == null) {
+        // Not an mmp_site_entries row — update legacy table instead
+        print('Visit $visitId not found in mmp_site_entries; updating site_visits');
+        await _supabase.from('site_visits').update({
+          'status': 'in_progress',
+          'updated_at': DateTime.now().toIso8601String(),
+        }).eq('id', visitId);
+      } else {
+        final response = await _supabase
+            .from('mmp_site_entries')
+            .update({
+              'status': 'Ongoing',
+              'updated_at': DateTime.now().toIso8601String(),
+            })
+            .eq('id', visitId)
+            .select();
+
+        if (response.isEmpty) {
+          final msg =
+              'Unable to update visit to Ongoing in mmp_site_entries. This may be caused by row-level-security (RLS) or insufficient permissions.';
+          print(msg);
+          throw Exception(msg);
+        }
+      }
+
+      // Capture location
+      try {
+        final position = await Geolocator.getCurrentPosition();
+        await _supabase.from('site_locations').insert({
+          'site_id': visitId,
+          'user_id': _supabase.auth.currentUser?.id,
+          'latitude': position.latitude,
+          'longitude': position.longitude,
+          'accuracy': position.accuracy,
+          'recorded_at': DateTime.now().toIso8601String(),
+        });
+      } catch (e) {
+        // If this is an RLS error (Postgrest 42501) give a clearer message
+        final msg = e.toString();
+        if (msg.contains('row-level') || msg.contains('42501') || msg.toLowerCase().contains('policy') || msg.toLowerCase().contains('permission')) {
+          final friendly = 'Failed to save start location due to database permissions (RLS). Contact admin to grant insert permission for site_locations.';
+          print('Error capturing start location: $msg');
+          throw Exception(friendly);
+        }
+        print('Error capturing start location: $e');
+        rethrow;
+      }
+    } catch (e) {
+      print('Error starting visit: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> completeVisit(String visitId) async {
+    print('Completing visit: $visitId');
+    try {
+      // Ensure the row is in mmp_site_entries
+      final existing = await _supabase
+          .from('mmp_site_entries')
+          .select('id, status')
+          .eq('id', visitId)
+          .maybeSingle();
+
+      if (existing == null) {
+        print('Visit $visitId not found in mmp_site_entries; updating legacy site_visits');
+        await _supabase.from('site_visits').update({
+          'status': 'completed',
+          'completed_at': DateTime.now().toIso8601String(),
+        }).eq('id', visitId);
+        return;
+      }
+
+      final response = await _supabase
+          .from('mmp_site_entries')
+          .update({
+            'status': 'Completed',
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('id', visitId)
+          .select();
+
+      if (response.isEmpty) {
+        final msg =
+            'Unable to update visit to Completed in mmp_site_entries. This may be caused by row-level-security (RLS) or insufficient permissions.';
+        print(msg);
+        throw Exception(msg);
+      }
+    } catch (e) {
+      print('Error completing visit: $e');
+      rethrow;
+    }
   }
 
   Future<List<SiteVisit>> getAssignedPendingSiteVisits(String userId) async {

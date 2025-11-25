@@ -639,7 +639,7 @@ class MMPFileService {
       );
       LoggerService.log('Successfully downloaded and cached ${file.name ?? file.id}');
       return downloadedPath;
-    } on SocketException catch (e) {
+    } on SocketException {
       // Offline - use cached version if available
       if (existingPath != null) {
         LoggerService.log('Offline, using cached version for ${file.name ?? file.id}');

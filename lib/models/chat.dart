@@ -73,7 +73,7 @@ class Chat {
         } else if (item is Map) {
           participants.add(
             ChatParticipant.fromJson(
-              Map<String, dynamic>.from(item as Map),
+              Map<String, dynamic>.from(item),
             ),
           );
         }

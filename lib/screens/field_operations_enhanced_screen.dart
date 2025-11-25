@@ -581,69 +581,33 @@ class _FieldOperationsEnhancedScreenState
         throw Exception('User not authenticated');
       }
 
-      final connectivityStatus = await Connectivity().checkConnectivity();
-      if (connectivityStatus != ConnectivityResult.none) {
-        unawaited(_siteVisitService.syncQueuedVisits());
-      }
-
-      List<SiteVisit> cachedVisits = [];
-      try {
-        cachedVisits =
-            await _siteVisitService.getAssignedSiteVisitsFromCache(userId);
-      } catch (cacheError) {
-        debugPrint('Failed to load cached visits: $cacheError');
-      }
-
-      if (cachedVisits.isNotEmpty && mounted) {
-        setState(() {
-          _availableVisits = cachedVisits;
-          _myVisits =
-              cachedVisits.where((v) => v.assignedTo == userId).toList();
-          _isLoading = false;
-        });
-        _updateMarkers();
-      }
-
-      final visitData =
-          await _siteVisitService.getAssignedSiteVisitsCached(userId);
-      final allVisits =
-          visitData.map((data) => SiteVisit.fromJson(data)).toList();
-
-      // Show all assigned visits (removed location filtering for reliability)
-      final filteredVisits =
-          allVisits; // when implementing geofencing based on city change this
+      // Fetch from new service methods
+      final available = await _siteVisitService.getAvailableSiteVisits();
+      final accepted = await _siteVisitService.getAcceptedSiteVisits(userId);
+      final ongoing = await _siteVisitService.getOngoingSiteVisits(userId);
+      final completed = await _siteVisitService.getCompletedSiteVisits(userId);
 
       if (mounted) {
         setState(() {
-          _availableVisits = filteredVisits;
-          _myVisits =
-              filteredVisits.where((v) => v.assignedTo == userId).toList();
+          _availableVisits = available;
+          // Include available (dispatched) visits in My Visits list
+          _myVisits = [...available, ...accepted, ...ongoing, ...completed];
           _isLoading = false;
         });
       }
-
       _updateMarkers();
     } catch (e) {
       debugPrint('Error loading visits: $e');
       if (mounted) {
-        if (_availableVisits.isEmpty) {
-          setState(() {
-            _isLoading = false;
-          });
-        }
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted) return;
-          final hasCached = _availableVisits.isNotEmpty;
-          final message = hasCached
-              ? 'Offline mode: showing last synced site visits.'
-              : 'Unable to load site visits. Check your connection and try again.';
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(message),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
+        setState(() {
+          _isLoading = false;
         });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error loading visits: $e'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
       }
     }
   }
@@ -720,6 +684,7 @@ class _FieldOperationsEnhancedScreenState
         visit: visit,
         onStatusChanged: (newStatus) =>
             _handleVisitStatusChanged(visit, newStatus),
+        onReject: (reason) => _handleVisitRejection(visit, reason),
         isTrackingJourney: isTrackedVisit && _isTrackingJourney,
         isNearDestination: isNear,
         onArrived: isTrackedVisit ? _handleArrived : null,
@@ -733,6 +698,26 @@ class _FieldOperationsEnhancedScreenState
     );
   }
 
+  Future<void> _handleVisitRejection(SiteVisit visit, String reason) async {
+    try {
+      final userId = _authService.currentUser?.id;
+      if (userId == null) return;
+      
+      await _siteVisitService.rejectVisit(visit.id, userId, reason);
+      await _loadVisits();
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Visit rejected successfully')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        context.showError(e);
+      }
+    }
+  }
+
   // Handle visit status changes
   Future<void> _handleVisitStatusChanged(
     SiteVisit visit,
@@ -744,40 +729,74 @@ class _FieldOperationsEnhancedScreenState
         debugPrint('Visit ${visit.id} already in status $newStatus; skipping');
         return;
       }
-      final visitStatus = visitStatusFromString(newStatus);
-      // Ensure the visit carries the current user's ID for RLS-compliant updates
+      
       final userId = _authService.currentUser?.id;
-      final updatedVisit = visit.copyWith(
-        status: newStatus,
-        userId: visit.userId ?? userId,
-      );
+      if (userId == null) return;
 
-      // If visit was in-progress and is now completed, stop tracking
-      if (visitStatus == VisitStatus.completed &&
-          _locationTrackingService.getCurrentVisitId() == visit.id) {
-        await _locationTrackingService.stopTracking();
-      }
-
-      // If visit is now in-progress, start tracking
-      if (visitStatus == VisitStatus.inProgress &&
-          _locationTrackingService.getCurrentVisitId() != visit.id) {
+      if (newStatus == 'Accepted' || newStatus == 'Accept') {
+        await _siteVisitService.acceptVisit(visit.id, userId);
+        // Start tracking location upon acceptance
         await _locationTrackingService.startTracking(visit.id);
+        // Reload visits and update UI
+        await _loadVisits();
+      } else if (newStatus == 'Ongoing') {
+        await _siteVisitService.startVisit(visit.id);
+        // Reload visits and update UI
+        await _loadVisits();
+      } else if (newStatus == 'Completed' || newStatus == 'Complete') {
+        await _siteVisitService.completeVisit(visit.id);
+        // Stop tracking
+        await _locationTrackingService.stopTracking();
+        // Show report form - don't reload visits yet, let the report callback handle it
+        _showReportFormSheet(visit);
+      } else {
+        // Fallback for other statuses or legacy logic
+        final visitStatus = visitStatusFromString(newStatus);
+        final updatedVisit = visit.copyWith(
+          status: newStatus,
+          userId: visit.userId ?? userId,
+        );
+
+        // If visit was in-progress and is now completed, stop tracking
+        if (visitStatus == VisitStatus.completed &&
+            _locationTrackingService.getCurrentVisitId() == visit.id) {
+          await _locationTrackingService.stopTracking();
+        }
+
+        // If visit is now in-progress, start tracking
+        if (visitStatus == VisitStatus.inProgress &&
+            _locationTrackingService.getCurrentVisitId() != visit.id) {
+          await _locationTrackingService.startTracking(visit.id);
+        }
+
+        // Update visit in Supabase (with offline cache support)
+        await _siteVisitService.updateSiteVisitCached(updatedVisit);
+
+        // Show report form if completed
+        if (visitStatus == VisitStatus.completed) {
+          debugPrint('Visit ${visit.id} marked completed; opening report form');
+          _showReportFormSheet(updatedVisit);
+        } else {
+          // Reload visits only if not completing (completion reload is handled by report callback)
+          await _loadVisits();
+        }
       }
-
-      // Update visit in Supabase (with offline cache support)
-      await _siteVisitService.updateSiteVisitCached(updatedVisit);
-
-      // Show report form if completed
-      if (visitStatus == VisitStatus.completed) {
-        debugPrint('Visit ${visit.id} marked completed; opening report form');
-        _showReportFormSheet(updatedVisit);
-      }
-
-      // Reload visits and update UI
-      await _loadVisits();
     } catch (e) {
+      debugPrint('Error in _handleVisitStatusChanged: $e'); // Added logging
       if (mounted) {
-        context.showError(e);
+        // Friendly error message for common DB permission problems
+        final message = e.toString();
+        if (message.contains('row-level-security') || message.contains('RLS') || message.contains('42501') ||
+            message.toLowerCase().contains('permission')) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Permission denied: cannot update visit in remote database. Contact admin or try again later.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        } else {
+          context.showError(e);
+        }
       }
     }
   }
@@ -791,23 +810,21 @@ class _FieldOperationsEnhancedScreenState
       builder: (context) => ReportFormSheet(
         visit: visit,
         onReportSubmitted: (report) {
-          // Reload visits after report submission, then show capture location
-          _loadVisits().then((_) async {
-            try {
-              final refreshed =
-                  await _siteVisitService.getSiteVisitById(visit.id);
-              if (!mounted) return;
-              if (refreshed != null) {
-                // Reopen details with reportSubmitted=true so capture button is shown
-                _showVisitDetailsSheet(refreshed, reportSubmitted: true);
-              } else {
-                // Fallback: show original with flag
-                _showVisitDetailsSheet(visit, reportSubmitted: true);
-              }
-            } catch (_) {
-              if (!mounted) return;
-              _showVisitDetailsSheet(visit, reportSubmitted: true);
-            }
+          // Simply close the report form and reload visits
+          // Don't open another sheet to avoid UI conflicts
+          Navigator.of(context).pop();
+          
+          // Reload visits after report submission
+          _loadVisits().then((_) {
+            if (!mounted) return;
+            // Show success message
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Report submitted successfully!'),
+                backgroundColor: Colors.green,
+                duration: Duration(seconds: 2),
+              ),
+            );
           });
         },
       ),
@@ -2024,6 +2041,11 @@ class _FieldOperationsEnhancedScreenState
     final status = visitStatusFromString(visit.status);
 
     switch (status) {
+      case VisitStatus.available:
+        statusColor = Colors.red;
+        statusType = StatusType.error;
+        statusIcon = Icons.assignment_late;
+        break;
       case VisitStatus.assigned:
         statusColor = AppColors.primaryBlue;
         statusType = StatusType.info;

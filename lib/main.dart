@@ -9,9 +9,11 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import '../services/biometric_auth_service.dart';
 import 'authentication/login_screen.dart';
 import 'authentication/improved_register_screen.dart';
 import 'authentication/forgot_password_screen.dart';
+import 'authentication/biometric_prompt_screen.dart';
 import 'screens/main_screen.dart';
 import 'screens/field_operations_enhanced_screen.dart';
 import 'screens/comprehensive_monitoring_form_screen.dart';
@@ -167,6 +169,31 @@ void main() async {
 
   debugPrint('📱 Notification services initialized');
 
+  // Check authentication state and biometric status
+  final currentUser = Supabase.instance.client.auth.currentUser;
+  String initialRoute = '/login';
+
+  if (currentUser != null) {
+    // User is logged in, check if biometrics are enabled
+    try {
+      final biometricService = BiometricAuthService();
+      final isBiometricEnabled = await biometricService.isBiometricEnabled();
+      final isBiometricAvailable = await biometricService.isBiometricAvailable();
+
+      if (isBiometricEnabled && isBiometricAvailable) {
+        // Show biometric prompt screen
+        initialRoute = '/biometric-prompt';
+      } else {
+        // User logged in but no biometrics, go to main
+        initialRoute = '/main';
+      }
+    } catch (e) {
+      debugPrint('Error checking biometric status: $e');
+      // Fallback to main screen if biometric check fails
+      initialRoute = '/main';
+    }
+  }
+
   // Runs the main application
   runApp(
     MultiProvider(
@@ -180,15 +207,16 @@ void main() async {
           ),
         ),
       ],
-      child: MyApp(routeObserver: routeObserver),
+      child: MyApp(routeObserver: routeObserver, initialRoute: initialRoute),
     ),
   );
 }
 
 class MyApp extends StatelessWidget {
   final RouteObserver<PageRoute>? routeObserver;
+  final String initialRoute;
 
-  const MyApp({super.key, this.routeObserver});
+  const MyApp({super.key, this.routeObserver, required this.initialRoute});
 
   @override
   Widget build(BuildContext context) {
@@ -244,12 +272,13 @@ class MyApp extends StatelessWidget {
 
           // Set up routing for proper URL display
           // Do not set home when using initialRoute
-          initialRoute: '/login',
+          initialRoute: initialRoute,
 
           // Define routes for navigation throughout the app
           routes: {
             '/': (_) => LoginScreen(),
             '/login': (_) => LoginScreen(),
+            '/biometric-prompt': (_) => BiometricPromptScreen(),
             '/register': (_) => ImprovedRegisterScreen(),
             '/forgot-password': (_) => ForgotPasswordScreen(),
             '/main': (_) => MainScreen(),
@@ -265,6 +294,7 @@ class MyApp extends StatelessWidget {
             // Only for routes not defined in routes map
             switch (settings.name) {
               case '/login':
+              case '/biometric-prompt':
               case '/register':
               case '/forgot-password':
               case '/main':
@@ -274,6 +304,7 @@ class MyApp extends StatelessWidget {
                 final routeBuilders = {
                   '/': (_) => LoginScreen(),
                   '/login': (_) => LoginScreen(),
+                  '/biometric-prompt': (_) => BiometricPromptScreen(),
                   '/register': (_) => ImprovedRegisterScreen(),
                   '/forgot-password': (_) => ForgotPasswordScreen(),
                   '/main': (_) => MainScreen(),

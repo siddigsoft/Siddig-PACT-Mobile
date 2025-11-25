@@ -102,7 +102,11 @@ class BiometricAuthService {
       debugPrint('BiometricAuth Debug:');
       debugPrint('  canUseBiometrics: $canUseBiometrics');
       debugPrint('  isSupported: $isSupported');
-      debugPrint('  Platform: ${Platform.operatingSystem}');
+      try {
+        debugPrint('  Platform: ${Platform.operatingSystem}');
+      } catch (e) {
+        debugPrint('  Platform: (unable to detect on this platform)');
+      }
 
       if (!canUseBiometrics && !isSupported) {
         debugPrint(

@@ -261,7 +261,7 @@ class ChatService {
 
           final profile = map['profiles'];
           final profileMap =
-              profile is Map ? Map<String, dynamic>.from(profile as Map) : null;
+              profile is Map ? Map<String, dynamic>.from(profile) : null;
           final username = (profileMap?['username'] as String?)?.trim();
           final fullName = (profileMap?['full_name'] as String?)?.trim();
           final email = (profileMap?['email'] as String?)?.trim();
@@ -711,7 +711,7 @@ class ChatService {
         final map = Map<String, dynamic>.from(json);
         final profile = map['profiles'];
         final profileMap =
-            profile is Map ? Map<String, dynamic>.from(profile as Map) : null;
+            profile is Map ? Map<String, dynamic>.from(profile) : null;
         final username = (profileMap?['username'] as String?)?.trim();
         final fullName = (profileMap?['full_name'] as String?)?.trim();
         final email = (profileMap?['email'] as String?)?.trim();

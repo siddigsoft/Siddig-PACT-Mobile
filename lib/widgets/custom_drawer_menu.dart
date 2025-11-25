@@ -9,7 +9,7 @@ import '../theme/app_colors.dart';
 import '../widgets/app_widgets.dart';
 import '../utils/error_handler.dart';
 
-class CustomDrawerMenu extends StatelessWidget {
+class CustomDrawerMenu extends StatefulWidget {
   final User? currentUser;
   final VoidCallback onClose;
 
@@ -18,6 +18,39 @@ class CustomDrawerMenu extends StatelessWidget {
     required this.currentUser,
     required this.onClose,
   });
+
+  @override
+  State<CustomDrawerMenu> createState() => _CustomDrawerMenuState();
+}
+
+class _CustomDrawerMenuState extends State<CustomDrawerMenu> {
+  String _userRole = 'Loading...';
+
+  @override
+  void initState() {
+    super.initState();
+    _userRole = widget.currentUser?.userMetadata?['role'] ?? 'User';
+    _fetchUserRole();
+  }
+
+  Future<void> _fetchUserRole() async {
+    if (widget.currentUser == null) return;
+    try {
+      final response = await Supabase.instance.client
+          .from('user_roles')
+          .select('role')
+          .eq('user_id', widget.currentUser!.id)
+          .maybeSingle();
+      
+      if (response != null && mounted) {
+        setState(() {
+          _userRole = response['role'] as String;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error fetching role: $e');
+    }
+  }
 
   Future<void> _launchUrl(
       BuildContext context, String urlString, String errorMessage) async {
@@ -126,11 +159,10 @@ class CustomDrawerMenu extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final userName = currentUser?.userMetadata?['full_name'] ?? 'User';
-    final userEmail = currentUser?.email ?? '';
+    final userName = widget.currentUser?.userMetadata?['full_name'] ?? 'User';
+    final userEmail = widget.currentUser?.email ?? '';
     final userInitial = userName.isNotEmpty ? userName[0].toUpperCase() : 'U';
-    final userRole = currentUser?.userMetadata?['role'] ?? 'User';
-
+    
     return Drawer(
       child: Container(
         decoration: BoxDecoration(
@@ -248,7 +280,7 @@ class CustomDrawerMenu extends StatelessWidget {
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(
-                          userRole,
+                          _userRole,
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 12,
@@ -278,7 +310,7 @@ class CustomDrawerMenu extends StatelessWidget {
                         iconColor: AppColors.primaryOrange,
                         onTap: () async {
                           await _launchPactDashboard(context);
-                          onClose();
+                          widget.onClose();
                         },
                       ),
                       _MenuItemData(
@@ -288,7 +320,7 @@ class CustomDrawerMenu extends StatelessWidget {
                         iconColor: Colors.blue,
                         onTap: () async {
                           await _performSync(context);
-                          onClose();
+                          widget.onClose();
                         },
                       ),
                     ],
@@ -305,7 +337,7 @@ class CustomDrawerMenu extends StatelessWidget {
                         iconColor: Colors.green,
                         onTap: () async {
                           await _launchPactWebsite(context);
-                          onClose();
+                          widget.onClose();
                         },
                       ),
                       _MenuItemData(
@@ -315,7 +347,7 @@ class CustomDrawerMenu extends StatelessWidget {
                         iconColor: Colors.purple,
                         onTap: () async {
                           await _sendFeedback(context);
-                          onClose();
+                          widget.onClose();
                         },
                       ),
                     ],

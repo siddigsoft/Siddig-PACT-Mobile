@@ -1,6 +1,5 @@
 import 'package:sqflite/sqflite.dart';
 import '../models/equipment.dart';
-import '../services/supabase_service.dart';
 import 'base_repository.dart';
 
 class EquipmentRepository extends BaseRepository<Equipment> {

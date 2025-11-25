@@ -11,10 +11,12 @@ import '../../services/staff_tracking_service.dart';
 import '../../services/location_tracking_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../services/offline_data_service.dart';
+import 'report_form_sheet.dart';
 
 class VisitDetailsSheet extends StatefulWidget {
   final SiteVisit visit;
   final Future<void> Function(String) onStatusChanged;
+  final Future<void> Function(String)? onReject; // New callback for rejection
   final bool isTrackingJourney;
   final bool isNearDestination;
   final VoidCallback? onArrived;
@@ -28,6 +30,7 @@ class VisitDetailsSheet extends StatefulWidget {
     super.key,
     required this.visit,
     required this.onStatusChanged,
+    this.onReject,
     this.isTrackingJourney = false,
     this.isNearDestination = false,
     this.onArrived,
@@ -196,6 +199,14 @@ class _VisitDetailsSheetState extends State<VisitDetailsSheet> {
       await widget
           .onStatusChanged(newStatus)
           .timeout(const Duration(seconds: 20));
+      
+      // Update local state to reflect the change immediately
+      if (mounted) {
+        setState(() {
+          _visit = _visit.copyWith(status: newStatus);
+        });
+      }
+
       // If we successfully marked as completed, close this bottom sheet so the parent can show the report form cleanly
       if (newStatus.toLowerCase() == 'completed') {
         shouldCloseSheet = true;
@@ -243,6 +254,64 @@ class _VisitDetailsSheetState extends State<VisitDetailsSheet> {
       }
       if (mounted) setState(() => _isUpdating = false);
     }
+  }
+
+  Future<void> _updateVisitStatusAndShowReport() async {
+    // 1. Update status to Completed
+    // We can't easily await _updateVisitStatus because it returns void.
+    // But we can replicate its logic or just call it and hope for the best, 
+    // OR better, we can use the widget.onStatusChanged directly which returns Future<void>.
+    
+    if (_isUpdating) return;
+    setState(() => _isUpdating = true);
+    
+    // Show progress
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const _ProgressDialog(title: 'Updating', message: 'Completing visit...'),
+    );
+
+    try {
+      // Call the parent callback directly to await it
+      await widget.onStatusChanged('Completed');
+      
+      // Also stop tracking if needed (logic usually in parent, but let's be safe)
+      // The parent _handleVisitStatusChanged handles stopTracking for 'Completed'.
+      
+      if (mounted) {
+        Navigator.pop(context); // Close progress dialog
+        setState(() => _isUpdating = false);
+        
+        // 2. Show Report Form immediately
+        _showReportForm();
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context); // Close progress dialog
+        setState(() => _isUpdating = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error completing visit: $e')),
+        );
+      }
+    }
+  }
+
+  void _showReportForm() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => ReportFormSheet(
+        visit: _visit,
+        onReportSubmitted: (report) {
+          setState(() {
+            _hasReport = true;
+          });
+          // Optionally close the details sheet too, or just let user see "View Report"
+        },
+      ),
+    );
   }
 
   void _showReportDialog() {
@@ -389,18 +458,23 @@ class _VisitDetailsSheetState extends State<VisitDetailsSheet> {
         statusText = 'Pending';
         break;
       case 'available':
+      case 'dispatched': // New status
         badgeColor = Colors.blue.shade400;
-        statusText = 'Available';
+        statusText = 'Dispatched';
         break;
       case 'assigned':
+      case 'accept': // New status
+      case 'accepted':
         badgeColor = Colors.blue.shade400;
-        statusText = 'Assigned';
+        statusText = 'Accepted';
         break;
       case 'in_progress':
+      case 'ongoing': // New status
         badgeColor = Colors.amber.shade700;
-        statusText = 'In Progress';
+        statusText = 'Ongoing';
         break;
       case 'completed':
+      case 'complete': // New status
         badgeColor = Colors.green.shade500;
         statusText = 'Completed';
         break;
@@ -476,6 +550,43 @@ class _VisitDetailsSheetState extends State<VisitDetailsSheet> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildButton({
+    required String label,
+    required IconData icon,
+    required Color color,
+    required VoidCallback onPressed,
+    bool filled = true,
+  }) {
+    return SizedBox(
+      width: double.infinity,
+      height: 50,
+      child: filled
+          ? ElevatedButton.icon(
+              onPressed: onPressed,
+              icon: Icon(icon),
+              label: Text(label),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: color,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            )
+          : OutlinedButton.icon(
+              onPressed: onPressed,
+              icon: Icon(icon, color: color),
+              label: Text(label, style: TextStyle(color: color)),
+              style: OutlinedButton.styleFrom(
+                side: BorderSide(color: color),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
     );
   }
 
@@ -582,8 +693,32 @@ class _VisitDetailsSheetState extends State<VisitDetailsSheet> {
 
     // Different buttons based on current status
     switch (_visit.status.toLowerCase()) {
-      case 'pending':
-      case 'available':
+      case 'dispatched':
+      case 'available': // Keep for backward compatibility
+        return Row(
+          children: [
+            Expanded(
+              child: _buildButton(
+                label: 'Reject',
+                icon: Icons.close,
+                color: Colors.red,
+                onPressed: _showRejectionDialog,
+                filled: false,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: _buildButton(
+                label: 'Accept',
+                icon: Icons.check,
+                color: Colors.green,
+                onPressed: () => _updateVisitStatus('Accepted'),
+              ),
+            ),
+          ],
+        );
+      case 'accept':
+      case 'accepted':
       case 'assigned':
         return Column(
           children: [
@@ -591,7 +726,7 @@ class _VisitDetailsSheetState extends State<VisitDetailsSheet> {
               label: 'Start Visit',
               icon: Icons.play_arrow,
               color: Colors.blue,
-              onPressed: () => _updateVisitStatus('in_progress'),
+              onPressed: () => _updateVisitStatus('Ongoing'),
             ),
             const SizedBox(height: 16),
             if (widget.onGetDirections != null)
@@ -604,7 +739,7 @@ class _VisitDetailsSheetState extends State<VisitDetailsSheet> {
               ),
           ],
         );
-
+      case 'ongoing':
       case 'in_progress':
         return Column(
           children: [
@@ -612,15 +747,10 @@ class _VisitDetailsSheetState extends State<VisitDetailsSheet> {
               label: 'Complete Visit',
               icon: Icons.check_circle,
               color: Colors.green,
-              onPressed: () => _updateVisitStatus('completed'),
-            ),
-            const SizedBox(height: 16),
-            _buildButton(
-              label: 'Cancel Visit',
-              icon: Icons.cancel,
-              color: Colors.red,
-              onPressed: () => _updateVisitStatus('cancelled'),
-              filled: false,
+              onPressed: () async {
+                // Update status to Completed and show report form
+                await _updateVisitStatusAndShowReport();
+              },
             ),
             const SizedBox(height: 16),
             if (widget.onGetDirections != null)
@@ -633,84 +763,82 @@ class _VisitDetailsSheetState extends State<VisitDetailsSheet> {
               ),
           ],
         );
-
       case 'completed':
-        // Show capture site location ONLY after report has been submitted.
-        final allowCapture = widget.reportSubmitted || _hasReport;
-        if (allowCapture) {
-          return Column(
-            children: [
-              _buildButton(
-                label: 'Capture Site Location',
-                icon: Icons.location_on,
-                color: Colors.orange,
-                onPressed: _onEndVisitCaptureLocation,
-              ),
-            ],
-          );
-        } else {
-          return Column(
-            children: [
-              _buildButton(
-                label: 'Submit Report',
-                icon: Icons.description,
-                color: AppColors.primaryBlue,
-                onPressed: () {
-                  // Delegate to parent to open the report form
-                  widget.onSubmitReportRequested?.call();
-                },
-              ),
-              const SizedBox(height: 12),
-              Text(
-                'Submit the visit report first. After successful submission, you can capture the definitive site location.',
-                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          );
-        }
-
-      case 'cancelled':
-      case 'rejected':
+      case 'complete':
         return _buildButton(
-          label: 'Reopen Visit',
-          icon: Icons.refresh,
-          color: Colors.blue,
-          onPressed: () => _updateVisitStatus('assigned'),
-          filled: false,
+          label: _hasReport ? 'View Report' : 'Submit Report',
+          icon: _hasReport ? Icons.description : Icons.assignment,
+          color: _hasReport ? Colors.grey : Colors.green,
+          onPressed: () {
+            if (_hasReport) {
+              // View report logic (maybe open PDF or details)
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Report already submitted')),
+              );
+            } else {
+              _showReportForm();
+            }
+          },
+          filled: !_hasReport,
         );
       default:
         return defaultButton;
     }
   }
 
-  Widget _buildButton({
-    required String label,
-    required IconData icon,
-    required Color color,
-    required VoidCallback onPressed,
-    bool filled = true,
-  }) {
-    return SizedBox(
-      width: double.infinity,
-      child: ElevatedButton.icon(
-        onPressed: _isUpdating ? null : onPressed,
-        icon: Icon(icon, color: filled ? Colors.white : color),
-        label: Text(label),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: filled ? color : Colors.white,
-          foregroundColor: filled ? Colors.white : color,
-          side: filled ? null : BorderSide(color: color),
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
+  Future<void> _showRejectionDialog() async {
+    final reasonController = TextEditingController();
+    final reason = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Reject Visit'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Please provide a reason for rejecting this visit:'),
+            const SizedBox(height: 16),
+            TextField(
+              controller: reasonController,
+              decoration: const InputDecoration(
+                hintText: 'Reason for rejection',
+                border: OutlineInputBorder(),
+              ),
+              maxLines: 3,
+            ),
+          ],
         ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              if (reasonController.text.isNotEmpty) {
+                Navigator.pop(context, reasonController.text);
+              }
+            },
+            child: const Text('Reject'),
+          ),
+        ],
       ),
-    )
-        .animate()
-        .fadeIn(duration: 300.ms)
-        .slideY(begin: 0.1, end: 0, duration: 250.ms);
+    );
+
+    if (reason != null && widget.onReject != null) {
+      setState(() => _isUpdating = true);
+      try {
+        await widget.onReject!(reason);
+        if (mounted) Navigator.pop(context);
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error rejecting visit: $e')),
+          );
+        }
+      } finally {
+        if (mounted) setState(() => _isUpdating = false);
+      }
+    }
   }
 }
 

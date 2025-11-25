@@ -1,7 +1,6 @@
 import 'package:sqflite/sqflite.dart';
 import 'dart:io';
 import '../models/incident_report.dart';
-import '../services/supabase_service.dart';
 import 'base_repository.dart';
 
 class IncidentRepository extends BaseRepository<IncidentReport> {

@@ -1,6 +1,5 @@
 import 'package:sqflite/sqflite.dart';
 import '../models/safety_checklist.dart';
-import '../services/supabase_service.dart';
 import 'base_repository.dart';
 
 class SafetyChecklistRepository extends BaseRepository<SafetyChecklist> {
