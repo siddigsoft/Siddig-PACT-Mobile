@@ -24,6 +24,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
   List<SiteVisit> _filteredVisits = [];
   bool _isLoading = true;
   String? _userId;
+  Map<String, Map<String, dynamic>> _siteLocations = {}; // site_id -> location data
 
   // Filter state
   String _filterType = 'Date'; // Date, Month, Year
@@ -41,6 +42,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
       _userId = Supabase.instance.client.auth.currentUser?.id;
       if (_userId != null) {
         _allVisits = await _siteVisitService.getCompletedSiteVisits(_userId!);
+        await _loadSiteLocations();
         _applyFilter();
       }
     } catch (e) {
@@ -49,6 +51,30 @@ class _ReportsScreenState extends State<ReportsScreen> {
       );
     } finally {
       setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _loadSiteLocations() async {
+    try {
+      final siteIds = _allVisits.map((v) => v.id).toList();
+      if (siteIds.isEmpty) return;
+
+      final response = await Supabase.instance.client
+          .from('site_locations')
+          .select('site_id, latitude, longitude, accuracy, recorded_at')
+          .inFilter('site_id', siteIds)
+          .order('recorded_at', ascending: false);
+
+      _siteLocations.clear();
+      for (var location in response) {
+        final siteId = location['site_id'];
+        if (!_siteLocations.containsKey(siteId)) {
+          _siteLocations[siteId] = location;
+        }
+      }
+    } catch (e) {
+      print('Error loading site locations: $e');
+      // Don't show error to user, just continue without location data
     }
   }
 
@@ -165,14 +191,28 @@ class _ReportsScreenState extends State<ReportsScreen> {
                 1: pw.Alignment.centerLeft,
                 2: pw.Alignment.centerLeft,
                 3: pw.Alignment.centerLeft,
+                4: pw.Alignment.centerLeft,
+                5: pw.Alignment.centerLeft,
               },
-              headers: ['Site Name', 'Site Code', 'Completed At', 'Notes'],
-              data: _filteredVisits.map((visit) => [
-                visit.siteName ?? 'N/A',
-                visit.siteCode ?? 'N/A',
-                visit.completedAt != null ? DateFormat('yyyy-MM-dd HH:mm').format(visit.completedAt!) : 'N/A',
-                visit.notes ?? 'No notes',
-              ]).toList(),
+              headers: ['Site Name', 'Site Code', 'Completed At', 'Coordinates', 'Accuracy', 'Notes'],
+              data: _filteredVisits.map((visit) {
+                final location = _siteLocations[visit.id];
+                final coordinates = location != null 
+                  ? '${location['latitude']?.toStringAsFixed(6) ?? 'N/A'}, ${location['longitude']?.toStringAsFixed(6) ?? 'N/A'}'
+                  : 'Not recorded';
+                final accuracy = location != null 
+                  ? '${location['accuracy']?.toStringAsFixed(1) ?? 'N/A'}m'
+                  : 'N/A';
+                
+                return [
+                  visit.siteName ?? 'N/A',
+                  visit.siteCode ?? 'N/A',
+                  visit.completedAt != null ? DateFormat('yyyy-MM-dd HH:mm').format(visit.completedAt!) : 'N/A',
+                  coordinates,
+                  accuracy,
+                  visit.notes ?? 'No notes',
+                ];
+              }).toList(),
             ),
             pw.Footer(
               margin: const pw.EdgeInsets.only(top: 20),
@@ -244,14 +284,28 @@ class _ReportsScreenState extends State<ReportsScreen> {
                     1: pw.Alignment.centerLeft,
                     2: pw.Alignment.centerLeft,
                     3: pw.Alignment.centerLeft,
+                    4: pw.Alignment.centerLeft,
+                    5: pw.Alignment.centerLeft,
                   },
-                  headers: ['Site Name', 'Site Code', 'Completed At', 'Notes'],
-                  data: _filteredVisits.map((visit) => [
-                    visit.siteName ?? 'N/A',
-                    visit.siteCode ?? 'N/A',
-                    visit.completedAt != null ? DateFormat('yyyy-MM-dd HH:mm').format(visit.completedAt!) : 'N/A',
-                    visit.notes ?? 'No notes',
-                  ]).toList(),
+                  headers: ['Site Name', 'Site Code', 'Completed At', 'Coordinates', 'Accuracy', 'Notes'],
+                  data: _filteredVisits.map((visit) {
+                    final location = _siteLocations[visit.id];
+                    final coordinates = location != null 
+                      ? '${location['latitude']?.toStringAsFixed(6) ?? 'N/A'}, ${location['longitude']?.toStringAsFixed(6) ?? 'N/A'}'
+                      : 'Not recorded';
+                    final accuracy = location != null 
+                      ? '${location['accuracy']?.toStringAsFixed(1) ?? 'N/A'}m'
+                      : 'N/A';
+                    
+                    return [
+                      visit.siteName ?? 'N/A',
+                      visit.siteCode ?? 'N/A',
+                      visit.completedAt != null ? DateFormat('yyyy-MM-dd HH:mm').format(visit.completedAt!) : 'N/A',
+                      coordinates,
+                      accuracy,
+                      visit.notes ?? 'No notes',
+                    ];
+                  }).toList(),
                 ),
                 pw.Footer(
                   margin: const pw.EdgeInsets.only(top: 20),
@@ -334,11 +388,19 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Reports & Statistics'),
+        title: const Text(
+          'Reports & Analytics',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
+        ),
         elevation: 0,
+        backgroundColor: const Color(0xFF1976D2), // Deep blue
+        foregroundColor: Colors.white,
         actions: [
           IconButton(
-            icon: const Icon(Icons.picture_as_pdf),
+            icon: const Icon(Icons.picture_as_pdf, color: Colors.white),
             tooltip: kIsWeb ? 'Download PDF' : 'Generate PDF',
             onPressed: () async {
               try {
@@ -387,14 +449,28 @@ class _ReportsScreenState extends State<ReportsScreen> {
                               1: pw.Alignment.centerLeft,
                               2: pw.Alignment.centerLeft,
                               3: pw.Alignment.centerLeft,
+                              4: pw.Alignment.centerLeft,
+                              5: pw.Alignment.centerLeft,
                             },
-                            headers: ['Site Name', 'Site Code', 'Completed At', 'Notes'],
-                            data: _filteredVisits.map((visit) => [
-                              visit.siteName ?? 'N/A',
-                              visit.siteCode ?? 'N/A',
-                              visit.completedAt != null ? DateFormat('yyyy-MM-dd HH:mm').format(visit.completedAt!) : 'N/A',
-                              visit.notes ?? 'No notes',
-                            ]).toList(),
+                            headers: ['Site Name', 'Site Code', 'Completed At', 'Coordinates', 'Accuracy', 'Notes'],
+                            data: _filteredVisits.map((visit) {
+                              final location = _siteLocations[visit.id];
+                              final coordinates = location != null 
+                                ? '${location['latitude']?.toStringAsFixed(6) ?? 'N/A'}, ${location['longitude']?.toStringAsFixed(6) ?? 'N/A'}'
+                                : 'Not recorded';
+                              final accuracy = location != null 
+                                ? '${location['accuracy']?.toStringAsFixed(1) ?? 'N/A'}m'
+                                : 'N/A';
+                              
+                              return [
+                                visit.siteName ?? 'N/A',
+                                visit.siteCode ?? 'N/A',
+                                visit.completedAt != null ? DateFormat('yyyy-MM-dd HH:mm').format(visit.completedAt!) : 'N/A',
+                                coordinates,
+                                accuracy,
+                                visit.notes ?? 'No notes',
+                              ];
+                            }).toList(),
                           ),
                           pw.Footer(
                             margin: const pw.EdgeInsets.only(top: 20),
@@ -426,12 +502,12 @@ class _ReportsScreenState extends State<ReportsScreen> {
             },
           ),
           IconButton(
-            icon: const Icon(Icons.print),
+            icon: const Icon(Icons.print, color: Colors.white),
             tooltip: 'Print',
             onPressed: _printPDF,
           ),
           IconButton(
-            icon: const Icon(Icons.email),
+            icon: const Icon(Icons.email, color: Colors.white),
             tooltip: 'Email',
             onPressed: _sendEmail,
           ),
@@ -444,13 +520,22 @@ class _ReportsScreenState extends State<ReportsScreen> {
                 // Summary Cards
                 Container(
                   padding: const EdgeInsets.all(16),
-                  color: Theme.of(context).primaryColor.withOpacity(0.05),
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        Color(0xFFE3F2FD), // Light blue
+                        Color(0xFFF3E5F5), // Light purple tint
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                  ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: [
-                      _buildSummaryCard('Today', counts['daily']!, Colors.blue),
-                      _buildSummaryCard('This Week', counts['weekly']!, Colors.orange),
-                      _buildSummaryCard('This Month', counts['monthly']!, Colors.green),
+                      _buildSummaryCard('Today', counts['daily']!, const Color(0xFF1976D2)), // Deep blue
+                      _buildSummaryCard('This Week', counts['weekly']!, const Color(0xFFFF9800)), // Orange
+                      _buildSummaryCard('This Month', counts['monthly']!, const Color(0xFF4CAF50)), // Green
                     ],
                   ),
                 ),
@@ -458,59 +543,135 @@ class _ReportsScreenState extends State<ReportsScreen> {
                 const Divider(height: 1),
 
                 // Filter Section
-                Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Row(
-                    children: [
-                      DropdownButton<String>(
-                        value: _filterType,
-                        items: ['Date', 'Month', 'Year'].map((String value) {
-                          return DropdownMenuItem<String>(
-                            value: value,
-                            child: Text(value),
-                          );
-                        }).toList(),
-                        onChanged: (newValue) {
-                          if (newValue != null) {
-                            setState(() {
-                              _filterType = newValue;
-                              _applyFilter();
-                            });
-                          }
-                        },
+                Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.grey.shade200,
+                        blurRadius: 6,
+                        offset: const Offset(0, 3),
                       ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: InkWell(
-                          onTap: () => _selectDate(context),
-                          child: InputDecorator(
-                            decoration: const InputDecoration(
-                              border: OutlineInputBorder(),
-                              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                              labelText: 'Select Date',
-                            ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(DateFormat('yyyy-MM-dd').format(_selectedDate)),
-                                const Icon(Icons.calendar_today, size: 20),
-                              ],
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Filter Options',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: const Color(0xFF263238),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            flex: 1,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF8F9FA),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: const Color(0xFFE0E0E0)),
+                              ),
+                              child: DropdownButton<String>(
+                                value: _filterType,
+                                isExpanded: true,
+                                underline: const SizedBox(),
+                                icon: Icon(Icons.arrow_drop_down, color: const Color(0xFF1976D2)),
+                                style: TextStyle(
+                                  color: const Color(0xFF263238),
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                                items: ['Date', 'Month', 'Year'].map((String value) {
+                                  return DropdownMenuItem<String>(
+                                    value: value,
+                                    child: Text(value),
+                                  );
+                                }).toList(),
+                                onChanged: (newValue) {
+                                  if (newValue != null) {
+                                    setState(() {
+                                      _filterType = newValue;
+                                      _applyFilter();
+                                    });
+                                  }
+                                },
+                              ),
                             ),
                           ),
-                        ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            flex: 2,
+                            child: InkWell(
+                              onTap: () => _selectDate(context),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF8F9FA),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: const Color(0xFFE0E0E0)),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(
+                                      DateFormat('yyyy-MM-dd').format(_selectedDate),
+                                      style: TextStyle(
+                                        color: const Color(0xFF263238),
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                    Icon(Icons.calendar_today, color: const Color(0xFFFF9800), size: 20),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
                 ),
 
                 // Results Header
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        const Color(0xFFFF9800).withOpacity(0.1), // Light orange
+                        const Color(0xFF1976D2).withOpacity(0.1), // Light blue
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                   child: Row(
                     children: [
+                      Icon(
+                        Icons.analytics,
+                        color: const Color(0xFF1976D2),
+                        size: 24,
+                      ),
+                      const SizedBox(width: 12),
                       Text(
                         'Results (${_filteredVisits.length})',
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 18,
+                          color: Color(0xFF263238),
+                        ),
                       ),
                     ],
                   ),
@@ -524,27 +685,159 @@ class _ReportsScreenState extends State<ReportsScreen> {
                           itemCount: _filteredVisits.length,
                           itemBuilder: (context, index) {
                             final visit = _filteredVisits[index];
-                            return Card(
-                              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                              child: ListTile(
-                                leading: CircleAvatar(
-                                  backgroundColor: Colors.blue.shade100,
-                                  child: Text(visit.siteCode.substring(0, min(2, visit.siteCode.length))),
+                            final location = _siteLocations[visit.id];
+                            
+                            return Container(
+                              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(16),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.grey.shade200,
+                                    blurRadius: 6,
+                                    offset: const Offset(0, 3),
+                                  ),
+                                ],
+                                border: Border.all(
+                                  color: const Color(0xFFFF9800).withOpacity(0.1), // Light orange border
+                                  width: 1,
                                 ),
-                                title: Text(visit.siteName),
-                                subtitle: Column(
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.all(16),
+                                child: Row(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text('Code: ${visit.siteCode}'),
-                                    Text(
-                                      visit.completedAt != null
-                                          ? DateFormat('MMM dd, yyyy HH:mm').format(visit.completedAt!)
-                                          : 'No Date',
-                                      style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                                    // Leading icon
+                                    Container(
+                                      width: 50,
+                                      height: 50,
+                                      decoration: BoxDecoration(
+                                        gradient: LinearGradient(
+                                          colors: [
+                                            const Color(0xFF1976D2).withOpacity(0.8), // Blue gradient
+                                            const Color(0xFF42A5F5),
+                                          ],
+                                          begin: Alignment.topLeft,
+                                          end: Alignment.bottomRight,
+                                        ),
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Center(
+                                        child: Text(
+                                          visit.siteCode.length >= 2 
+                                            ? visit.siteCode.substring(0, 2).toUpperCase()
+                                            : visit.siteCode.toUpperCase(),
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 16,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 16),
+                                    // Content
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          // Title
+                                          Text(
+                                            visit.siteName ?? 'Unknown Site',
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 16,
+                                              color: Color(0xFF263238),
+                                            ),
+                                            overflow: TextOverflow.ellipsis,
+                                            maxLines: 1,
+                                          ),
+                                          const SizedBox(height: 8),
+                                          // Site code
+                                          Row(
+                                            children: [
+                                              Icon(Icons.location_on, size: 16, color: const Color(0xFFFF9800)),
+                                              const SizedBox(width: 4),
+                                              Expanded(
+                                                child: Text(
+                                                  'Code: ${visit.siteCode}',
+                                                  style: TextStyle(
+                                                    color: Colors.grey.shade700,
+                                                    fontSize: 14,
+                                                    fontWeight: FontWeight.w500,
+                                                  ),
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 4),
+                                          // Date
+                                          Row(
+                                            children: [
+                                              Icon(Icons.access_time, size: 16, color: const Color(0xFF1976D2)),
+                                              const SizedBox(width: 4),
+                                              Expanded(
+                                                child: Text(
+                                                  visit.completedAt != null
+                                                      ? DateFormat('MMM dd, yyyy HH:mm').format(visit.completedAt!)
+                                                      : 'No Date',
+                                                  style: TextStyle(
+                                                    color: Colors.grey.shade600,
+                                                    fontSize: 13,
+                                                  ),
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          // Location (if available)
+                                          if (location != null) ...[
+                                            const SizedBox(height: 4),
+                                            Row(
+                                              children: [
+                                                Icon(Icons.gps_fixed, size: 16, color: const Color(0xFF4CAF50)),
+                                                const SizedBox(width: 4),
+                                                Expanded(
+                                                  child: Text(
+                                                    '${location['latitude']?.toStringAsFixed(4) ?? 'N/A'}, ${location['longitude']?.toStringAsFixed(4) ?? 'N/A'} (±${location['accuracy']?.toStringAsFixed(0) ?? 'N/A'}m)',
+                                                    style: TextStyle(
+                                                      color: Colors.grey.shade600,
+                                                      fontSize: 12,
+                                                    ),
+                                                    overflow: TextOverflow.ellipsis,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ],
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    // Trailing status
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF4CAF50).withOpacity(0.1),
+                                        borderRadius: BorderRadius.circular(20),
+                                        border: Border.all(
+                                          color: const Color(0xFF4CAF50).withOpacity(0.3),
+                                        ),
+                                      ),
+                                      child: const Text(
+                                        'Completed',
+                                        style: TextStyle(
+                                          color: Color(0xFF4CAF50),
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
                                     ),
                                   ],
                                 ),
-                                isThreeLine: true,
                               ),
                             );
                           },
@@ -556,24 +849,43 @@ class _ReportsScreenState extends State<ReportsScreen> {
   }
 
   Widget _buildSummaryCard(String title, int count, Color color) {
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
-        child: Column(
-          children: [
-            Text(
-              count.toString(),
-              style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: color),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              title,
-              style: TextStyle(fontSize: 14, color: Colors.grey.shade700, fontWeight: FontWeight.w500),
-            ),
-          ],
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: color.withOpacity(0.1),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
+        border: Border.all(
+          color: color.withOpacity(0.2),
+          width: 1,
         ),
+      ),
+      child: Column(
+        children: [
+          Text(
+            count.toString(),
+            style: TextStyle(
+              fontSize: 32,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.grey.shade700,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
       ),
     );
   }
