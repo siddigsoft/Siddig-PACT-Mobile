@@ -126,12 +126,28 @@ class AuthService {
     required String email,
     required String password,
     String? name,
+    String? phone,
+    String? employeeId,
+    String? role,
+    String? hubId,
+    String? stateId,
+    String? localityId,
+    String? avatarUrl,
   }) async {
     try {
       final response = await supabase.auth.signUp(
         email: email,
         password: password,
-        data: name != null ? {'full_name': name} : null,
+        data: {
+          if (name != null) 'name': name,
+          if (phone != null) 'phone': phone,
+          if (employeeId != null) 'employeeId': employeeId,
+          if (role != null) 'role': role,
+          if (hubId != null) 'hubId': hubId,
+          if (stateId != null) 'stateId': stateId,
+          if (localityId != null) 'localityId': localityId,
+          if (avatarUrl != null) 'avatar': avatarUrl,
+        },
       );
       return response;
     } on AuthException catch (e) {
@@ -155,12 +171,43 @@ class AuthService {
     }
   }
 
-  // Reset password
-  Future<void> resetPassword(String email) async {
+  /// Check if user is approved for login
+  Future<bool> isUserApproved(String userId) async {
     try {
-      await supabase.auth.resetPasswordForEmail(email);
+      final profile = await supabase
+          .from('profiles')
+          .select('status')
+          .eq('id', userId)
+          .single();
+
+      return profile['status'] == 'approved';
     } catch (e) {
-      throw AuthException('Failed to send reset password email');
+      debugPrint('Error checking user approval: $e');
+      return false;
+    }
+  }
+
+  /// Approve user (admin function)
+  Future<void> approveUser(String userId) async {
+    try {
+      await supabase
+          .from('profiles')
+          .update({'status': 'approved'})
+          .eq('id', userId);
+    } catch (e) {
+      throw AuthException('Failed to approve user');
+    }
+  }
+
+  /// Resend verification email
+  Future<void> resendVerificationEmail(String email) async {
+    try {
+      await supabase.auth.resend(
+        type: OtpType.signup,
+        email: email,
+      );
+    } catch (e) {
+      throw AuthException('Failed to resend verification email');
     }
   }
 

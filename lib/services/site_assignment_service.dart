@@ -38,8 +38,8 @@ class SiteAssignmentService {
         final distance = _calculateDistance(
           position.latitude,
           position.longitude,
-          visit.latitude,
-          visit.longitude,
+          visit.latitude ?? 0.0,
+          visit.longitude ?? 0.0,
         );
         
         return _RankedSiteVisit(visit: visit, distance: distance);

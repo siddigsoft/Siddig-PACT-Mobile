@@ -16,10 +16,10 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.0.2+3
+version: 1.0.2+4
 
 environment:
-  sdk: '>=3.0.0 <4.0.0'
+  sdk: '>=3.8.0 <4.0.0'
   flutter: ">=3.0.0"
 
 # Dependencies specify other packages that your package needs in order to work.
@@ -87,11 +87,16 @@ dependencies:
   webview_flutter: ^4.10.0 # For in-app document viewing
   shorebird_code_push: ^1.1.0 # For Shorebird OTA updates
   firebase_messaging: ^15.1.6 # For push notifications (optional, for FCM)
+  flutter_webrtc: ^1.2.1 # For WebRTC audio/video calls
   excel: ^4.0.2 # For reading Excel (.xlsx) files offline
   share_plus: ^10.0.2 # For sharing exported CSV or original Excel files
   pdf: ^3.10.7 # For PDF generation
   printing: ^5.12.0 # For printing and saving PDFs
   flutter_email_sender: ^6.0.3 # For sending emails with attachments
+  json_annotation: ^4.9.0 # For JSON serialization
+  flutter_riverpod: ^2.4.9 # For state management
+  csv: ^5.0.2 # For CSV export
+  audioplayers: ^6.1.0 # For playing call sounds
 
 dev_dependencies:
   flutter_test:
@@ -99,6 +104,7 @@ dev_dependencies:
   flutter_lints: ^5.0.0
   mocktail: ^1.0.3
   build_runner: ^2.4.8
+  json_serializable: ^6.7.1 # For JSON serialization
   flutter_launcher_icons: ^0.14.4
   test: ^1.24.9
 
@@ -136,6 +142,7 @@ flutter:
     - assets/images/pact_consultancy_pact_cover.jpg
     - assets/images/placeholders/
     - assets/icons/
+    - assets/sounds/
     - shorebird.yaml
     - lib/l10n/
 

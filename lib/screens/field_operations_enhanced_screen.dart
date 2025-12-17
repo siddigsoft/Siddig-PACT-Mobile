@@ -3,6 +3,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
@@ -28,7 +29,6 @@ import '../services/mmp_file_service.dart';
 import '../l10n/app_localizations.dart';
 import '../widgets/language_switcher.dart';
 import '../services/geographical_task_service.dart';
-import '../services/task_assignment_service.dart';
 import '../services/journey_service.dart';
 import '../services/staff_tracking_service.dart';
 import '../widgets/task_dashboard.dart';
@@ -48,8 +48,9 @@ import 'components/visit_assignment_sheet.dart';
 import 'components/visit_details_sheet.dart';
 import 'components/mmp_files_sheet.dart';
 import '../theme/app_design_system.dart';
-import '../widgets/app_widgets.dart';
+import '../widgets/active_visit_overlay.dart';
 import '../utils/error_handler.dart';
+import '../widgets/app_widgets.dart';
 
 class FieldOperationsEnhancedScreen extends StatefulWidget {
   const FieldOperationsEnhancedScreen({super.key});
@@ -83,7 +84,6 @@ class _FieldOperationsEnhancedScreenState
   final MMPFileService _mmpFileService = MMPFileService();
   final SyncManager _syncManager = SyncManager();
   late final GeographicalTaskService _geographicalTaskService;
-  late final TaskAssignmentService _taskAssignmentService;
   late final JourneyService _journeyService;
   late final LocationTrackingService _locationTrackingService;
   final UserNotificationService _notificationService = UserNotificationService();
@@ -103,11 +103,16 @@ class _FieldOperationsEnhancedScreenState
   // Visit data
   List<SiteVisit> _availableVisits = [];
   List<SiteVisit> _myVisits = [];
+  List<SiteVisit> _assignedVisits = []; // For displaying assigned/accepted visits
 
   // Task data
   List<SiteVisitWithDistance> _nearbyTasks = [];
   final List<SiteVisit> _acceptedTasks = [];
   bool _isLoadingTasks = false;
+  
+  // Location accuracy tracking
+  int _consecutiveLowAccuracyCount = 0;
+  static const int _maxLowAccuracyAttempts = 3;
 
   // Journey tracking state
   bool _isTrackingJourney = false;
@@ -249,8 +254,6 @@ class _FieldOperationsEnhancedScreenState
 
       // Initialize new task services
       _geographicalTaskService = GeographicalTaskService(_siteVisitService);
-      _taskAssignmentService =
-          TaskAssignmentService(_siteVisitService.supabase, _siteVisitService);
       _journeyService = JourneyService(LocationTrackingService(),
           StaffTrackingService(_siteVisitService.supabase));
       _locationTrackingService = LocationTrackingService();
@@ -285,15 +288,37 @@ class _FieldOperationsEnhancedScreenState
         }
       }
 
-      // Now get fresh, accurate position
-      final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: kIsWeb ? LocationAccuracy.high : LocationAccuracy.best,
-        forceAndroidLocationManager:
-            false, // Use FusedLocationProvider on Android for better accuracy
-      );
+      // Now get fresh, accurate position with retry for better accuracy
+      Position position;
+      int retryCount = 0;
+      const maxRetries = 3;
+      const maxAccuracy = 5.0; // Maximum 5 meters accuracy
 
-      debugPrint(
-          'Fresh GPS location: ${position.latitude}, ${position.longitude}, accuracy: ${position.accuracy}m');
+      do {
+        position = await Geolocator.getCurrentPosition(
+          desiredAccuracy: kIsWeb ? LocationAccuracy.high : LocationAccuracy.best,
+          forceAndroidLocationManager:
+              false, // Use FusedLocationProvider on Android for better accuracy
+        );
+
+        debugPrint(
+            'GPS location attempt ${retryCount + 1}: ${position.latitude}, ${position.longitude}, accuracy: ${position.accuracy}m');
+
+        if (position.accuracy <= maxAccuracy) {
+          debugPrint('✓ Accuracy acceptable: ${position.accuracy}m');
+          break;
+        }
+
+        retryCount++;
+        if (retryCount < maxRetries) {
+          debugPrint('⚠ Accuracy too low (${position.accuracy}m), retrying...');
+          await Future.delayed(const Duration(seconds: 2));
+        }
+      } while (retryCount < maxRetries);
+
+      if (position.accuracy > maxAccuracy) {
+        debugPrint('⚠ Could not achieve ${maxAccuracy}m accuracy after $maxRetries attempts. Using best available: ${position.accuracy}m');
+      }
 
       if (mounted) {
         setState(() {
@@ -331,14 +356,39 @@ class _FieldOperationsEnhancedScreenState
     ).listen(
       (Position position) {
         if (mounted) {
-          debugPrint(
-              'Location stream update: ${position.latitude}, ${position.longitude}, accuracy: ${position.accuracy}m');
-          setState(() {
-            _currentLocation =
-                latlong.LatLng(position.latitude, position.longitude);
-          });
-          // Update markers when location changes
-          _updateMarkers();
+          const maxAccuracy = 5.0; // Prefer 5m or better accuracy
+          
+          if (position.accuracy <= maxAccuracy) {
+            // Reset counter when we get good accuracy
+            _consecutiveLowAccuracyCount = 0;
+            debugPrint(
+                '✓ Location stream update: ${position.latitude}, ${position.longitude}, accuracy: ${position.accuracy}m');
+            setState(() {
+              _currentLocation =
+                  latlong.LatLng(position.latitude, position.longitude);
+            });
+            // Update markers when location changes
+            _updateMarkers();
+          } else {
+            // Increment counter for consecutive low accuracy
+            _consecutiveLowAccuracyCount++;
+            
+            // After 3 consecutive low accuracy readings, accept what we have
+            if (_consecutiveLowAccuracyCount >= _maxLowAccuracyAttempts) {
+              debugPrint(
+                  '⚠ After $_maxLowAccuracyAttempts attempts, accepting available accuracy: ${position.accuracy}m');
+              setState(() {
+                _currentLocation =
+                    latlong.LatLng(position.latitude, position.longitude);
+              });
+              _updateMarkers();
+              // Reset counter after accepting
+              _consecutiveLowAccuracyCount = 0;
+            } else {
+              debugPrint(
+                  '⚠ Location accuracy: ${position.accuracy}m (attempt $_consecutiveLowAccuracyCount/$_maxLowAccuracyAttempts, preferred: ≤${maxAccuracy}m)');
+            }
+          }
         }
       },
       onError: (error) {
@@ -602,12 +652,17 @@ class _FieldOperationsEnhancedScreenState
         setState(() {
           _isLoading = false;
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error loading visits: $e'),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        // Schedule SnackBar for after build completes
+        SchedulerBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Error loading visits: $e'),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          }
+        });
       }
     }
   }
@@ -1135,14 +1190,18 @@ class _FieldOperationsEnhancedScreenState
 
     try {
       final tasks = await _geographicalTaskService.getNearbyAvailableTasks();
-      setState(() {
-        _nearbyTasks = tasks;
-        _isLoadingTasks = false;
-      });
+      if (mounted) {
+        setState(() {
+          _nearbyTasks = tasks;
+          _isLoadingTasks = false;
+        });
+      }
     } catch (e) {
-      setState(() {
-        _isLoadingTasks = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoadingTasks = false;
+        });
+      }
       debugPrint('Error loading nearby tasks: $e');
     }
   }
@@ -1153,35 +1212,23 @@ class _FieldOperationsEnhancedScreenState
     if (userId == null) return;
 
     try {
-      final response = await _taskAssignmentService.acceptTask(
-        taskId: task.id,
-        userId: userId,
-      );
+      // Accept the task directly
+      await _siteVisitService.acceptVisit(task.id, userId);
+      
+      // Show dialog to start tracking
+      _showStartTrackingDialog(task);
 
-      if (response.result == TaskAssignmentResult.success) {
-        // Show dialog to start tracking
-        _showStartTrackingDialog(task);
+      // Remove from nearby tasks
+      setState(() {
+        _nearbyTasks.removeWhere((t) => t.visit.id == task.id);
+      });
 
-        // Remove from nearby tasks
-        setState(() {
-          _nearbyTasks.removeWhere((t) => t.visit.id == task.id);
-        });
-
-        if (mounted) {
-          AppSnackBar.show(
-            context,
-            message: 'Task accepted successfully',
-            type: SnackBarType.success,
-          );
-        }
-      } else {
-        if (mounted) {
-          AppSnackBar.show(
-            context,
-            message: response.message ?? 'Failed to accept task',
-            type: SnackBarType.error,
-          );
-        }
+      if (mounted) {
+        AppSnackBar.show(
+          context,
+          message: 'Task accepted successfully',
+          type: SnackBarType.success,
+        );
       }
     } catch (e) {
       if (mounted) {
@@ -1196,10 +1243,8 @@ class _FieldOperationsEnhancedScreenState
     if (userId == null) return;
 
     try {
-      final response = await _taskAssignmentService.declineTask(
-        taskId: task.id,
-        userId: userId,
-      );
+      // Decline the task directly
+      await _siteVisitService.rejectVisit(task.id, userId, 'Declined by user');
 
       // Remove from nearby tasks
       setState(() {
@@ -1624,6 +1669,8 @@ class _FieldOperationsEnhancedScreenState
                 },
               ),
             ),
+          // Active visit overlay
+          const ActiveVisitOverlay(),
         ],
       ),
     );
@@ -1968,9 +2015,9 @@ class _FieldOperationsEnhancedScreenState
   Widget _buildVisitsPanel() {
     return Container(
       width: double.infinity,
-      margin: const EdgeInsets.fromLTRB(16, 0, 16, 8), // Reduced bottom margin
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
       child: ModernCard(
-        padding: const EdgeInsets.all(8), // Reduced from 12
+        padding: const EdgeInsets.all(8),
         borderRadius: 20,
         boxShadow: [
           BoxShadow(
@@ -2006,34 +2053,39 @@ class _FieldOperationsEnhancedScreenState
               )
             : null,
         animationDelay: 200.ms,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxHeight: 140), // Reduced from 160
-          child: _myVisits.isEmpty
-              ? Center(
-                  child: Text(
-                    'No assigned visits yet',
-                    style: GoogleFonts.poppins(
-                      color: Colors.grey,
-                      fontSize: 14,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 160),
+              child: _myVisits.isEmpty
+                  ? Center(
+                      child: Text(
+                        'No assigned visits yet',
+                        style: GoogleFonts.poppins(
+                          color: Colors.grey,
+                          fontSize: 14,
+                        ),
+                      ),
+                    )
+                  : ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: _assignedVisits.length,
+                      separatorBuilder: (context, index) =>
+                          const SizedBox(width: 12),
+                      itemBuilder: (context, index) {
+                        final visit = _assignedVisits[index];
+                        return _buildVisitCard(visit, showCost: false);
+                      },
                     ),
-                  ),
-                )
-              : ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: _myVisits.length,
-                  separatorBuilder: (context, index) =>
-                      const SizedBox(width: 12),
-                  itemBuilder: (context, index) {
-                    final visit = _myVisits[index];
-                    return _buildVisitCard(visit);
-                  },
-                ),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildVisitCard(SiteVisit visit) {
+  Widget _buildVisitCard(SiteVisit visit, {bool showCost = false}) {
     // Determine color and status type based on visit status
     Color statusColor;
     StatusType statusType;
@@ -2071,18 +2123,17 @@ class _FieldOperationsEnhancedScreenState
       onTap: () => _selectVisit(visit),
       shadows: AppDesignSystem.shadowMD,
       child: Container(
-        width: 170, // Reduced from 180
-        padding:
-            const EdgeInsets.symmetric(horizontal: 8, vertical: 8), // Was 10
+        width: showCost ? 190 : 170,
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
             // Status icon
             Container(
-              width: 24, // Reduced from 28
-              height: 24, // Reduced from 28
-              margin: const EdgeInsets.only(bottom: 2), // Reduced from 4
+              width: 24,
+              height: 24,
+              margin: const EdgeInsets.only(bottom: 2),
               decoration: BoxDecoration(
                 color: statusColor.withOpacity(0.1),
                 shape: BoxShape.circle,
@@ -2090,17 +2141,16 @@ class _FieldOperationsEnhancedScreenState
               child: Icon(
                 statusIcon,
                 color: statusColor,
-                size: 14, // Reduced from 16
+                size: 14,
               ),
             ),
             Text(
               visit.siteName ?? 'Unnamed Site',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: AppDesignSystem.titleMedium
-                  .copyWith(fontSize: 11), // Reduced from 12
+              style: AppDesignSystem.titleMedium.copyWith(fontSize: 11),
             ),
-            const SizedBox(height: 2), // Reduced from 3
+            const SizedBox(height: 2),
             Text(
               visit.locationString.isNotEmpty
                   ? visit.locationString
@@ -2109,10 +2159,10 @@ class _FieldOperationsEnhancedScreenState
               overflow: TextOverflow.ellipsis,
               style: AppDesignSystem.bodySmall.copyWith(
                 color: Colors.grey.shade600,
-                fontSize: 9, // Reduced from 10
+                fontSize: 9,
               ),
             ),
-            const SizedBox(height: 2), // Reduced from 3
+            const SizedBox(height: 2),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -2124,8 +2174,7 @@ class _FieldOperationsEnhancedScreenState
                   ),
                 ),
                 const SizedBox(width: 4),
-                Icon(Icons.chevron_right,
-                    size: 12, color: statusColor), // Reduced from 16
+                Icon(Icons.chevron_right, size: 12, color: statusColor),
               ],
             ),
           ],

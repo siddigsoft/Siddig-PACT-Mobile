@@ -12,6 +12,9 @@ import '../../services/location_tracking_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../services/offline_data_service.dart';
 import 'report_form_sheet.dart';
+import '../../widgets/claim_site_button.dart';
+import '../../widgets/start_visit_button.dart';
+import '../../widgets/complete_visit_button.dart';
 
 class VisitDetailsSheet extends StatefulWidget {
   final SiteVisit visit;
@@ -708,11 +711,18 @@ class _VisitDetailsSheetState extends State<VisitDetailsSheet> {
             ),
             const SizedBox(width: 16),
             Expanded(
-              child: _buildButton(
-                label: 'Accept',
-                icon: Icons.check,
-                color: Colors.green,
-                onPressed: () => _updateVisitStatus('Accepted'),
+              child: ClaimSiteButton(
+                siteEntryId: _visit.id,
+                siteName: _visit.siteName,
+                onClaimSuccess: () {
+                  setState(() {
+                    _visit = _visit.copyWith(status: 'claimed');
+                  });
+                  widget.onStatusChanged('claimed');
+                },
+                onClaimError: () {
+                  // Error handling is done in the button
+                },
               ),
             ),
           ],
@@ -720,13 +730,20 @@ class _VisitDetailsSheetState extends State<VisitDetailsSheet> {
       case 'accept':
       case 'accepted':
       case 'assigned':
+      case 'claimed':
         return Column(
           children: [
-            _buildButton(
-              label: 'Start Visit',
-              icon: Icons.play_arrow,
-              color: Colors.blue,
-              onPressed: () => _updateVisitStatus('Ongoing'),
+            StartVisitButton(
+              visit: _visit,
+              onStartSuccess: () {
+                setState(() {
+                  _visit = _visit.copyWith(status: 'in_progress');
+                });
+                widget.onStatusChanged('in_progress');
+              },
+              onStartError: () {
+                // Error handling is done in the button
+              },
             ),
             const SizedBox(height: 16),
             if (widget.onGetDirections != null)
@@ -743,13 +760,16 @@ class _VisitDetailsSheetState extends State<VisitDetailsSheet> {
       case 'in_progress':
         return Column(
           children: [
-            _buildButton(
-              label: 'Complete Visit',
-              icon: Icons.check_circle,
-              color: Colors.green,
-              onPressed: () async {
-                // Update status to Completed and show report form
-                await _updateVisitStatusAndShowReport();
+            CompleteVisitButton(
+              visit: _visit,
+              onCompleteSuccess: () {
+                setState(() {
+                  _visit = _visit.copyWith(status: 'completed');
+                });
+                widget.onStatusChanged('completed');
+              },
+              onCompleteError: () {
+                // Error handling is done in the button
               },
             ),
             const SizedBox(height: 16),

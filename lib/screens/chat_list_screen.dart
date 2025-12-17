@@ -104,26 +104,25 @@ class _ChatListScreenState extends State<ChatListScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.backgroundGray,
+      backgroundColor: const Color(0xFFF8F9FA), // Light background
       appBar: AppBar(
-        title: Text(
+        title: const Text(
           'Messages',
-          style: GoogleFonts.poppins(
-            fontWeight: FontWeight.w600,
-            color: AppColors.textDark,
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
           ),
         ),
-        backgroundColor: Colors.white,
+        backgroundColor: const Color(0xFF1976D2), // Deep blue
         elevation: 0,
+        foregroundColor: Colors.white,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          color: AppColors.textDark,
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
           onPressed: () => Navigator.pop(context),
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.add),
-            color: AppColors.primaryOrange,
+            icon: const Icon(Icons.add, color: Colors.white),
             onPressed: _startNewChat,
           ),
         ],
@@ -131,13 +130,13 @@ class _ChatListScreenState extends State<ChatListScreen> {
       body: _isLoading
           ? const Center(
               child: CircularProgressIndicator(
-                color: AppColors.primaryOrange,
+                color: Color(0xFFFF9800), // Orange
               ),
             )
           : _chats.isEmpty
               ? _buildEmptyState()
               : ListView.builder(
-                  padding: EdgeInsets.all(AppDesignSystem.spaceMD),
+                  padding: const EdgeInsets.all(16),
                   itemCount: _chats.length,
                   itemBuilder: (context, index) {
                     final chat = _chats[index];
@@ -211,94 +210,106 @@ class _ChatListScreenState extends State<ChatListScreen> {
                       chatTitle = _fallbackLabel(chat.id);
                     }
 
-                    return AppCard(
-                      margin:
-                          EdgeInsets.only(bottom: AppDesignSystem.spaceSM),
-                      shadows: AppDesignSystem.shadowSM,
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => ChatScreen(chat: chat),
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.grey.shade200,
+                            blurRadius: 6,
+                            offset: const Offset(0, 3),
                           ),
-                        ).then((_) => _loadChats());
-                      },
-                      child: Padding(
-                        padding: EdgeInsets.all(AppDesignSystem.spaceSM),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 50,
-                              height: 50,
-                              decoration: BoxDecoration(
-                                gradient: AppColors.primaryGradient,
-                                shape: BoxShape.circle,
+                        ],
+                        border: Border.all(
+                          color: const Color(0xFFFF9800).withOpacity(0.1), // Light orange border
+                          width: 1,
+                        ),
+                      ),
+                      child: ListTile(
+                        contentPadding: const EdgeInsets.all(16),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => ChatScreen(chat: chat),
+                            ),
+                          ).then((_) => _loadChats());
+                        },
+                        leading: Container(
+                          width: 50,
+                          height: 50,
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [
+                                Color(0xFF1976D2), // Deep blue
+                                Color(0xFF42A5F5), // Light blue
+                              ],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Center(
+                            child: Text(
+                              chatTitle.isNotEmpty
+                                  ? chatTitle[0].toUpperCase()
+                                  : '?',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 18,
                               ),
-                              child: Center(
-                                child: Text(
-                                  chatTitle.isNotEmpty
-                                      ? chatTitle[0].toUpperCase()
-                                      : '?',
-                                  style:
-                                      AppDesignSystem.headlineMedium.copyWith(
-                                    color: Colors.white,
-                                  ),
+                            ),
+                          ),
+                        ),
+                        title: Text(
+                          chatTitle,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 16,
+                            color: Color(0xFF263238),
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        subtitle: chatSubtitle.isNotEmpty
+                            ? Text(
+                                chatSubtitle,
+                                style: TextStyle(
+                                  color: const Color(0xFF263238).withOpacity(0.7),
+                                  fontSize: 14,
                                 ),
-                              ),
-                            ),
-                            SizedBox(width: AppDesignSystem.spaceMD),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    chatTitle,
-                                    style:
-                                        AppDesignSystem.titleLarge.copyWith(
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  if (chatSubtitle.isNotEmpty) ...[
-                                    SizedBox(height: AppDesignSystem.spaceXS),
-                                    Text(
-                                      chatSubtitle,
-                                      style: AppDesignSystem.bodySmall.copyWith(
-                                        color: AppColors.textLight,
-                                      ),
-                                    ),
-                                  ],
-                                ],
-                              ),
-                            ),
-                            if (unreadCount > 0)
-                              Container(
-                                padding: EdgeInsets.symmetric(
-                                  horizontal: AppDesignSystem.spaceSM,
-                                  vertical: AppDesignSystem.spaceXS,
+                              )
+                            : null,
+                        trailing: unreadCount > 0
+                            ? Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 4,
                                 ),
                                 decoration: BoxDecoration(
-                                  gradient: AppColors.primaryGradient,
-                                  borderRadius: BorderRadius.circular(
-                                    AppDesignSystem.radiusFull,
+                                  gradient: const LinearGradient(
+                                    colors: [
+                                      Color(0xFFFF9800), // Orange
+                                      Color(0xFFFFB74D), // Light orange
+                                    ],
                                   ),
+                                  borderRadius: BorderRadius.circular(12),
                                 ),
                                 child: Text(
                                   unreadCount > 99
                                       ? '99+'
                                       : unreadCount.toString(),
-                                  style: AppDesignSystem.labelSmall.copyWith(
+                                  style: const TextStyle(
                                     color: Colors.white,
                                     fontWeight: FontWeight.w600,
+                                    fontSize: 12,
                                   ),
                                 ),
-                              ).animate().scale(
-                                    duration: 300.ms,
-                                    curve: Curves.elasticOut,
-                                  ),
-                          ],
-                        ),
+                              )
+                            : null,
                       ),
                     )
                         .animate()
@@ -308,11 +319,11 @@ class _ChatListScreenState extends State<ChatListScreen> {
                 ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _startNewChat,
-        backgroundColor: AppColors.primaryOrange,
+        backgroundColor: const Color(0xFFFF9800), // Orange
         icon: const Icon(Icons.add, color: Colors.white),
-        label: Text(
+        label: const Text(
           'New Chat',
-          style: AppDesignSystem.labelLarge.copyWith(
+          style: TextStyle(
             color: Colors.white,
             fontWeight: FontWeight.w600,
           ),
@@ -327,39 +338,86 @@ class _ChatListScreenState extends State<ChatListScreen> {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Container(
-            padding: EdgeInsets.all(AppDesignSystem.spaceLG),
+            padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              color: AppColors.primaryOrange.withOpacity(0.1),
+              gradient: const LinearGradient(
+                colors: [
+                  Color(0xFFFF9800), // Orange
+                  Color(0xFFFFB74D), // Light orange
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
               shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFFFF9800).withOpacity(0.3),
+                  blurRadius: 12,
+                  offset: const Offset(0, 6),
+                ),
+              ],
             ),
-            child: Icon(
+            child: const Icon(
               Icons.chat_bubble_outline,
               size: 80,
-              color: AppColors.primaryOrange,
+              color: Colors.white,
             ),
           ).animate().scale(duration: 600.ms, curve: Curves.elasticOut),
-          SizedBox(height: AppDesignSystem.spaceLG),
-          Text(
+          const SizedBox(height: 24),
+          const Text(
             'No conversations yet',
-            style: AppDesignSystem.headlineLarge,
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF263238),
+            ),
           ).animate().fadeIn(delay: 200.ms),
-          SizedBox(height: AppDesignSystem.spaceSM),
+          const SizedBox(height: 8),
           Padding(
-            padding: EdgeInsets.symmetric(horizontal: AppDesignSystem.spaceLG),
+            padding: const EdgeInsets.symmetric(horizontal: 32),
             child: Text(
               'Start a new chat to connect with team members',
-              style: AppDesignSystem.bodyLarge.copyWith(
-                color: AppColors.textLight,
+              style: TextStyle(
+                fontSize: 16,
+                color: const Color(0xFF263238).withOpacity(0.7),
               ),
               textAlign: TextAlign.center,
             ),
           ).animate().fadeIn(delay: 300.ms),
-          SizedBox(height: AppDesignSystem.spaceLG),
-          ElevatedButton.icon(
-            onPressed: _startNewChat,
-            icon: const Icon(Icons.add),
-            label: const Text('Start New Chat'),
-            style: AppDesignSystem.primaryButton(),
+          const SizedBox(height: 24),
+          Container(
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [
+                  Color(0xFFFF9800), // Orange
+                  Color(0xFFFFB74D), // Light orange
+                ],
+              ),
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFFFF9800).withOpacity(0.3),
+                  blurRadius: 8,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: ElevatedButton.icon(
+              onPressed: _startNewChat,
+              icon: const Icon(Icons.add, color: Colors.white),
+              label: const Text(
+                'Start New Chat',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.transparent,
+                shadowColor: Colors.transparent,
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              ),
+            ),
           ).animate().fadeIn(delay: 400.ms).slideY(begin: 0.3, end: 0),
         ],
       ),

@@ -3,7 +3,7 @@ class SiteVisit {
   final String? userId;  // User who created/owns this site visit
   final String siteName;
   final String siteCode;
-  final String status;
+  final String status; // dispatched → assigned/accepted → in_progress → completed / cancelled
   final String locality;
   final String state;
   final String activity;
@@ -40,6 +40,26 @@ class SiteVisit {
   final DateTime? arrivalTimestamp;
   final Map<String, dynamic>? journeyPath;
   final bool arrivalRecorded;
+  
+  // ========== NEW TRACKING COLUMNS (from mmp_site_entries schema) ==========
+  final String? claimedBy;
+  final DateTime? claimedAt;
+  final String? acceptedBy;
+  final DateTime? acceptedAt;
+  final String? visitStartedBy;
+  final DateTime? visitStartedAt;
+  final String? visitCompletedBy;
+  final DateTime? visitCompletedAt;
+  final DateTime? updatedAt;
+  
+  // ========== FEES (from mmp_site_entries schema) ==========
+  final double? enumeratorFee;
+  final double? transportFee;
+  final double? cost; // total cost
+  
+  // ========== ADDITIONAL DATA (jsonb) ==========
+  // Contains: start_location, end_location, photos, offline_markers, offline_synced_at, etc.
+  final Map<String, dynamic>? additionalData;
 
   SiteVisit({
     required this.id,
@@ -70,24 +90,40 @@ class SiteVisit {
     this.arrivalTimestamp,
     this.journeyPath,
     this.arrivalRecorded = false,
+    // New tracking columns
+    this.claimedBy,
+    this.claimedAt,
+    this.acceptedBy,
+    this.acceptedAt,
+    this.visitStartedBy,
+    this.visitStartedAt,
+    this.visitCompletedBy,
+    this.visitCompletedAt,
+    this.updatedAt,
+    // Fees
+    this.enumeratorFee,
+    this.transportFee,
+    this.cost,
+    // Additional data
+    this.additionalData,
   });
   factory SiteVisit.fromJson(Map<String, dynamic> json) {
     // Handle mmp_site_entries schema
     if (json.containsKey('mmp_file_id')) {
       return SiteVisit(
         id: json['id']?.toString() ?? '',
-        userId: json['accepted_by'], // Map accepted_by to userId/assignedTo
+        userId: json['accepted_by'],
         siteName: json['site_name'] ?? '',
         siteCode: json['site_code'] ?? '',
-        status: json['status'] ?? 'Pending',
+        status: json['status'] ?? 'dispatched',
         locality: json['locality'] ?? '',
         state: json['state'] ?? '',
         activity: json['activity_at_site'] ?? json['main_activity'] ?? '',
-        priority: 'Medium', // Default as not in schema
+        priority: 'Medium',
         dueDate: json['visit_date'] != null ? DateTime.tryParse(json['visit_date']) : null,
         notes: json['comments'] ?? '',
         mainActivity: json['main_activity'] ?? '',
-        location: null, // Location is separate now
+        location: null,
         fees: {
           'enumerator_fee': json['enumerator_fee'],
           'transport_fee': json['transport_fee'],
@@ -97,7 +133,7 @@ class SiteVisit {
         assignedBy: json['dispatched_by'],
         assignedAt: json['dispatched_at'] != null ? DateTime.tryParse(json['dispatched_at']) : null,
         attachments: null,
-        completedAt: json['status'] == 'Completed' ? DateTime.tryParse(json['updated_at']) : null,
+        completedAt: json['visit_completed_at'] != null ? DateTime.tryParse(json['visit_completed_at']) : null,
         rating: null,
         mmpId: json['mmp_file_id'],
         createdAt: json['created_at'] != null ? DateTime.parse(json['created_at']) : DateTime.now(),
@@ -106,9 +142,26 @@ class SiteVisit {
         arrivalTimestamp: null,
         journeyPath: null,
         arrivalRecorded: false,
+        // New tracking columns
+        claimedBy: json['claimed_by'],
+        claimedAt: json['claimed_at'] != null ? DateTime.tryParse(json['claimed_at']) : null,
+        acceptedBy: json['accepted_by'],
+        acceptedAt: json['accepted_at'] != null ? DateTime.tryParse(json['accepted_at']) : null,
+        visitStartedBy: json['visit_started_by'],
+        visitStartedAt: json['visit_started_at'] != null ? DateTime.tryParse(json['visit_started_at']) : null,
+        visitCompletedBy: json['visit_completed_by'],
+        visitCompletedAt: json['visit_completed_at'] != null ? DateTime.tryParse(json['visit_completed_at']) : null,
+        updatedAt: json['updated_at'] != null ? DateTime.tryParse(json['updated_at']) : null,
+        // Fees
+        enumeratorFee: _parseDouble(json['enumerator_fee']),
+        transportFee: _parseDouble(json['transport_fee']),
+        cost: _parseDouble(json['cost']),
+        // Additional data
+        additionalData: json['additional_data'],
       );
     }
 
+    // Handle other schemas (legacy)
     return SiteVisit(
       id: json['id']?.toString() ?? '',
       userId: json['user_id'],
@@ -152,6 +205,22 @@ class SiteVisit {
           : null,
       journeyPath: json['journey_path'],
       arrivalRecorded: json['arrival_recorded'] ?? false,
+      // Legacy fields - left blank for schema compatibility
+      claimedBy: null,
+      claimedAt: null,
+      acceptedBy: json['assigned_by'],
+      acceptedAt: json['assigned_at'],
+      visitStartedBy: null,
+      visitStartedAt: null,
+      visitCompletedBy: null,
+      visitCompletedAt: json['completed_at'],
+      updatedAt: null,
+      // Fees
+      enumeratorFee: null,
+      transportFee: null,
+      cost: null,
+      // Additional data
+      additionalData: null,
     );
   }
   Map<String, dynamic> toJson() {
@@ -184,6 +253,22 @@ class SiteVisit {
       'arrival_timestamp': arrivalTimestamp?.toIso8601String(),
       'journey_path': journeyPath,
       'arrival_recorded': arrivalRecorded,
+      // Tracking columns
+      'claimed_by': claimedBy,
+      'claimed_at': claimedAt?.toIso8601String(),
+      'accepted_by': acceptedBy,
+      'accepted_at': acceptedAt?.toIso8601String(),
+      'visit_started_by': visitStartedBy,
+      'visit_started_at': visitStartedAt?.toIso8601String(),
+      'visit_completed_by': visitCompletedBy,
+      'visit_completed_at': visitCompletedAt?.toIso8601String(),
+      'updated_at': updatedAt?.toIso8601String(),
+      // Fees
+      'enumerator_fee': enumeratorFee,
+      'transport_fee': transportFee,
+      'cost': cost,
+      // Additional data
+      'additional_data': additionalData,
     };
   }
 
@@ -216,6 +301,22 @@ class SiteVisit {
     DateTime? arrivalTimestamp,
     Map<String, dynamic>? journeyPath,
     bool? arrivalRecorded,
+    // Tracking columns
+    String? claimedBy,
+    DateTime? claimedAt,
+    String? acceptedBy,
+    DateTime? acceptedAt,
+    String? visitStartedBy,
+    DateTime? visitStartedAt,
+    String? visitCompletedBy,
+    DateTime? visitCompletedAt,
+    DateTime? updatedAt,
+    // Fees
+    double? enumeratorFee,
+    double? transportFee,
+    double? cost,
+    // Additional data
+    Map<String, dynamic>? additionalData,
   }) {
     return SiteVisit(
       id: id ?? this.id,
@@ -246,6 +347,57 @@ class SiteVisit {
       arrivalTimestamp: arrivalTimestamp ?? this.arrivalTimestamp,
       journeyPath: journeyPath ?? this.journeyPath,
       arrivalRecorded: arrivalRecorded ?? this.arrivalRecorded,
+      // Tracking columns
+      claimedBy: claimedBy ?? this.claimedBy,
+      claimedAt: claimedAt ?? this.claimedAt,
+      acceptedBy: acceptedBy ?? this.acceptedBy,
+      acceptedAt: acceptedAt ?? this.acceptedAt,
+      visitStartedBy: visitStartedBy ?? this.visitStartedBy,
+      visitStartedAt: visitStartedAt ?? this.visitStartedAt,
+      visitCompletedBy: visitCompletedBy ?? this.visitCompletedBy,
+      visitCompletedAt: visitCompletedAt ?? this.visitCompletedAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      // Fees
+      enumeratorFee: enumeratorFee ?? this.enumeratorFee,
+      transportFee: transportFee ?? this.transportFee,
+      cost: cost ?? this.cost,
+      // Additional data
+      additionalData: additionalData ?? this.additionalData,
     );
   }
+
+  // ========== HELPER METHODS ==========
+  
+  /// Calculate total cost from enumerator and transport fees
+  double? get calculatedTotalCost {
+    if (enumeratorFee == null && transportFee == null) return null;
+    return (enumeratorFee ?? 0) + (transportFee ?? 0);
+  }
+
+  /// Check if visit is in final completed state
+  bool get isCompleted => status.toLowerCase().contains('completed');
+
+  /// Check if visit is pending dispatch
+  bool get isPending => status.toLowerCase().contains('dispatched');
+
+  /// Check if visit has been claimed
+  bool get isClaimed => claimedBy != null && claimedAt != null;
+
+  /// Check if visit has been accepted by data collector
+  bool get isAccepted => acceptedBy != null && acceptedAt != null;
+
+  /// Check if visit has been started
+  bool get isStarted => visitStartedBy != null && visitStartedAt != null;
+}
+
+// ============================================================================
+// STATIC HELPER FUNCTIONS
+// ============================================================================
+
+double? _parseDouble(dynamic value) {
+  if (value == null) return null;
+  if (value is double) return value;
+  if (value is int) return value.toDouble();
+  if (value is String) return double.tryParse(value);
+  return null;
 }

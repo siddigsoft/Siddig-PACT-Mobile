@@ -10,6 +10,8 @@ import '../models/chat_participant.dart';
 import '../models/chat_contact.dart';
 import '../services/chat_service.dart';
 import '../services/chat_contact_service.dart';
+import '../services/webrtc_service.dart';
+import '../screens/call_screen.dart';
 import '../theme/app_colors.dart';
 import '../utils/error_handler.dart';
 
@@ -290,6 +292,63 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  // Initiate audio or video call
+  Future<void> _initiateCall({required bool isAudioOnly}) async {
+    if (widget.chat.otherParticipantId == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Cannot initiate call: No participant found'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return;
+    }
+
+    try {
+      final targetUserId = widget.chat.otherParticipantId!;
+      final targetUserName = _getChatTitle();
+      
+      // Check if WebRTC service is initialized
+      final webrtcService = WebRTCService();
+      
+      // Initiate the call
+      final success = await webrtcService.initiateCall(
+        targetUserId,
+        targetUserName,
+        isAudioOnly: isAudioOnly,
+      );
+
+      if (success && mounted) {
+        // Navigate to call screen
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (context) => CallScreen(
+              remoteUserName: targetUserName,
+            ),
+          ),
+        );
+      } else if (!success && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('User is busy or unavailable'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to initiate call: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   // Show dialog to edit contact name
   Future<void> _editContactName() async {
     if (_currentUserId == null || _contactUserId == null) return;
@@ -445,32 +504,47 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.backgroundGray,
+      backgroundColor: const Color(0xFFF8F9FA), // Light background
       appBar: AppBar(
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.textDark),
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
           _getChatTitle(),
-          style: GoogleFonts.poppins(
-            fontWeight: FontWeight.w600,
-            color: AppColors.textDark,
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
           ),
         ),
-        backgroundColor: Colors.white,
+        backgroundColor: const Color(0xFF1976D2), // Deep blue
         elevation: 0,
+        foregroundColor: Colors.white,
         actions: [
+          // Audio call button (only for private chats)
+          if (widget.chat.chatType == 'private' && widget.chat.otherParticipantId != null)
+            IconButton(
+              icon: const Icon(Icons.phone, color: Colors.white),
+              onPressed: () => _initiateCall(isAudioOnly: true),
+              tooltip: 'Audio call',
+            ),
+          // Video call button (only for private chats)
+          if (widget.chat.chatType == 'private' && widget.chat.otherParticipantId != null)
+            IconButton(
+              icon: const Icon(Icons.videocam, color: Colors.white),
+              onPressed: () => _initiateCall(isAudioOnly: false),
+              tooltip: 'Video call',
+            ),
           // Edit contact name button (only for private chats)
           if (widget.chat.chatType == 'private')
             IconButton(
-              icon: const Icon(Icons.edit, color: AppColors.primary),
+              icon: const Icon(Icons.edit, color: Colors.white),
               onPressed: _editContactName,
               tooltip: 'Edit contact name',
             ),
           // Delete chat button
           IconButton(
-            icon: const Icon(Icons.delete_outline, color: AppColors.error),
+            icon: const Icon(Icons.delete_outline, color: Colors.white),
             onPressed: _confirmDeleteChat,
             tooltip: 'Delete chat',
           ),
@@ -501,11 +575,18 @@ class _ChatScreenState extends State<ChatScreen> {
           // Message input
           Container(
             padding: const EdgeInsets.all(16),
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               color: Colors.white,
-              border: Border(
+              border: const Border(
                 top: BorderSide(color: Color(0xFFE0E0E0), width: 1),
               ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.grey.shade200,
+                  blurRadius: 4,
+                  offset: const Offset(0, -2),
+                ),
+              ],
             ),
             child: Row(
               children: [
@@ -519,7 +600,7 @@ class _ChatScreenState extends State<ChatScreen> {
                         borderSide: BorderSide.none,
                       ),
                       filled: true,
-                      fillColor: AppColors.backgroundGray,
+                      fillColor: const Color(0xFFF8F9FA),
                       contentPadding: const EdgeInsets.symmetric(
                         horizontal: 16,
                         vertical: 12,
@@ -533,8 +614,20 @@ class _ChatScreenState extends State<ChatScreen> {
                 const SizedBox(width: 8),
                 Container(
                   decoration: BoxDecoration(
-                    gradient: AppColors.primaryGradient,
+                    gradient: const LinearGradient(
+                      colors: [
+                        Color(0xFFFF9800), // Orange
+                        Color(0xFFFFB74D), // Light orange
+                      ],
+                    ),
                     shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFFFF9800).withOpacity(0.3),
+                        blurRadius: 6,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
                   ),
                   child: IconButton(
                     icon: _isSending
@@ -573,7 +666,16 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
-            gradient: isCurrentUser ? AppColors.primaryGradient : null,
+            gradient: isCurrentUser
+                ? const LinearGradient(
+                    colors: [
+                      Color(0xFFFF9800), // Orange
+                      Color(0xFFFFB74D), // Light orange
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  )
+                : null,
             color: isCurrentUser ? null : Colors.white,
             borderRadius: BorderRadius.only(
               topLeft: const Radius.circular(16),
@@ -587,11 +689,17 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.1),
+                color: Colors.grey.shade200,
                 blurRadius: 4,
                 offset: const Offset(0, 2),
               ),
             ],
+            border: isCurrentUser
+                ? null
+                : Border.all(
+                    color: const Color(0xFFFF9800).withOpacity(0.1),
+                    width: 1,
+                  ),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -602,10 +710,10 @@ class _ChatScreenState extends State<ChatScreen> {
                   padding: const EdgeInsets.only(bottom: 4),
                   child: Text(
                     senderName,
-                    style: GoogleFonts.poppins(
+                    style: TextStyle(
                       color: isCurrentUser
                           ? Colors.white.withOpacity(0.9)
-                          : AppColors.primary,
+                          : const Color(0xFF1976D2), // Deep blue
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
                     ),
@@ -613,18 +721,18 @@ class _ChatScreenState extends State<ChatScreen> {
                 ),
               Text(
                 message.content ?? '',
-                style: GoogleFonts.poppins(
-                  color: isCurrentUser ? Colors.white : AppColors.textDark,
+                style: TextStyle(
+                  color: isCurrentUser ? Colors.white : const Color(0xFF263238),
                   fontSize: 16,
                 ),
               ),
               const SizedBox(height: 4),
               Text(
                 _formatMessageTime(message.createdAt),
-                style: GoogleFonts.poppins(
+                style: TextStyle(
                   color: isCurrentUser
                       ? Colors.white.withOpacity(0.7)
-                      : AppColors.textLight,
+                      : const Color(0xFF263238).withOpacity(0.6),
                   fontSize: 12,
                 ),
               ),
@@ -707,25 +815,47 @@ class _ChatScreenState extends State<ChatScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            Icons.chat_bubble_outline,
-            size: 80,
-            color: AppColors.textLight.withOpacity(0.5),
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [
+                  Color(0xFFFF9800), // Orange
+                  Color(0xFFFFB74D), // Light orange
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFFFF9800).withOpacity(0.3),
+                  blurRadius: 12,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: const Icon(
+              Icons.chat_bubble_outline,
+              size: 60,
+              color: Colors.white,
+            ),
           ),
-          const SizedBox(height: 16),
-          Text(
+          const SizedBox(height: 24),
+          const Text(
             'No messages yet',
-            style: GoogleFonts.poppins(
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-              color: AppColors.textLight,
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF263238),
             ),
           ),
           const SizedBox(height: 8),
           Text(
             'Start the conversation!',
-            style: GoogleFonts.poppins(
-              color: AppColors.textLight,
+            style: TextStyle(
+              fontSize: 16,
+              color: const Color(0xFF263238).withOpacity(0.7),
             ),
           ),
         ],

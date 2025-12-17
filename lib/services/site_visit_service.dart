@@ -6,6 +6,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'offline_data_service.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'notification_trigger_service.dart';
 import '../models/site_visit.dart';
 
 class SiteVisitService {
@@ -697,7 +698,6 @@ class SiteVisitService {
         'arrival_longitude': position.longitude,
         'arrival_timestamp': DateTime.now().toIso8601String(),
       }).eq('id', visitId);
-
       // Store locally for backup
       final prefs = await SharedPreferences.getInstance();
       final gpsData = {
@@ -720,4 +720,301 @@ class SiteVisitService {
         .eq('site_code', siteCode);
     return List<Map<String, dynamic>>.from(response);
   }
+
+  // ============================================================================
+  // NEW HUB OPERATIONS & TRACKING METHODS
+  // ============================================================================
+
+  /// Update tracking columns: verified_by, verified_at, verified status
+  Future<void> verifySiteEntry(String siteEntryId, String userId) async {
+    try {
+      print('✓ Verifying site entry: $siteEntryId by $userId');
+      
+      final response = await _supabase
+          .from('mmp_site_entries')
+          .update({
+            'status': 'Verified',
+            'verified_by': userId,
+            'verified_at': DateTime.now().toIso8601String(),
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('id', siteEntryId)
+          .select();
+
+      if (response.isEmpty) {
+        throw Exception('Failed to verify site entry: No rows updated');
+      }
+      print('✅ Site entry verified successfully');
+    } catch (e) {
+      print('❌ Error verifying site entry: $e');
+      rethrow;
+    }
+  }
+
+  /// Update dispatched columns: dispatched_by, dispatched_at, status
+  Future<void> dispatchSiteEntry(
+    String siteEntryId,
+    String userId, {
+    String? toDataCollectorId,
+    String? siteName,
+    double? enumeratorFee,
+    double? transportFee,
+  }) async {
+    try {
+      print('📤 Dispatching site entry: $siteEntryId');
+      
+      final updateData = {
+        'status': 'Dispatched',
+        'dispatched_by': userId,
+        'dispatched_at': DateTime.now().toIso8601String(),
+        'updated_at': DateTime.now().toIso8601String(),
+      };
+
+      // Pre-fill accepted_by if specified (optional)
+      if (toDataCollectorId != null) {
+        updateData['accepted_by'] = toDataCollectorId;
+      }
+
+      final response = await _supabase
+          .from('mmp_site_entries')
+          .update(updateData)
+          .eq('id', siteEntryId)
+          .select()
+          .single();
+
+      if (response == null) {
+        throw Exception('Failed to dispatch site entry: No rows updated');
+      }
+
+      print('✅ Site entry dispatched successfully');
+
+      // ✅ NEW: Send notification to assigned collector
+      if (toDataCollectorId != null) {
+        try {
+          final notificationService = NotificationTriggerService();
+          await notificationService.siteAssigned(
+            toDataCollectorId,
+            siteName ?? (response['site_name'] ?? 'Unknown Site'),
+            siteEntryId,
+            enumeratorFee: enumeratorFee ?? (response['enumerator_fee'] as double?),
+            transportFee: transportFee ?? (response['transport_fee'] as double?),
+            assignedBy: userId,
+          );
+          print('✅ Notification sent to collector: $toDataCollectorId');
+        } catch (notifError) {
+          print('⚠️ Warning: Failed to send notification: $notifError');
+          // Don't fail the dispatch if notification fails
+        }
+      }
+    } catch (e) {
+      print('❌ Error dispatching site entry: $e');
+      rethrow;
+    }
+  }
+
+  /// Flag a site entry for review
+  Future<void> flagSiteEntry(
+    String siteEntryId,
+    String flagReason, {
+    String? flaggedBy,
+  }) async {
+    try {
+      print('🚩 Flagging site entry: $siteEntryId - $flagReason');
+      
+      final additionalData = await _getSiteAdditionalData(siteEntryId);
+      additionalData['isFlagged'] = true;
+      additionalData['flagReason'] = flagReason;
+      additionalData['flaggedBy'] = flaggedBy ?? 'system';
+      additionalData['flaggedAt'] = DateTime.now().toIso8601String();
+
+      final response = await _supabase
+          .from('mmp_site_entries')
+          .update({
+            'additional_data': additionalData,
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('id', siteEntryId)
+          .select();
+
+      if (response.isEmpty) {
+        throw Exception('Failed to flag site entry: No rows updated');
+      }
+      print('✅ Site entry flagged successfully');
+    } catch (e) {
+      print('❌ Error flagging site entry: $e');
+      rethrow;
+    }
+  }
+
+  /// Acknowledge cost for a site entry
+  Future<void> acknowledgeCost(
+    String siteEntryId,
+    String userId,
+  ) async {
+    try {
+      print('💰 Acknowledging cost for site entry: $siteEntryId');
+      
+      final response = await _supabase
+          .from('mmp_site_entries')
+          .update({
+            'cost_acknowledged': true,
+            'cost_acknowledged_at': DateTime.now().toIso8601String(),
+            'cost_acknowledged_by': userId,
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('id', siteEntryId)
+          .select();
+
+      if (response.isEmpty) {
+        throw Exception('Failed to acknowledge cost: No rows updated');
+      }
+      print('✅ Cost acknowledged successfully');
+    } catch (e) {
+      print('❌ Error acknowledging cost: $e');
+      rethrow;
+    }
+  }
+
+  /// Get all hubs
+  Future<List<Map<String, dynamic>>> getAllHubs() async {
+    try {
+      final response = await _supabase
+          .from('hubs')
+          .select()
+          .order('name');
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      print('❌ Error fetching hubs: $e');
+      return [];
+    }
+  }
+
+  /// Get all sites from registry
+  Future<List<Map<String, dynamic>>> getAllSitesRegistry() async {
+    try {
+      final response = await _supabase
+          .from('sites_registry')
+          .select()
+          .order('site_name');
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      print('❌ Error fetching sites registry: $e');
+      return [];
+    }
+  }
+
+  /// Get registry linkage from site entry
+  Future<Map<String, dynamic>?> getRegistryLinkage(String siteEntryId) async {
+    try {
+      final response = await _supabase
+          .from('mmp_site_entries')
+          .select('registry_site_id, additional_data')
+          .eq('id', siteEntryId)
+          .single();
+
+      final registryLinkage = response['additional_data']?['registry_linkage'];
+      return registryLinkage != null ? Map<String, dynamic>.from(registryLinkage) : null;
+    } catch (e) {
+      print('⚠️ Error getting registry linkage: $e');
+      return null;
+    }
+  }
+
+  /// Helper: get additional_data for a site entry
+  Future<Map<String, dynamic>> _getSiteAdditionalData(String siteEntryId) async {
+    try {
+      final response = await _supabase
+          .from('mmp_site_entries')
+          .select('additional_data')
+          .eq('id', siteEntryId)
+          .single();
+
+      return response['additional_data'] != null
+          ? Map<String, dynamic>.from(response['additional_data'])
+          : {};
+    } catch (e) {
+      print('⚠️ Error getting additional_data: $e');
+      return {};
+    }
+  }
+
+  /// Get cost summary for a site entry
+  Future<Map<String, dynamic>?> getSiteCostSummary(String siteEntryId) async {
+    try {
+      final response = await _supabase
+          .from('mmp_site_entries')
+          .select('enumerator_fee, transport_fee, cost_acknowledged, cost_acknowledged_at, cost_acknowledged_by')
+          .eq('id', siteEntryId)
+          .single();
+
+      final enumeratorFee = response['enumerator_fee'] ?? 0.0;
+      final transport = response['transport_fee'] ?? 0.0;
+
+      return {
+        'enumerator_fee': enumeratorFee,
+        'transport_fee': transport,
+        'total_cost': enumeratorFee + transport,
+        'cost_acknowledged': response['cost_acknowledged'] ?? false,
+        'cost_acknowledged_at': response['cost_acknowledged_at'],
+        'cost_acknowledged_by': response['cost_acknowledged_by'],
+      };
+    } catch (e) {
+      print('⚠️ Error getting cost summary: $e');
+      return null;
+    }
+  }
+
+  /// Filter sites by status
+  Future<List<SiteVisit>> getSitesByStatus(String status) async {
+    try {
+      final response = await _supabase
+          .from('mmp_site_entries')
+          .select()
+          .eq('status', status)
+          .order('updated_at', ascending: false);
+
+      return (response as List)
+          .map((item) => SiteVisit.fromJson(item as Map<String, dynamic>))
+          .toList();
+    } catch (e) {
+      print('❌ Error filtering sites by status: $e');
+      return [];
+    }
+  }
+
+  /// Filter sites by hub
+  Future<List<SiteVisit>> getSitesByHub(String hubId) async {
+    try {
+      final response = await _supabase
+          .from('mmp_site_entries')
+          .select()
+          .eq('hub_office', hubId)
+          .order('site_name');
+
+      return (response as List)
+          .map((item) => SiteVisit.fromJson(item as Map<String, dynamic>))
+          .toList();
+    } catch (e) {
+      print('❌ Error filtering sites by hub: $e');
+      return [];
+    }
+  }
+
+  /// Get pending withdrawal requests from completed visits
+  Future<List<Map<String, dynamic>>> getPendingCostAcknowledgments() async {
+    try {
+      final response = await _supabase
+          .from('mmp_site_entries')
+          .select()
+          .eq('cost_acknowledged', false)
+          .neq('enumerator_fee', 'null')
+          .order('updated_at', ascending: true);
+
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      print('❌ Error getting pending cost acknowledgments: $e');
+      return [];
+    }
+  }
 }
+

@@ -18,7 +18,7 @@ class SafetyHubScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.backgroundGray,
+      backgroundColor: const Color(0xFFF8F9FA), // Light background
       body: SafeArea(
         child: Column(
           children: [
@@ -55,6 +55,8 @@ class SafetyHubScreen extends StatelessWidget {
         title: AppLocalizations.of(context)!.safetyHub,
         showBackButton: true,
         centerTitle: true,
+        backgroundColor: const Color(0xFF1976D2), // Deep blue
+        textColor: Colors.white,
         onLeadingIconPressed: () {
           HapticFeedback.lightImpact();
           Navigator.pop(context);
@@ -63,6 +65,8 @@ class SafetyHubScreen extends StatelessWidget {
           HeaderActionButton(
             icon: Icons.info_outline_rounded,
             tooltip: AppLocalizations.of(context)!.information,
+            color: Colors.white,
+            backgroundColor: Colors.white.withOpacity(0.2),
             onPressed: () {},
           ),
         ],
@@ -75,10 +79,10 @@ class SafetyHubScreen extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
       child: Text(
         title,
-        style: GoogleFonts.poppins(
+        style: const TextStyle(
           fontSize: 22,
           fontWeight: FontWeight.w600,
-          color: AppColors.textDark,
+          color: Color(0xFF263238), // Dark text
         ),
       ),
     ).animate().fadeIn(duration: 400.ms, delay: 100.ms);
@@ -92,22 +96,22 @@ class SafetyHubScreen extends StatelessWidget {
             context: context,
             icon: Icons.checklist_rounded,
             title: AppLocalizations.of(context)!.safetyChecklist,
-            iconBackgroundColor: AppColors.accentGreen.withOpacity(0.15),
-            iconColor: AppColors.accentGreen,
+            iconBackgroundColor: const Color(0xFFFF9800).withOpacity(0.15), // Orange background
+            iconColor: const Color(0xFFFF9800), // Orange icon
           ),
           _buildSafetyItem(
             context: context,
             icon: Icons.warning_amber_rounded,
             title: AppLocalizations.of(context)!.incidentReport,
-            iconBackgroundColor: AppColors.accentYellow.withOpacity(0.15),
-            iconColor: AppColors.accentYellow,
+            iconBackgroundColor: const Color(0xFF1976D2).withOpacity(0.15), // Blue background
+            iconColor: const Color(0xFF1976D2), // Blue icon
           ),
           _buildSafetyItem(
             context: context,
             icon: Icons.support_agent,
             title: AppLocalizations.of(context)!.regionalHelplines,
-            iconBackgroundColor: AppColors.primaryOrange.withOpacity(0.15),
-            iconColor: AppColors.primaryOrange,
+            iconBackgroundColor: const Color(0xFF4CAF50).withOpacity(0.15), // Green background
+            iconColor: const Color(0xFF4CAF50), // Green icon
           ),
         ],
       ),
@@ -128,12 +132,15 @@ class SafetyHubScreen extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-            spreadRadius: 0,
+            color: Colors.grey.shade200,
+            blurRadius: 6,
+            offset: const Offset(0, 3),
           ),
         ],
+        border: Border.all(
+          color: const Color(0xFFFF9800).withOpacity(0.1), // Light orange border
+          width: 1,
+        ),
       ),
       child: Material(
         color: Colors.transparent,
@@ -179,14 +186,14 @@ class SafetyHubScreen extends StatelessWidget {
                 Expanded(
                   child: Text(
                     title,
-                    style: GoogleFonts.poppins(
+                    style: const TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w600,
-                      color: AppColors.textDark,
+                      color: Color(0xFF263238), // Dark text
                     ),
                   ),
                 ),
-                Icon(Icons.chevron_right, color: AppColors.textLight, size: 28),
+                Icon(Icons.chevron_right, color: const Color(0xFFFF9800), size: 28), // Orange chevron
               ],
             ),
           ),
@@ -200,18 +207,18 @@ class SafetyHubScreen extends StatelessWidget {
       builder: (context) => Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-            gradient: LinearGradient(
+            gradient: const LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: [
-                AppColors.accentGreen.withOpacity(0.9),
-                AppColors.accentGreen.withOpacity(0.7),
+                Color(0xFF1976D2), // Deep blue
+                Color(0xFF42A5F5), // Light blue
               ],
             ),
             borderRadius: BorderRadius.circular(16),
             boxShadow: [
               BoxShadow(
-                color: AppColors.accentGreen.withOpacity(0.3),
+                color: const Color(0xFF1976D2).withOpacity(0.3),
                 blurRadius: 10,
                 offset: const Offset(0, 5),
                 spreadRadius: -2,
@@ -231,7 +238,7 @@ class SafetyHubScreen extends StatelessWidget {
                   const SizedBox(width: 12),
                   Text(
                     AppLocalizations.of(context)!.safetyTipOfTheDay,
-                    style: GoogleFonts.poppins(
+                    style: const TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w600,
                       color: Colors.white,
@@ -242,7 +249,7 @@ class SafetyHubScreen extends StatelessWidget {
               const SizedBox(height: 12),
               Text(
                 AppLocalizations.of(context)!.ladderInspectionTip,
-                style: GoogleFonts.poppins(fontSize: 15, color: Colors.white),
+                style: const TextStyle(fontSize: 15, color: Colors.white),
               ),
               const SizedBox(height: 16),
               Align(
@@ -264,7 +271,7 @@ class SafetyHubScreen extends StatelessWidget {
                   ),
                   child: Text(
                     AppLocalizations.of(context)!.viewMoreTips,
-                    style: GoogleFonts.poppins(
+                    style: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
                       color: Colors.white,

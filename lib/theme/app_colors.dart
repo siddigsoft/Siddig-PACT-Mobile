@@ -57,6 +57,14 @@ class AppColors {
     0x14000000,
   ); // Subtle shadow color (8% opacity)
 
+  // Additional color aliases for consistency
+  static const Color surface = primaryWhite;
+  static const Color shadow = shadowColor;
+  static const Color textPrimary = textDark;
+  static const Color textSecondary = textLight;
+  static const Color textTertiary = Color(0xFFB0B7BF); // Even lighter gray
+  static const Color secondary = primaryBlue;
+
   // Gradient definitions - For beautiful backgrounds
   static const LinearGradient primaryGradient = LinearGradient(
     begin: Alignment.topLeft,

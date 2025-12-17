@@ -139,6 +139,13 @@ class AppDesignSystem {
         height: 1.5,
       );
 
+  static TextStyle get titleSmall => GoogleFonts.poppins(
+        fontSize: 12,
+        fontWeight: FontWeight.w600,
+        color: AppColors.textDark,
+        height: 1.5,
+      );
+
   static TextStyle get bodyLarge => GoogleFonts.poppins(
         fontSize: 16,
         fontWeight: FontWeight.w400,
@@ -230,205 +237,34 @@ class AppDesignSystem {
   // ============================================
   // BUTTON STYLES
   // ============================================
-  static ButtonStyle primaryButton({double? radius}) {
+  static ButtonStyle primaryButton() {
     return ElevatedButton.styleFrom(
-      backgroundColor: AppColors.primaryOrange,
+      backgroundColor: AppColors.primaryBlue,
       foregroundColor: Colors.white,
       elevation: 0,
-      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+      shadowColor: Colors.transparent,
+      padding: const EdgeInsets.symmetric(horizontal: spaceLG, vertical: spaceMD),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(radius ?? radiusMD),
+        borderRadius: BorderRadius.circular(radiusMD),
       ),
       textStyle: GoogleFonts.poppins(
         fontSize: 16,
         fontWeight: FontWeight.w600,
       ),
-      shadowColor: AppColors.primaryOrange.withOpacity(0.3),
-    ).copyWith(
-      elevation: WidgetStateProperty.resolveWith<double>(
-        (states) => states.contains(WidgetState.pressed) ? 0 : 4,
-      ),
     );
   }
 
-  static ButtonStyle secondaryButton({double? radius}) {
+  static ButtonStyle secondaryButton() {
     return OutlinedButton.styleFrom(
-      foregroundColor: AppColors.primaryOrange,
-      side: const BorderSide(color: AppColors.primaryOrange, width: 2),
-      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+      foregroundColor: AppColors.primaryBlue,
+      side: const BorderSide(color: AppColors.primaryBlue, width: 1.5),
+      padding: const EdgeInsets.symmetric(horizontal: spaceLG, vertical: spaceMD),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(radius ?? radiusMD),
+        borderRadius: BorderRadius.circular(radiusMD),
       ),
       textStyle: GoogleFonts.poppins(
         fontSize: 16,
         fontWeight: FontWeight.w600,
-      ),
-    );
-  }
-
-  static ButtonStyle textButton() {
-    return TextButton.styleFrom(
-      foregroundColor: AppColors.primaryOrange,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      textStyle: GoogleFonts.poppins(
-        fontSize: 14,
-        fontWeight: FontWeight.w600,
-      ),
-    );
-  }
-
-  static ButtonStyle iconButton({Color? color}) {
-    return IconButton.styleFrom(
-      foregroundColor: color ?? AppColors.primaryOrange,
-      backgroundColor: (color ?? AppColors.primaryOrange).withOpacity(0.1),
-      padding: const EdgeInsets.all(12),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(radiusSM),
-      ),
-    );
-  }
-
-  // ============================================
-  // INPUT DECORATION
-  // ============================================
-  static InputDecoration inputDecoration({
-    String? label,
-    String? hint,
-    Widget? prefixIcon,
-    Widget? suffixIcon,
-    String? errorText,
-  }) {
-    return InputDecoration(
-      labelText: label,
-      hintText: hint,
-      prefixIcon: prefixIcon,
-      suffixIcon: suffixIcon,
-      errorText: errorText,
-      filled: true,
-      fillColor: Colors.white,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(radiusMD),
-        borderSide: BorderSide(color: AppColors.borderColor),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(radiusMD),
-        borderSide: BorderSide(color: AppColors.borderColor),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(radiusMD),
-        borderSide: const BorderSide(color: AppColors.primaryOrange, width: 2),
-      ),
-      errorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(radiusMD),
-        borderSide: const BorderSide(color: AppColors.accentRed, width: 1),
-      ),
-      focusedErrorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(radiusMD),
-        borderSide: const BorderSide(color: AppColors.accentRed, width: 2),
-      ),
-      labelStyle: GoogleFonts.poppins(
-        color: AppColors.textLight,
-        fontWeight: FontWeight.w500,
-      ),
-      hintStyle: GoogleFonts.poppins(
-        color: AppColors.textLight.withOpacity(0.6),
-      ),
-      errorStyle: GoogleFonts.poppins(
-        color: AppColors.accentRed,
-        fontSize: 12,
-      ),
-    );
-  }
-
-  // ============================================
-  // LOADING INDICATOR
-  // ============================================
-  static Widget loadingIndicator({Color? color, double? size}) {
-    return SizedBox(
-      width: size ?? 24,
-      height: size ?? 24,
-      child: CircularProgressIndicator(
-        strokeWidth: 3,
-        valueColor: AlwaysStoppedAnimation<Color>(
-          color ?? AppColors.primaryOrange,
-        ),
-      ),
-    );
-  }
-
-  // ============================================
-  // EMPTY STATE
-  // ============================================
-  static Widget emptyState({
-    required IconData icon,
-    required String title,
-    String? description,
-    Widget? action,
-  }) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(spaceLG),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(spaceXL),
-              decoration: BoxDecoration(
-                color: AppColors.primaryOrange.withOpacity(0.1),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                icon,
-                size: 64,
-                color: AppColors.primaryOrange,
-              ),
-            ),
-            const SizedBox(height: spaceLG),
-            Text(
-              title,
-              style: headlineMedium,
-              textAlign: TextAlign.center,
-            ),
-            if (description != null) ...[
-              const SizedBox(height: spaceSM),
-              Text(
-                description,
-                style: bodyMedium.copyWith(color: AppColors.textLight),
-                textAlign: TextAlign.center,
-              ),
-            ],
-            if (action != null) ...[
-              const SizedBox(height: spaceLG),
-              action,
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ============================================
-  // BADGES
-  // ============================================
-  static Widget badge({
-    required String text,
-    Color? backgroundColor,
-    Color? textColor,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: backgroundColor ?? AppColors.primaryOrange.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(radiusFull),
-      ),
-      child: Text(
-        text,
-        style: GoogleFonts.poppins(
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-          color: textColor ?? AppColors.primaryOrange,
-        ),
       ),
     );
   }
@@ -451,4 +287,23 @@ class AppDesignSystem {
       color: AppColors.borderColor,
     );
   }
+}
+
+/// Text styles for the app - provides easy access to typography
+class AppTextStyles {
+  static TextStyle get displayLarge => AppDesignSystem.displayLarge;
+  static TextStyle get displayMedium => AppDesignSystem.displayMedium;
+  static TextStyle get displaySmall => AppDesignSystem.displaySmall;
+  static TextStyle get headlineLarge => AppDesignSystem.headlineLarge;
+  static TextStyle get headlineMedium => AppDesignSystem.headlineMedium;
+  static TextStyle get headlineSmall => AppDesignSystem.headlineSmall;
+  static TextStyle get titleLarge => AppDesignSystem.titleLarge;
+  static TextStyle get titleMedium => AppDesignSystem.titleMedium;
+  static TextStyle get titleSmall => AppDesignSystem.titleSmall;
+  static TextStyle get bodyLarge => AppDesignSystem.bodyLarge;
+  static TextStyle get bodyMedium => AppDesignSystem.bodyMedium;
+  static TextStyle get bodySmall => AppDesignSystem.bodySmall;
+  static TextStyle get labelLarge => AppDesignSystem.labelLarge;
+  static TextStyle get labelMedium => AppDesignSystem.labelMedium;
+  static TextStyle get labelSmall => AppDesignSystem.labelSmall;
 }

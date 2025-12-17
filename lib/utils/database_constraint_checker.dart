@@ -216,7 +216,7 @@ CREATE POLICY "Users can add photos to their reports"
     );
 
 -- Ensure equipment table has user_id column
-DO $$
+DO \$\$
 BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM information_schema.columns 
@@ -225,10 +225,10 @@ BEGIN
         ALTER TABLE equipment ADD COLUMN user_id UUID REFERENCES auth.users(id);
         CREATE INDEX idx_equipment_user_id ON equipment(user_id);
     END IF;
-END $$;
+END \$\$;
 
 -- Ensure site_visits has last_modified column
-DO $$
+DO \$\$
 BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM information_schema.columns 
@@ -236,7 +236,7 @@ BEGIN
     ) THEN
         ALTER TABLE site_visits ADD COLUMN last_modified TIMESTAMP WITH TIME ZONE DEFAULT NOW();
     END IF;
-END $$;
+END \$\$;
 ''';
   }
 

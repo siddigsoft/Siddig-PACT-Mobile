@@ -1,15 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../services/auth_service.dart';
 import '../providers/sync_provider.dart';
+import '../providers/profile_provider.dart';
 import '../theme/app_design_system.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_widgets.dart';
 import '../utils/error_handler.dart';
+import '../screens/profile_screen.dart';
 
-class CustomDrawerMenu extends StatefulWidget {
+class CustomDrawerMenu extends ConsumerStatefulWidget {
   final User? currentUser;
   final VoidCallback onClose;
 
@@ -20,10 +23,10 @@ class CustomDrawerMenu extends StatefulWidget {
   });
 
   @override
-  State<CustomDrawerMenu> createState() => _CustomDrawerMenuState();
+  ConsumerState<CustomDrawerMenu> createState() => _CustomDrawerMenuState();
 }
 
-class _CustomDrawerMenuState extends State<CustomDrawerMenu> {
+class _CustomDrawerMenuState extends ConsumerState<CustomDrawerMenu> {
   String _userRole = 'Loading...';
 
   @override
@@ -31,6 +34,10 @@ class _CustomDrawerMenuState extends State<CustomDrawerMenu> {
     super.initState();
     _userRole = widget.currentUser?.userMetadata?['role'] ?? 'User';
     _fetchUserRole();
+    // Load profile data
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(profileProvider.notifier).loadProfile();
+    });
   }
 
   Future<void> _fetchUserRole() async {
@@ -122,7 +129,7 @@ class _CustomDrawerMenuState extends State<CustomDrawerMenu> {
   }
 
   Future<void> _performSync(BuildContext context) async {
-    final syncProvider = Provider.of<SyncProvider>(context, listen: false);
+    final syncProvider = context.read<SyncProvider>();
 
     try {
       // Show initial sync message
@@ -159,9 +166,14 @@ class _CustomDrawerMenuState extends State<CustomDrawerMenu> {
 
   @override
   Widget build(BuildContext context) {
-    final userName = widget.currentUser?.userMetadata?['full_name'] ?? 'User';
-    final userEmail = widget.currentUser?.email ?? '';
-    final userInitial = userName.isNotEmpty ? userName[0].toUpperCase() : 'U';
+    // Get profile data from Riverpod provider
+    final profile = ref.watch(currentUserProfileProvider);
+    
+    // Use profile data if available, fallback to auth metadata
+    final userName = profile?.displayName ?? widget.currentUser?.userMetadata?['full_name'] ?? 'User';
+    final userEmail = profile?.email ?? widget.currentUser?.email ?? '';
+    final userInitial = profile?.initials ?? (userName.isNotEmpty ? userName[0].toUpperCase() : 'U');
+    final avatarUrl = profile?.avatarUrl;
     
     return Drawer(
       child: Container(
@@ -212,14 +224,19 @@ class _CustomDrawerMenuState extends State<CustomDrawerMenu> {
                             child: CircleAvatar(
                               radius: 32,
                               backgroundColor: Colors.white,
-                              child: Text(
-                                userInitial,
-                                style: TextStyle(
-                                  fontSize: 32,
-                                  fontWeight: FontWeight.bold,
-                                  color: AppColors.primaryOrange,
-                                ),
-                              ),
+                              backgroundImage: avatarUrl != null && avatarUrl.isNotEmpty
+                                  ? NetworkImage(avatarUrl)
+                                  : null,
+                              child: avatarUrl == null || avatarUrl.isEmpty
+                                  ? Text(
+                                      userInitial,
+                                      style: TextStyle(
+                                        fontSize: 32,
+                                        fontWeight: FontWeight.bold,
+                                        color: AppColors.primaryOrange,
+                                      ),
+                                    )
+                                  : null,
                             ),
                           ),
                           const Spacer(),
@@ -303,6 +320,21 @@ class _CustomDrawerMenuState extends State<CustomDrawerMenu> {
                     context,
                     title: 'Quick Access',
                     items: [
+                      _MenuItemData(
+                        icon: Icons.person_rounded,
+                        title: 'My Profile',
+                        subtitle: 'View and edit profile',
+                        iconColor: Colors.teal,
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const ProfileScreen(),
+                            ),
+                          );
+                          widget.onClose();
+                        },
+                      ),
                       _MenuItemData(
                         icon: Icons.dashboard_rounded,
                         title: 'PACT Dashboard',

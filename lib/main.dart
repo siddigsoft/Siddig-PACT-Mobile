@@ -8,6 +8,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart' hide ChangeNotifierProvider, Consumer;
 import 'package:hive_flutter/hive_flutter.dart';
 import '../services/biometric_auth_service.dart';
 import 'authentication/login_screen.dart';
@@ -196,18 +197,20 @@ void main() async {
 
   // Runs the main application
   runApp(
-    MultiProvider(
-      providers: [
-        ChangeNotifierProvider(create: (context) => LocaleProvider()),
-        ChangeNotifierProvider(
-          create: (context) => SyncProvider(
-            Supabase.instance.client,
-            localStorageService,
-            connectivityService,
+    ProviderScope(
+      child: MultiProvider(
+        providers: [
+          ChangeNotifierProvider(create: (context) => LocaleProvider()),
+          ChangeNotifierProvider(
+            create: (context) => SyncProvider(
+              Supabase.instance.client,
+              localStorageService,
+              connectivityService,
+            ),
           ),
-        ),
-      ],
-      child: MyApp(routeObserver: routeObserver, initialRoute: initialRoute),
+        ],
+        child: MyApp(routeObserver: routeObserver, initialRoute: initialRoute),
+      ),
     ),
   );
 }
