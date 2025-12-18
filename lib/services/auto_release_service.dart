@@ -24,12 +24,12 @@ class AutoReleaseService {
     try {
       int releasedCount = 0;
 
-      // Query all assigned sites with autorelease data
+      // Query all claimed sites that haven't been accepted yet
       final response = await _supabase
           .from('mmp_site_entries')
           .select()
-          .neq('accepted_by', 'null')
-          .eq('status', 'Accepted')
+          .eq('status', 'claimed')
+          .is_('accepted_by', null)
           .order('created_at', ascending: false)
           .limit(500);
 
@@ -94,10 +94,10 @@ class AutoReleaseService {
   /// Release a site back to "Dispatched" status
   Future<void> _releaseSite(SiteEntryData site) async {
     try {
-      debugPrint('🔄 Auto-releasing site: ${site.id} (was assigned to ${site.acceptedBy})');
+      debugPrint('🔄 Auto-releasing site: ${site.id} (was claimed by ${site.claimedBy})');
 
-      // Get the former assignee for notification
-      final formerAssignee = site.acceptedBy;
+      // Get the former claimant for notification
+      final formerClaimant = site.claimedBy;
       final siteName = site.siteName;
 
       // Update site status back to Dispatched
@@ -109,12 +109,14 @@ class AutoReleaseService {
             'accepted_at': null,
             'claimed_by': null,
             'claimed_at': null,
+            'enumerator_fee': null,
+            'cost': null,
             'additional_data': (site.additionalData as Map<String, dynamic>? ?? {})
               ..addAll({
                 'autorelease_triggered': true,
                 'autorelease_timestamp': DateTime.now().toIso8601String(),
-                'autorelease_from_user': formerAssignee,
-                'previous_status': 'Accepted',
+                'autorelease_from_user': formerClaimant,
+                'previous_status': 'claimed',
               }),
             'updated_at': DateTime.now().toIso8601String(),
           })
@@ -125,11 +127,11 @@ class AutoReleaseService {
         throw Exception('Failed to update site status');
       }
 
-      // Notify the former assignee that site was auto-released
-      if (formerAssignee != null) {
+      // Notify the former claimant that site was auto-released
+      if (formerClaimant != null) {
         try {
           await _notificationService.siteAutoReleased(
-            formerAssignee,
+            formerClaimant,
             siteName,
             site.id,
           );

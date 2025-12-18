@@ -46,6 +46,9 @@ class _CostSubmissionFormScreenState extends ConsumerState<CostSubmissionFormScr
   bool _loadingSiteVisits = true;
   final _siteVisitService = SiteVisitService();
 
+  // Service getter
+  CostSubmissionService get service => ref.read(costSubmissionServiceProvider);
+
   @override
   void initState() {
     super.initState();
@@ -383,9 +386,218 @@ class _CostSubmissionFormScreenState extends ConsumerState<CostSubmissionFormScr
                   ),
                 ),
               ),
+
+            // Budget Information Card
+            if (_selectedSiteVisit != null) ...[
+              const SizedBox(height: 16),
+              _buildBudgetInfoCard(),
+            ],
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildBudgetInfoCard() {
+    final transportBudget = _selectedSiteVisit!.transportFee ?? 0.0;
+    final enumeratorFee = _selectedSiteVisit!.enumeratorFee ?? 0.0;
+    final totalBudget = transportBudget + enumeratorFee;
+    final totalBudgetCents = (totalBudget * 100).round();
+    final budgetUtilizationPercent = totalBudget > 0 ? (_totalCents / totalBudgetCents) * 100 : 0.0;
+    final isOverBudget = _totalCents > totalBudgetCents;
+    final isNearBudget = budgetUtilizationPercent > 80 && !isOverBudget;
+
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: isOverBudget
+              ? [Colors.red.shade50, Colors.red.shade100]
+              : isNearBudget
+                ? [Colors.orange.shade50, Colors.orange.shade100]
+                : [Colors.green.shade50, Colors.green.shade100],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: (isOverBudget ? Colors.red : isNearBudget ? Colors.orange : Colors.green).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    isOverBudget ? Icons.warning : isNearBudget ? Icons.warning_amber : Icons.check_circle,
+                    color: isOverBudget ? Colors.red : isNearBudget ? Colors.orange : Colors.green,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                const Text(
+                  'Budget Information',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildBudgetItem(
+                    'Transport Budget',
+                    service.formatCurrency((transportBudget * 100).round(), currency: _selectedCurrency),
+                    Icons.directions_car,
+                    const Color(0xFF1976D2),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _buildBudgetItem(
+                    'Enumerator Fee',
+                    service.formatCurrency((enumeratorFee * 100).round(), currency: _selectedCurrency),
+                    Icons.person,
+                    const Color(0xFF7B1FA2),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            _buildBudgetItem(
+              'Total Available Budget',
+              service.formatCurrency(totalBudgetCents, currency: _selectedCurrency),
+              Icons.account_balance_wallet,
+              const Color(0xFF388E3C),
+            ),
+            const SizedBox(height: 12),
+            _buildBudgetItem(
+              'Current Total Cost',
+              service.formatCurrency(_totalCents, currency: _selectedCurrency),
+              Icons.calculate,
+              isOverBudget ? Colors.red : isNearBudget ? Colors.orange : const Color(0xFF1976D2),
+            ),
+            const SizedBox(height: 8),
+            LinearProgressIndicator(
+              value: budgetUtilizationPercent / 100,
+              backgroundColor: Colors.grey.shade300,
+              valueColor: AlwaysStoppedAnimation<Color>(
+                isOverBudget ? Colors.red : isNearBudget ? Colors.orange : Colors.green,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '${budgetUtilizationPercent.toStringAsFixed(1)}% of budget used',
+              style: TextStyle(
+                fontSize: 12,
+                color: isOverBudget ? Colors.red : isNearBudget ? Colors.orange : Colors.green,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            if (isOverBudget) ...[
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.red.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.red.shade200),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.error, color: Colors.red, size: 16),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Cost exceeds allocated budget by ${service.formatCurrency(_totalCents - totalBudgetCents, currency: _selectedCurrency)}',
+                        style: const TextStyle(
+                          color: Colors.red,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ] else if (isNearBudget) ...[
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.orange.shade200),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.warning_amber, color: Colors.orange, size: 16),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Warning: Using ${budgetUtilizationPercent.toStringAsFixed(1)}% of allocated budget',
+                        style: const TextStyle(
+                          color: Colors.orange,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBudgetItem(String label, String amount, IconData icon, Color color) {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(6),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Icon(icon, color: color, size: 16),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey[600],
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              Text(
+                amount,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: color,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 

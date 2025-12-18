@@ -355,28 +355,189 @@ class NotificationService {
     );
   }
 
+  // ==================== COST SUBMISSION NOTIFICATIONS ====================
+
+  static Future<void> showCostSubmissionApprovedNotification({
+    required String submissionId,
+    required String siteVisitId,
+    required double approvedAmount,
+    required String currency,
+  }) async {
+    await initialize();
+
+    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+      'cost_submission_approvals',
+      'Cost Submission Approvals',
+      channelDescription: 'Notifications for cost submission approval status',
+      importance: Importance.max,
+      priority: Priority.high,
+      showWhen: true,
+    );
+
+    const DarwinNotificationDetails iOSDetails = DarwinNotificationDetails();
+
+    const NotificationDetails platformDetails = NotificationDetails(
+      android: androidDetails,
+      iOS: iOSDetails,
+    );
+
+    await _notifications.show(
+      submissionId.hashCode,
+      'Cost Submission Approved',
+      'Your cost submission for site visit $siteVisitId has been approved. Amount: ${approvedAmount.toStringAsFixed(2)} $currency',
+      platformDetails,
+      payload: 'cost_submission_approved:$submissionId',
+    );
+  }
+
+  static Future<void> showCostSubmissionRejectedNotification({
+    required String submissionId,
+    required String siteVisitId,
+    required String rejectionReason,
+  }) async {
+    await initialize();
+
+    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+      'cost_submission_rejections',
+      'Cost Submission Rejections',
+      channelDescription: 'Notifications for cost submission rejection status',
+      importance: Importance.max,
+      priority: Priority.high,
+      showWhen: true,
+    );
+
+    const DarwinNotificationDetails iOSDetails = DarwinNotificationDetails();
+
+    const NotificationDetails platformDetails = NotificationDetails(
+      android: androidDetails,
+      iOS: iOSDetails,
+    );
+
+    await _notifications.show(
+      submissionId.hashCode,
+      'Cost Submission Rejected',
+      'Your cost submission for site visit $siteVisitId has been rejected. Reason: $rejectionReason',
+      platformDetails,
+      payload: 'cost_submission_rejected:$submissionId',
+    );
+  }
+
+  static Future<void> showCostSubmissionRevisionRequestedNotification({
+    required String submissionId,
+    required String siteVisitId,
+    required String revisionNotes,
+  }) async {
+    await initialize();
+
+    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+      'cost_submission_revisions',
+      'Cost Submission Revisions',
+      channelDescription: 'Notifications for cost submission revision requests',
+      importance: Importance.max,
+      priority: Priority.high,
+      showWhen: true,
+    );
+
+    const DarwinNotificationDetails iOSDetails = DarwinNotificationDetails();
+
+    const NotificationDetails platformDetails = NotificationDetails(
+      android: androidDetails,
+      iOS: iOSDetails,
+    );
+
+    await _notifications.show(
+      submissionId.hashCode,
+      'Revision Requested',
+      'Your cost submission for site visit $siteVisitId requires revision. Notes: $revisionNotes',
+      platformDetails,
+      payload: 'cost_submission_revision:$submissionId',
+    );
+  }
+
+  static Future<void> showOfflineSyncCompletedNotification({
+    required int syncedCount,
+  }) async {
+    await initialize();
+
+    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+      'offline_sync',
+      'Offline Sync',
+      channelDescription: 'Notifications for offline data synchronization',
+      importance: Importance.defaultImportance,
+      priority: Priority.defaultPriority,
+      showWhen: true,
+    );
+
+    const DarwinNotificationDetails iOSDetails = DarwinNotificationDetails();
+
+    const NotificationDetails platformDetails = NotificationDetails(
+      android: androidDetails,
+      iOS: iOSDetails,
+    );
+
+    await _notifications.show(
+      'offline_sync'.hashCode,
+      'Offline Sync Completed',
+      '$syncedCount cost submission(s) have been synchronized successfully.',
+      platformDetails,
+      payload: 'offline_sync_completed',
+    );
+  }
+
+  static Future<void> showBudgetAlertNotification({
+    required String siteVisitId,
+    required double remainingBudget,
+    required String currency,
+  }) async {
+    await initialize();
+
+    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+      'budget_alerts',
+      'Budget Alerts',
+      channelDescription: 'Notifications for budget-related alerts',
+      importance: Importance.high,
+      priority: Priority.high,
+      showWhen: true,
+    );
+
+    const DarwinNotificationDetails iOSDetails = DarwinNotificationDetails();
+
+    const NotificationDetails platformDetails = NotificationDetails(
+      android: androidDetails,
+      iOS: iOSDetails,
+    );
+
+    await _notifications.show(
+      'budget_alert_$siteVisitId'.hashCode,
+      'Budget Alert',
+      'Your remaining budget for site visit $siteVisitId is ${remainingBudget.toStringAsFixed(2)} $currency. Consider reviewing your expenses.',
+      platformDetails,
+      payload: 'budget_alert:$siteVisitId',
+    );
+  }
+
   // ==================== UTILITY METHODS ====================
 
-  static Future<void> cancelNotification(int id) async {
+  Future<void> cancelNotification(int id) async {
     await _notifications.cancel(id);
   }
 
-  static Future<void> cancelAllNotifications() async {
+  Future<void> cancelAllNotifications() async {
     await _notifications.cancelAll();
   }
 
-  static Future<void> cancelChatNotifications() async {
+  Future<void> cancelChatNotifications() async {
     // This would require tracking notification IDs
     // For now, we'll use a simple approach
   }
 
-  static Future<int> getPendingNotificationCount() async {
+  Future<int> getPendingNotificationCount() async {
     final pending = await _notifications.pendingNotificationRequests();
     return pending.length;
   }
 
   // Schedule a notification for future delivery
-  static Future<void> scheduleNotification({
+  Future<void> scheduleNotification({
     required int id,
     required String title,
     required String body,

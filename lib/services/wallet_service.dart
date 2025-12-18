@@ -1,6 +1,7 @@
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import '../models/wallet_models.dart';
 import '../models/wallet_transaction.dart';
 import '../config/wallet_constants.dart';
@@ -79,7 +80,68 @@ class WalletService {
     return 0.0;
   }
 
-  // Calculate site visit fee based on classification
+  // Calculate site visit fee based on user classification from database
+  Future<double> calculateSiteVisitFeeFromClassification({
+    required String userId,
+    double complexityMultiplier = 1.0,
+  }) async {
+    try {
+      // Get user's active classification
+      final userClassificationResponse = await supabase
+          .from('user_classifications')
+          .select('classification_level, role_scope')
+          .eq('user_id', userId)
+          .eq('is_active', true)
+          .order('effective_from', ascending: false)
+          .limit(1)
+          .maybeSingle();
+
+      if (userClassificationResponse == null) {
+        debugPrint('No active classification found for user $userId, using default fee');
+        return 50.0; // Default fallback
+      }
+
+      final classificationLevel = userClassificationResponse['classification_level'] as String?;
+      final roleScope = userClassificationResponse['role_scope'] as String?;
+
+      if (classificationLevel == null || roleScope == null) {
+        debugPrint('Invalid classification data for user $userId, using default fee');
+        return 50.0;
+      }
+
+      // Look up fee structure for this classification
+      final feeStructureResponse = await supabase
+          .from('classification_fee_structures')
+          .select('site_visit_base_fee_cents, complexity_multiplier')
+          .eq('classification_level', classificationLevel)
+          .eq('role_scope', roleScope)
+          .eq('is_active', true)
+          .order('valid_from', ascending: false)
+          .limit(1)
+          .maybeSingle();
+
+      if (feeStructureResponse == null) {
+        debugPrint('No fee structure found for $classificationLevel/$roleScope, using default fee');
+        return 50.0;
+      }
+
+      final baseFee = (feeStructureResponse['site_visit_base_fee_cents'] as num?)?.toDouble() ?? 0.0;
+      final storedMultiplier = (feeStructureResponse['complexity_multiplier'] as num?)?.toDouble() ?? 1.0;
+
+      // Calculate fee: base_fee × stored_multiplier × complexity_multiplier
+      final calculatedFee = baseFee * storedMultiplier * complexityMultiplier;
+
+      debugPrint('Fee calculated for $classificationLevel/$roleScope: $baseFee × $storedMultiplier × $complexityMultiplier = $calculatedFee SDG');
+
+      return calculatedFee;
+
+    } catch (e) {
+      debugPrint('Error calculating classification fee: $e');
+      return 50.0; // Error fallback
+    }
+  }
+
+  // Legacy method - kept for backward compatibility but deprecated
   double calculateSiteVisitFee({
     required String classification,
     double multiplier = 1.0,
@@ -88,7 +150,7 @@ class WalletService {
     double accommodationCost = 0,
     double otherCosts = 0,
   }) {
-    // Base fees by classification
+    // Base fees by classification (legacy hardcoded values)
     final baseFees = {
       'A': 5000.0,
       'B': 3000.0,
@@ -99,7 +161,7 @@ class WalletService {
 
     final baseFee = baseFees[classification] ?? 1000.0;
     final calculatedFee = baseFee * multiplier;
-    
+
     return calculatedFee + transportCost + mealAllowance + accommodationCost + otherCosts;
   }
 

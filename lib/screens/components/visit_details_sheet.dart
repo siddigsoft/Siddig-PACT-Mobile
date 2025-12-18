@@ -15,6 +15,7 @@ import 'report_form_sheet.dart';
 import '../../widgets/claim_site_button.dart';
 import '../../widgets/start_visit_button.dart';
 import '../../widgets/complete_visit_button.dart';
+import '../../widgets/accept_assignment_button.dart';
 
 class VisitDetailsSheet extends StatefulWidget {
   final SiteVisit visit;
@@ -471,6 +472,10 @@ class _VisitDetailsSheetState extends State<VisitDetailsSheet> {
         badgeColor = Colors.blue.shade400;
         statusText = 'Accepted';
         break;
+      case 'claimed':
+        badgeColor = Colors.orange.shade400;
+        statusText = 'Claimed - Awaiting Acceptance';
+        break;
       case 'in_progress':
       case 'ongoing': // New status
         badgeColor = Colors.amber.shade700;
@@ -731,31 +736,69 @@ class _VisitDetailsSheetState extends State<VisitDetailsSheet> {
       case 'accepted':
       case 'assigned':
       case 'claimed':
-        return Column(
-          children: [
-            StartVisitButton(
-              visit: _visit,
-              onStartSuccess: () {
-                setState(() {
-                  _visit = _visit.copyWith(status: 'in_progress');
-                });
-                widget.onStatusChanged('in_progress');
-              },
-              onStartError: () {
-                // Error handling is done in the button
-              },
-            ),
-            const SizedBox(height: 16),
-            if (widget.onGetDirections != null)
-              _buildButton(
-                label: 'Get Directions',
-                icon: Icons.directions,
-                color: Colors.blue,
-                onPressed: widget.onGetDirections!,
-                filled: false,
+        // Check if assignment has been accepted
+        final isAccepted = _visit.acceptedBy != null && _visit.acceptedAt != null;
+        
+        if (!isAccepted) {
+          // Show Accept Assignment button
+          return Column(
+            children: [
+              AcceptAssignmentButton(
+                siteEntryId: _visit.id,
+                siteName: _visit.siteName,
+                onAcceptSuccess: () {
+                  setState(() {
+                    _visit = _visit.copyWith(
+                      acceptedBy: Supabase.instance.client.auth.currentUser?.id,
+                      acceptedAt: DateTime.now(),
+                      status: 'accepted',
+                    );
+                  });
+                  widget.onStatusChanged('accepted');
+                },
+                onAcceptError: () {
+                  // Error handling is done in the button
+                },
               ),
-          ],
-        );
+              const SizedBox(height: 16),
+              if (widget.onGetDirections != null)
+                _buildButton(
+                  label: 'Get Directions',
+                  icon: Icons.directions,
+                  color: Colors.blue,
+                  onPressed: widget.onGetDirections!,
+                  filled: false,
+                ),
+            ],
+          );
+        } else {
+          // Assignment accepted, show Start Visit button
+          return Column(
+            children: [
+              StartVisitButton(
+                visit: _visit,
+                onStartSuccess: () {
+                  setState(() {
+                    _visit = _visit.copyWith(status: 'in_progress');
+                  });
+                  widget.onStatusChanged('in_progress');
+                },
+                onStartError: () {
+                  // Error handling is done in the button
+                },
+              ),
+              const SizedBox(height: 16),
+              if (widget.onGetDirections != null)
+                _buildButton(
+                  label: 'Get Directions',
+                  icon: Icons.directions,
+                  color: Colors.blue,
+                  onPressed: widget.onGetDirections!,
+                  filled: false,
+                ),
+            ],
+          );
+        }
       case 'ongoing':
       case 'in_progress':
         return Column(

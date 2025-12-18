@@ -43,15 +43,11 @@ CREATE TABLE IF NOT EXISTS public.classification_fee_structures (
 -- Insert default fee structures
 INSERT INTO classification_fee_structures (classification_level, role_scope, site_visit_base_fee_cents, complexity_multiplier, notes)
 VALUES
-  ('junior', 'field_officer', 50, 1.0, 'Junior Field Officer base fee'),
-  ('junior', 'team_leader', 75, 1.2, 'Junior Team Leader with multiplier'),
-  ('intermediate', 'field_officer', 75, 1.0, 'Intermediate Field Officer'),
-  ('intermediate', 'team_leader', 100, 1.3, 'Intermediate Team Leader'),
-  ('intermediate', 'supervisor', 125, 1.5, 'Intermediate Supervisor'),
-  ('senior', 'field_officer', 100, 1.0, 'Senior Field Officer'),
-  ('senior', 'team_leader', 150, 1.4, 'Senior Team Leader'),
-  ('senior', 'supervisor', 175, 1.6, 'Senior Supervisor'),
-  ('lead', 'coordinator', 200, 1.8, 'Lead Coordinator highest tier')
+  ('junior', 'field_officer', 200, 1.0, 'Junior Field Officer (Level C dataCollector) base fee'),
+  ('intermediate', 'field_officer', 350, 1.0, 'Intermediate Field Officer (Level B dataCollector) base fee'),
+  ('senior', 'field_officer', 600, 1.0, 'Senior Field Officer (Level A dataCollector) base fee'),
+  ('intermediate', 'coordinator', 500, 1.0, 'Intermediate Coordinator (Level B coordinator) base fee'),
+  ('senior', 'coordinator', 800, 1.0, 'Senior Coordinator (Level A coordinator) base fee')
 ON CONFLICT DO NOTHING;
 
 -- Create indexes

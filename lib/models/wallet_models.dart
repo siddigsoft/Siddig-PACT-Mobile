@@ -1,7 +1,5 @@
 import 'package:json_annotation/json_annotation.dart';
 
-part 'wallet_models.g.dart';
-
 @JsonSerializable()
 class Wallet {
   final String id;
@@ -12,6 +10,7 @@ class Wallet {
   final double totalEarned;
   @JsonKey(name: 'total_withdrawn')
   final double totalWithdrawn;
+  @JsonKey(defaultValue: 'SDG')
   final String currency;
   @JsonKey(name: 'created_at')
   final DateTime createdAt;
@@ -29,8 +28,26 @@ class Wallet {
     required this.updatedAt,
   });
 
-  factory Wallet.fromJson(Map<String, dynamic> json) => _$WalletFromJson(json);
-  Map<String, dynamic> toJson() => _$WalletToJson(this);
+  factory Wallet.fromJson(Map<String, dynamic> json) => Wallet(
+    id: json['id'] is String ? json['id'] as String : 'unknown',
+    userId: json['user_id'] is String ? json['user_id'] as String : 'unknown',
+    balances: json['balances'] is Map<String, dynamic> ? json['balances'] as Map<String, dynamic> : {},
+    totalEarned: (json['total_earned'] as num?)?.toDouble() ?? 0.0,
+    totalWithdrawn: (json['total_withdrawn'] as num?)?.toDouble() ?? 0.0,
+    currency: json['currency'] is String ? json['currency'] as String : 'SDG',
+    createdAt: json['created_at'] is String ? DateTime.parse(json['created_at'] as String) : DateTime.now(),
+    updatedAt: json['updated_at'] is String ? DateTime.parse(json['updated_at'] as String) : DateTime.now(),
+  );
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'user_id': userId,
+    'balances': balances,
+    'total_earned': totalEarned,
+    'total_withdrawn': totalWithdrawn,
+    'currency': currency,
+    'created_at': createdAt.toIso8601String(),
+    'updated_at': updatedAt.toIso8601String(),
+  };
 
   double get currentBalance {
     final sdgBalance = balances['SDG'];
@@ -63,7 +80,6 @@ class Wallet {
   }
 }
 
-@JsonSerializable()
 class WalletTransaction {
   final String id;
   @JsonKey(name: 'wallet_id')
@@ -108,9 +124,40 @@ class WalletTransaction {
     required this.createdAt,
   });
 
-  factory WalletTransaction.fromJson(Map<String, dynamic> json) =>
-      _$WalletTransactionFromJson(json);
-  Map<String, dynamic> toJson() => _$WalletTransactionToJson(this);
+  factory WalletTransaction.fromJson(Map<String, dynamic> json) => WalletTransaction(
+    id: json['id'] is String ? json['id'] as String : 'unknown',
+    walletId: json['wallet_id'] is String ? json['wallet_id'] as String : 'unknown',
+    userId: json['user_id'] is String ? json['user_id'] as String : 'unknown',
+    type: json['type'] is String ? json['type'] as String : 'unknown',
+    amount: (json['amount'] as num?)?.toDouble() ?? 0.0,
+    amountCents: json['amount_cents'] is int ? json['amount_cents'] as int : null,
+    currency: json['currency'] is String ? json['currency'] as String : 'SDG',
+    siteVisitId: json['site_visit_id'] as String?,
+    withdrawalRequestId: json['withdrawal_request_id'] as String?,
+    description: json['description'] as String?,
+    metadata: json['metadata'] as Map<String, dynamic>?,
+    balanceBefore: json['balance_before'] is num ? (json['balance_before'] as num).toDouble() : null,
+    balanceAfter: json['balance_after'] is num ? (json['balance_after'] as num).toDouble() : null,
+    createdBy: json['created_by'] as String?,
+    createdAt: json['created_at'] is String ? DateTime.parse(json['created_at'] as String) : DateTime.now(),
+  );
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'wallet_id': walletId,
+    'user_id': userId,
+    'type': type,
+    'amount': amount,
+    'amount_cents': amountCents,
+    'currency': currency,
+    'site_visit_id': siteVisitId,
+    'withdrawal_request_id': withdrawalRequestId,
+    'description': description,
+    'metadata': metadata,
+    'balance_before': balanceBefore,
+    'balance_after': balanceAfter,
+    'created_by': createdBy,
+    'created_at': createdAt.toIso8601String(),
+  };
 
   String get typeLabel {
     switch (type) {
@@ -142,30 +189,17 @@ class WithdrawalRequest {
   @JsonKey(name: 'user_id')
   final String userId;
   final double amount;
+  @JsonKey(defaultValue: 'SDG')
   final String currency;
-  final String status; // pending, supervisor_approved, processing, approved, rejected, cancelled
+  @JsonKey(defaultValue: 'pending')
+  final String status; // pending, processing, approved, rejected, cancelled
   @JsonKey(name: 'requested_at')
   final DateTime requestedAt;
   @JsonKey(name: 'processed_at')
   final DateTime? processedAt;
   final String? reason;
-  
-  // Supervisor approval (first step)
-  @JsonKey(name: 'supervisor_id')
-  final String? supervisorId;
-  @JsonKey(name: 'supervisor_notes')
-  final String? supervisorNotes;
-  @JsonKey(name: 'supervisor_approved_at')
-  final DateTime? supervisorApprovedAt;
-  
-  // Admin processing (second step)
-  @JsonKey(name: 'admin_processed_by')
-  final String? adminProcessedBy;
-  @JsonKey(name: 'admin_processed_at')
-  final DateTime? adminProcessedAt;
-  @JsonKey(name: 'admin_notes')
-  final String? adminNotes;
-  
+  final String? notes;
+
   // Offline deduplication
   @JsonKey(name: 'reference_id')
   final String? referenceId;
@@ -180,26 +214,42 @@ class WithdrawalRequest {
     required this.requestedAt,
     this.processedAt,
     this.reason,
-    this.supervisorId,
-    this.supervisorNotes,
-    this.supervisorApprovedAt,
-    this.adminProcessedBy,
-    this.adminProcessedAt,
-    this.adminNotes,
+    this.notes,
     this.referenceId,
   });
 
-  factory WithdrawalRequest.fromJson(Map<String, dynamic> json) =>
-      _$WithdrawalRequestFromJson(json);
-  Map<String, dynamic> toJson() => _$WithdrawalRequestToJson(this);
-  
+  factory WithdrawalRequest.fromJson(Map<String, dynamic> json) => WithdrawalRequest(
+    id: json['id'] is String ? json['id'] as String : 'unknown',
+    walletId: json['wallet_id'] is String ? json['wallet_id'] as String : 'unknown',
+    userId: json['user_id'] is String ? json['user_id'] as String : 'unknown',
+    amount: (json['amount'] as num?)?.toDouble() ?? 0.0,
+    currency: json['currency'] is String ? json['currency'] as String : 'SDG',
+    status: json['status'] is String ? json['status'] as String : 'pending',
+    requestedAt: json['requested_at'] is String ? DateTime.parse(json['requested_at'] as String) : DateTime.now(),
+    processedAt: json['processed_at'] is String ? DateTime.parse(json['processed_at'] as String) : null,
+    reason: json['reason'] as String?,
+    notes: json['notes'] as String?,
+    referenceId: json['reference_id'] as String?,
+  );
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'wallet_id': walletId,
+    'user_id': userId,
+    'amount': amount,
+    'currency': currency,
+    'status': status,
+    'requested_at': requestedAt.toIso8601String(),
+    'processed_at': processedAt?.toIso8601String(),
+    'reason': reason,
+    'notes': notes,
+    'reference_id': referenceId,
+  };
+
   // Helper getters
   String get statusLabel {
     switch (status) {
       case 'pending':
-        return 'Pending Supervisor';
-      case 'supervisor_approved':
-        return 'Awaiting Admin';
+        return 'Pending';
       case 'processing':
         return 'Processing';
       case 'approved':
@@ -212,10 +262,8 @@ class WithdrawalRequest {
         return status;
     }
   }
-  
+
   bool get canCancel => status == 'pending';
-  bool get needsSupervisorApproval => status == 'pending';
-  bool get needsAdminProcessing => status == 'supervisor_approved';
   bool get isSettled => ['approved', 'rejected', 'cancelled'].contains(status);
 }
 
@@ -239,9 +287,22 @@ class SiteVisitCost {
     required this.createdAt,
   });
 
-  factory SiteVisitCost.fromJson(Map<String, dynamic> json) =>
-      _$SiteVisitCostFromJson(json);
-  Map<String, dynamic> toJson() => _$SiteVisitCostToJson(this);
+  factory SiteVisitCost.fromJson(Map<String, dynamic> json) => SiteVisitCost(
+    id: json['id'] is String ? json['id'] as String : 'unknown',
+    siteVisitId: json['site_visit_id'] is String ? json['site_visit_id'] as String : 'unknown',
+    cost: (json['cost'] as num?)?.toDouble() ?? 0.0,
+    currency: json['currency'] is String ? json['currency'] as String : 'SDG',
+    type: json['type'] is String ? json['type'] as String : 'field_operation',
+    createdAt: json['created_at'] is String ? DateTime.parse(json['created_at'] as String) : DateTime.now(),
+  );
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'site_visit_id': siteVisitId,
+    'cost': cost,
+    'currency': currency,
+    'type': type,
+    'created_at': createdAt.toIso8601String(),
+  };
 }
 
 @JsonSerializable()
@@ -262,9 +323,22 @@ class WalletStats {
     this.completedSiteVisits = 0,
   });
 
-  factory WalletStats.fromJson(Map<String, dynamic> json) =>
-      _$WalletStatsFromJson(json);
-  Map<String, dynamic> toJson() => _$WalletStatsToJson(this);
+  factory WalletStats.fromJson(Map<String, dynamic> json) => WalletStats(
+    totalEarned: (json['totalEarned'] as num?)?.toDouble() ?? 0.0,
+    totalWithdrawn: (json['totalWithdrawn'] as num?)?.toDouble() ?? 0.0,
+    pendingWithdrawals: (json['pendingWithdrawals'] as num?)?.toInt() ?? 0,
+    currentBalance: (json['currentBalance'] as num?)?.toDouble() ?? 0.0,
+    totalTransactions: (json['totalTransactions'] as num?)?.toInt() ?? 0,
+    completedSiteVisits: (json['completedSiteVisits'] as num?)?.toInt() ?? 0,
+  );
+  Map<String, dynamic> toJson() => {
+    'totalEarned': totalEarned,
+    'totalWithdrawn': totalWithdrawn,
+    'pendingWithdrawals': pendingWithdrawals,
+    'currentBalance': currentBalance,
+    'totalTransactions': totalTransactions,
+    'completedSiteVisits': completedSiteVisits,
+  };
 
   double get approvalRate {
     if (totalTransactions == 0) return 0;

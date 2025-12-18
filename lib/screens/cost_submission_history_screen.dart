@@ -67,61 +67,123 @@ class _CostSubmissionHistoryScreenState extends ConsumerState<CostSubmissionHist
   }
 
   Widget _buildFilterChips(CostSubmissionStatus? selectedStatus) {
+    final hasOfflineSubmissionsAsync = ref.watch(hasOfflineSubmissionsProvider);
+    final syncStateAsync = ref.watch(syncOfflineSubmissionsProvider);
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          children: [
-            _buildFilterChip(
-              label: 'All',
-              isSelected: selectedStatus == null,
-              onSelected: () {
-                ref.read(selectedStatusFilterProvider.notifier).state = null;
-              },
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _buildFilterChip(
+                  label: 'All',
+                  isSelected: selectedStatus == null,
+                  onSelected: () {
+                    ref.read(selectedStatusFilterProvider.notifier).state = null;
+                  },
+                ),
+                const SizedBox(width: 8),
+                _buildFilterChip(
+                  label: 'Pending',
+                  isSelected: selectedStatus == CostSubmissionStatus.pending,
+                  color: const Color(0xFFFF9800),
+                  onSelected: () {
+                    ref.read(selectedStatusFilterProvider.notifier).state =
+                        CostSubmissionStatus.pending;
+                  },
+                ),
+                const SizedBox(width: 8),
+                _buildFilterChip(
+                  label: 'Approved',
+                  isSelected: selectedStatus == CostSubmissionStatus.approved,
+                  color: const Color(0xFF2196F3),
+                  onSelected: () {
+                    ref.read(selectedStatusFilterProvider.notifier).state =
+                        CostSubmissionStatus.approved;
+                  },
+                ),
+                const SizedBox(width: 8),
+                _buildFilterChip(
+                  label: 'Paid',
+                  isSelected: selectedStatus == CostSubmissionStatus.paid,
+                  color: const Color(0xFF4CAF50),
+                  onSelected: () {
+                    ref.read(selectedStatusFilterProvider.notifier).state =
+                        CostSubmissionStatus.paid;
+                  },
+                ),
+                const SizedBox(width: 8),
+                _buildFilterChip(
+                  label: 'Rejected',
+                  isSelected: selectedStatus == CostSubmissionStatus.rejected,
+                  color: const Color(0xFFF44336),
+                  onSelected: () {
+                    ref.read(selectedStatusFilterProvider.notifier).state =
+                        CostSubmissionStatus.rejected;
+                  },
+                ),
+              ],
             ),
-            const SizedBox(width: 8),
-            _buildFilterChip(
-              label: 'Pending',
-              isSelected: selectedStatus == CostSubmissionStatus.pending,
-              color: const Color(0xFFFF9800),
-              onSelected: () {
-                ref.read(selectedStatusFilterProvider.notifier).state =
-                    CostSubmissionStatus.pending;
-              },
-            ),
-            const SizedBox(width: 8),
-            _buildFilterChip(
-              label: 'Approved',
-              isSelected: selectedStatus == CostSubmissionStatus.approved,
-              color: const Color(0xFF2196F3),
-              onSelected: () {
-                ref.read(selectedStatusFilterProvider.notifier).state =
-                    CostSubmissionStatus.approved;
-              },
-            ),
-            const SizedBox(width: 8),
-            _buildFilterChip(
-              label: 'Paid',
-              isSelected: selectedStatus == CostSubmissionStatus.paid,
-              color: const Color(0xFF4CAF50),
-              onSelected: () {
-                ref.read(selectedStatusFilterProvider.notifier).state =
-                    CostSubmissionStatus.paid;
-              },
-            ),
-            const SizedBox(width: 8),
-            _buildFilterChip(
-              label: 'Rejected',
-              isSelected: selectedStatus == CostSubmissionStatus.rejected,
-              color: const Color(0xFFF44336),
-              onSelected: () {
-                ref.read(selectedStatusFilterProvider.notifier).state =
-                    CostSubmissionStatus.rejected;
-              },
-            ),
-          ],
-        ),
+          ),
+          // Offline sync section
+          hasOfflineSubmissionsAsync.when(
+            data: (hasOffline) => hasOffline ? Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Row(
+                children: [
+                  const Icon(Icons.sync, size: 16, color: Colors.orange),
+                  const SizedBox(width: 8),
+                  const Text(
+                    'Offline submissions pending sync',
+                    style: TextStyle(color: Colors.orange, fontSize: 12),
+                  ),
+                  const Spacer(),
+                  syncStateAsync.when(
+                    data: (syncedCount) => syncedCount > 0 ? Text(
+                      '$syncedCount synced',
+                      style: const TextStyle(color: Colors.green, fontSize: 12),
+                    ) : const SizedBox.shrink(),
+                    loading: () => const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                    error: (error, stack) => Text(
+                      'Sync failed',
+                      style: const TextStyle(color: Colors.red, fontSize: 12),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton.icon(
+                    onPressed: syncStateAsync.isLoading ? null : () async {
+                      try {
+                        await ref.read(syncOfflineSubmissionsProvider.notifier).syncOfflineSubmissions();
+                      } catch (e) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Sync failed: $e')),
+                          );
+                        }
+                      }
+                    },
+                    icon: const Icon(Icons.sync, size: 16),
+                    label: const Text('Sync Now'),
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      textStyle: const TextStyle(fontSize: 12),
+                    ),
+                  ),
+                ],
+              ),
+            ) : const SizedBox.shrink(),
+            loading: () => const SizedBox.shrink(),
+            error: (error, stack) => const SizedBox.shrink(),
+          ),
+        ],
       ),
     );
   }

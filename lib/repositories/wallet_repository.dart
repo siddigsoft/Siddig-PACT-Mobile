@@ -1,6 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/wallet_models.dart';
 import '../models/wallet_transaction.dart';
+import '../models/down_payment_request.dart';
 
 class WalletRepository {
   final SupabaseClient _supabase = Supabase.instance.client;
@@ -319,33 +320,6 @@ class WalletRepository {
     }
   }
 
-  // Update withdrawal request status (Admin only)
-  Future<WithdrawalRequest> updateWithdrawalRequestStatus({
-    required String requestId,
-    required String status,
-    String? notes,
-    String? processedBy,
-  }) async {
-    try {
-      final response = await _supabase
-          .from('withdrawal_requests')
-          .update({
-            'status': status,
-            'notes': notes,
-            'processed_by': processedBy,
-            'processed_at': DateTime.now().toIso8601String(),
-            'updated_at': DateTime.now().toIso8601String(),
-          })
-          .eq('id', requestId)
-          .select()
-          .single();
-
-      return WithdrawalRequest.fromJson(response);
-    } catch (e) {
-      throw WithdrawalException('Failed to update withdrawal request: $e');
-    }
-  }
-
   // Get site visit cost
   Future<SiteVisitCost?> getSiteVisitCost(String siteVisitId) async {
     try {
@@ -532,137 +506,342 @@ class WalletRepository {
   }
 
   // ============================================================================
-  // ATOMIC RPC OPERATIONS (Two-step withdrawal approval)
+  // DOWN PAYMENT REQUEST METHODS
   // ============================================================================
 
-  /// Supervisor approval (first step) - validates balance but doesn't transfer
-  Future<Map<String, dynamic>> supervisorApproveWithdrawal({
-    required String requestId,
-    required String supervisorId,
-    required String notes,
+  /// Create a new down payment request
+  /// Only data collectors can create requests for their accepted site visits
+  Future<DownPaymentRequest> createDownPaymentRequest({
+    required String userId,
+    required String siteVisitId,
+    required String mmpSiteEntryId,
+    required String siteName,
+    required String requesterRole,
+    String? hubId,
+    String? hubName,
+    required double totalTransportationBudget,
+    required double requestedAmount,
+    required String paymentType,
+    List<InstallmentPlan>? installmentPlan,
+    required String justification,
+    List<String>? supportingDocuments,
   }) async {
     try {
-      final response = await _supabase.rpc(
-        'rpc_supervisor_approve_withdrawal',
-        params: {
-          'in_request_id': requestId,
-          'in_supervisor_id': supervisorId,
-          'in_notes': notes,
-        },
-      ).select().single();
+      // Validate that the user is a data collector/coordinator
+      final userProfile = await _supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', userId)
+          .single();
 
-      // Response: {success: boolean, error_text: text}
-      if (response['success'] == true) {
-        return {'success': true};
-      } else {
-        throw WithdrawalException(
-          response['error_text'] ?? 'Supervisor approval failed',
-        );
+      final userRole = userProfile['role'] as String;
+      if (!['dataCollector', 'datacollector', 'coordinator'].contains(userRole)) {
+        throw WalletException('Only data collectors and coordinators can request down payments');
       }
-    } catch (e) {
-      if (e is WithdrawalException) rethrow;
-      throw WithdrawalException('Failed to approve withdrawal: $e');
-    }
-  }
 
-  /// Admin processing (second step) - atomically deducts balance and creates transaction
-  Future<Map<String, dynamic>> adminProcessWithdrawal({
-    required String requestId,
-    required String adminId,
-    required String notes,
-  }) async {
-    try {
-      final response = await _supabase.rpc(
-        'rpc_admin_process_withdrawal',
-        params: {
-          'in_request_id': requestId,
-          'in_admin_id': adminId,
-          'in_notes': notes,
-        },
-      ).select().single();
+      // Validate that the site visit exists and is accepted
+      final siteVisit = await _supabase
+          .from('site_visits')
+          .select('status, assigned_to')
+          .eq('id', siteVisitId)
+          .single();
 
-      // Response: {success: boolean, error_text: text, transaction_id: uuid}
-      if (response['success'] == true) {
-        return {
-          'success': true,
-          'transaction_id': response['transaction_id'],
-        };
-      } else {
-        throw WithdrawalException(
-          response['error_text'] ?? 'Withdrawal processing failed',
-        );
+      if (siteVisit['status'] != 'accepted') {
+        throw WalletException('Can only request down payment for accepted site visits');
       }
-    } catch (e) {
-      if (e is WithdrawalException) rethrow;
-      throw WithdrawalException('Failed to process withdrawal: $e');
-    }
-  }
 
-  /// Reject withdrawal request
-  Future<WithdrawalRequest> rejectWithdrawalRequest({
-    required String requestId,
-    required String reviewerId,
-    required String reason,
-  }) async {
-    try {
+      if (siteVisit['assigned_to'] != userId) {
+        throw WalletException('Can only request down payment for sites assigned to you');
+      }
+
+      // Check if a request already exists for this site visit
+      final existingRequest = await _supabase
+          .from('down_payment_requests')
+          .select('id')
+          .eq('site_visit_id', siteVisitId)
+          .eq('requested_by', userId)
+          .inFilter('status', ['pending_supervisor', 'pending_admin', 'approved', 'partially_paid'])
+          .maybeSingle();
+
+      if (existingRequest != null) {
+        throw WalletException('A down payment request already exists for this site visit');
+      }
+
+      // Validate requested amount doesn't exceed transportation budget
+      if (requestedAmount > totalTransportationBudget) {
+        throw WalletException('Requested amount cannot exceed transportation budget');
+      }
+
+      final requestData = {
+        'site_visit_id': siteVisitId,
+        'mmp_site_entry_id': mmpSiteEntryId,
+        'site_name': siteName,
+        'requested_by': userId,
+        'requester_role': requesterRole,
+        'hub_id': hubId,
+        'hub_name': hubName,
+        'total_transportation_budget': totalTransportationBudget,
+        'requested_amount': requestedAmount,
+        'payment_type': paymentType,
+        'installment_plan': installmentPlan?.map((plan) => {
+          'installment_number': plan.installmentNumber,
+          'amount': plan.amount,
+          'due_date': plan.dueDate.toIso8601String(),
+          'description': plan.description,
+        }).toList() ?? [],
+        'justification': justification,
+        'supporting_documents': supportingDocuments ?? [],
+        'status': 'pending_supervisor',
+      };
+
       final response = await _supabase
-          .from('withdrawal_requests')
-          .update({
-            'status': 'rejected',
-            'admin_processed_by': reviewerId,
-            'admin_processed_at': DateTime.now().toIso8601String(),
-            'admin_notes': reason,
-          })
-          .eq('id', requestId)
-          .inFilter('status', ['pending', 'supervisor_approved'])
+          .from('down_payment_requests')
+          .insert(requestData)
           .select()
           .single();
 
-      return WithdrawalRequest.fromJson(response);
-    } on PostgrestException catch (e) {
-      if (e.code == 'PGRST116') {
-        throw WithdrawalException(
-          'Cannot reject: request not found or already processed',
-        );
-      }
-      throw WithdrawalException('Failed to reject withdrawal: ${e.message}');
+      return DownPaymentRequest.fromJson(response);
     } catch (e) {
-      throw WithdrawalException('Failed to reject withdrawal: $e');
+      if (e is WalletException) rethrow;
+      throw WalletException('Failed to create down payment request: $e');
     }
   }
 
-  /// Get pending withdrawal requests (supervisor view)
-  Future<List<WithdrawalRequest>> getPendingWithdrawals() async {
+  /// Get down payment requests for current user
+  Future<List<DownPaymentRequest>> getUserDownPaymentRequests(String userId) async {
     try {
       final response = await _supabase
-          .from('withdrawal_requests')
+          .from('down_payment_requests')
           .select()
-          .eq('status', 'pending')
+          .eq('requested_by', userId)
           .order('created_at', ascending: false);
 
       return (response as List)
-          .map((json) => WithdrawalRequest.fromJson(json))
+          .map((json) => DownPaymentRequest.fromJson(json))
           .toList();
     } catch (e) {
-      throw WalletException('Failed to fetch pending withdrawals: $e');
+      throw WalletException('Failed to fetch down payment requests: $e');
     }
   }
 
-  /// Get supervisor-approved withdrawals (admin view)
-  Future<List<WithdrawalRequest>> getSupervisorApprovedWithdrawals() async {
+  /// Get down payment requests for supervisor approval
+  Future<List<DownPaymentRequest>> getSupervisorDownPaymentRequests(String supervisorId) async {
     try {
       final response = await _supabase
-          .from('withdrawal_requests')
+          .from('down_payment_requests')
           .select()
-          .eq('status', 'supervisor_approved')
-          .order('supervisor_approved_at', ascending: false);
+          .eq('supervisor_id', supervisorId)
+          .eq('status', 'pending_supervisor')
+          .order('created_at', ascending: false);
 
       return (response as List)
-          .map((json) => WithdrawalRequest.fromJson(json))
+          .map((json) => DownPaymentRequest.fromJson(json))
           .toList();
     } catch (e) {
-      throw WalletException('Failed to fetch approved withdrawals: $e');
+      throw WalletException('Failed to fetch supervisor requests: $e');
     }
   }
-}
 
+  /// Get down payment requests for admin approval
+  Future<List<DownPaymentRequest>> getAdminDownPaymentRequests(String adminId) async {
+    try {
+      final response = await _supabase
+          .from('down_payment_requests')
+          .select()
+          .eq('status', 'pending_admin')
+          .order('created_at', ascending: false);
+
+      return (response as List)
+          .map((json) => DownPaymentRequest.fromJson(json))
+          .toList();
+    } catch (e) {
+      throw WalletException('Failed to fetch admin requests: $e');
+    }
+  }
+
+  /// Approve down payment request (Supervisor level)
+  Future<DownPaymentRequest> approveSupervisorDownPaymentRequest({
+    required String requestId,
+    required String supervisorId,
+    String? notes,
+  }) async {
+    try {
+      final updateData = {
+        'supervisor_status': 'approved',
+        'supervisor_approved_by': supervisorId,
+        'supervisor_approved_at': DateTime.now().toIso8601String(),
+        'supervisor_notes': notes,
+        'status': 'pending_admin',
+        'updated_at': DateTime.now().toIso8601String(),
+      };
+
+      final response = await _supabase
+          .from('down_payment_requests')
+          .update(updateData)
+          .eq('id', requestId)
+          .eq('status', 'pending_supervisor')
+          .eq('supervisor_id', supervisorId)
+          .select()
+          .single();
+
+      return DownPaymentRequest.fromJson(response);
+    } catch (e) {
+      throw WalletException('Failed to approve supervisor request: $e');
+    }
+  }
+
+  /// Reject down payment request (Supervisor level)
+  Future<DownPaymentRequest> rejectSupervisorDownPaymentRequest({
+    required String requestId,
+    required String supervisorId,
+    required String rejectionReason,
+    String? notes,
+  }) async {
+    try {
+      final updateData = {
+        'supervisor_status': 'rejected',
+        'supervisor_approved_by': supervisorId,
+        'supervisor_approved_at': DateTime.now().toIso8601String(),
+        'supervisor_notes': notes,
+        'supervisor_rejection_reason': rejectionReason,
+        'status': 'rejected',
+        'updated_at': DateTime.now().toIso8601String(),
+      };
+
+      final response = await _supabase
+          .from('down_payment_requests')
+          .update(updateData)
+          .eq('id', requestId)
+          .eq('status', 'pending_supervisor')
+          .eq('supervisor_id', supervisorId)
+          .select()
+          .single();
+
+      return DownPaymentRequest.fromJson(response);
+    } catch (e) {
+      throw WalletException('Failed to reject supervisor request: $e');
+    }
+  }
+
+  /// Approve down payment request (Admin level)
+  Future<DownPaymentRequest> approveAdminDownPaymentRequest({
+    required String requestId,
+    required String adminId,
+    String? notes,
+  }) async {
+    try {
+      final updateData = {
+        'admin_status': 'approved',
+        'admin_processed_by': adminId,
+        'admin_processed_at': DateTime.now().toIso8601String(),
+        'admin_notes': notes,
+        'status': 'approved',
+        'updated_at': DateTime.now().toIso8601String(),
+      };
+
+      final response = await _supabase
+          .from('down_payment_requests')
+          .update(updateData)
+          .eq('id', requestId)
+          .eq('status', 'pending_admin')
+          .select()
+          .single();
+
+      return DownPaymentRequest.fromJson(response);
+    } catch (e) {
+      throw WalletException('Failed to approve admin request: $e');
+    }
+  }
+
+  /// Reject down payment request (Admin level)
+  Future<DownPaymentRequest> rejectAdminDownPaymentRequest({
+    required String requestId,
+    required String adminId,
+    required String rejectionReason,
+    String? notes,
+  }) async {
+    try {
+      final updateData = {
+        'admin_status': 'rejected',
+        'admin_processed_by': adminId,
+        'admin_processed_at': DateTime.now().toIso8601String(),
+        'admin_notes': notes,
+        'admin_rejection_reason': rejectionReason,
+        'status': 'rejected',
+        'updated_at': DateTime.now().toIso8601String(),
+      };
+
+      final response = await _supabase
+          .from('down_payment_requests')
+          .update(updateData)
+          .eq('id', requestId)
+          .eq('status', 'pending_admin')
+          .select()
+          .single();
+
+      return DownPaymentRequest.fromJson(response);
+    } catch (e) {
+      throw WalletException('Failed to reject admin request: $e');
+    }
+  }
+
+  /// Cancel down payment request (by requester)
+  Future<DownPaymentRequest> cancelDownPaymentRequest({
+    required String requestId,
+    required String userId,
+  }) async {
+    try {
+      final updateData = {
+        'status': 'cancelled',
+        'updated_at': DateTime.now().toIso8601String(),
+      };
+
+      final response = await _supabase
+          .from('down_payment_requests')
+          .update(updateData)
+          .eq('id', requestId)
+          .eq('requested_by', userId)
+          .inFilter('status', ['pending_supervisor', 'pending_admin', 'approved'])
+          .select()
+          .single();
+
+      return DownPaymentRequest.fromJson(response);
+    } catch (e) {
+      throw WalletException('Failed to cancel down payment request: $e');
+    }
+  }
+
+  /// Real-time stream for user's down payment requests
+  Stream<List<DownPaymentRequest>> watchUserDownPaymentRequests(String userId) {
+    return _supabase
+        .from('down_payment_requests')
+        .stream(primaryKey: ['id'])
+        .eq('requested_by', userId)
+        .order('created_at', ascending: false)
+        .map((data) => data.map((json) => DownPaymentRequest.fromJson(json)).toList());
+  }
+
+  /// Real-time stream for supervisor's pending requests
+  Stream<List<DownPaymentRequest>> watchSupervisorDownPaymentRequests(String supervisorId) {
+    return _supabase
+        .from('down_payment_requests')
+        .stream(primaryKey: ['id'])
+        .order('created_at', ascending: false)
+        .map((data) => data
+            .where((json) => json['supervisor_id'] == supervisorId && json['status'] == 'pending_supervisor')
+            .map((json) => DownPaymentRequest.fromJson(json))
+            .toList());
+  }
+
+  /// Real-time stream for admin's pending requests
+  Stream<List<DownPaymentRequest>> watchAdminDownPaymentRequests() {
+    return _supabase
+        .from('down_payment_requests')
+        .stream(primaryKey: ['id'])
+        .eq('status', 'pending_admin')
+        .order('created_at', ascending: false)
+        .map((data) => data.map((json) => DownPaymentRequest.fromJson(json)).toList());
+  }
+
+  // ============================================================================
+}

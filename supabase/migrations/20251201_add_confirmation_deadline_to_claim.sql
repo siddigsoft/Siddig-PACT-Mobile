@@ -1,17 +1,10 @@
--- Migration: Create atomic claim_site_visit RPC function
--- Description: Implements atomic site claiming with race condition prevention and fee calculation
--- Date: 2025-11-28
+-- Migration: Add confirmation deadline to claim RPC
+-- Description: Sets autorelease_at to 2 days before visit_date when claiming
+-- Date: 2025-12-01
 
 BEGIN;
 
--- Drop existing function if present
-DROP FUNCTION IF EXISTS public.claim_site_visit(UUID, UUID);
-DROP FUNCTION IF EXISTS public.claim_site_visit(UUID, UUID, NUMERIC);
-DROP FUNCTION IF EXISTS public.claim_site_visit(UUID, UUID, NUMERIC, NUMERIC);
-DROP FUNCTION IF EXISTS public.claim_site_visit(UUID, UUID, NUMERIC, NUMERIC, TEXT);
-DROP FUNCTION IF EXISTS public.claim_site_visit(UUID, UUID, NUMERIC, NUMERIC, TEXT, TEXT);
-DROP FUNCTION IF EXISTS public.claim_site_visit(UUID, UUID, NUMERIC, NUMERIC, TEXT, TEXT, TEXT);
-
+-- Update the claim_site_visit function to set autorelease_at
 CREATE OR REPLACE FUNCTION public.claim_site_visit(
   p_site_id UUID,
   p_user_id UUID,
@@ -34,6 +27,7 @@ DECLARE
   v_multiplier NUMERIC;
   v_classification_level classification_level;
   v_role_scope classification_role_scope;
+  v_autorelease_at TIMESTAMPTZ;
 BEGIN
   -- Get user name for audit trail
   SELECT COALESCE(full_name, username, email) INTO v_user_name
@@ -97,7 +91,7 @@ BEGIN
 
   -- Try to lock and claim the site atomically
   -- SKIP LOCKED ensures we don't wait if another transaction has the lock
-  SELECT id, status, claimed_by, accepted_by, site_name, transport_fee
+  SELECT id, status, claimed_by, accepted_by, site_name, transport_fee, visit_date
   INTO v_site
   FROM public.mmp_site_entries
   WHERE id = p_site_id
@@ -130,9 +124,17 @@ BEGIN
     );
   END IF;
 
-  -- All checks passed - claim the site with enumerator fee
+  -- Calculate autorelease_at: 2 days before visit_date
+  IF v_site.visit_date IS NOT NULL THEN
+    v_autorelease_at := v_site.visit_date - INTERVAL '2 days';
+  ELSE
+    -- Fallback: 2 days from now if no visit_date
+    v_autorelease_at := NOW() + INTERVAL '2 days';
+  END IF;
+
+  -- All checks passed - claim the site with enumerator fee and autorelease deadline
   UPDATE public.mmp_site_entries
-  SET 
+  SET
     status = 'claimed',
     claimed_by = p_user_id,
     claimed_at = NOW(),
@@ -142,6 +144,8 @@ BEGIN
       'claimed_by', v_user_name,
       'claimed_at', NOW()::TEXT,
       'claim_type', 'first_claim',
+      'autorelease_at', v_autorelease_at::TEXT,
+      'confirmation_deadline', v_autorelease_at::TEXT,
       'claim_fee_calculation', jsonb_build_object(
         'enumerator_fee', v_fee,
         'transport_budget', COALESCE(v_site.transport_fee, 0),
@@ -160,7 +164,7 @@ BEGIN
   VALUES (
     p_user_id,
     'Site Claimed Successfully',
-    'You have successfully claimed site "' || COALESCE(v_site.site_name, 'Unknown') || '". Please accept the assignment to proceed. Fee: ' || v_fee || ' SDG',
+    'You have successfully claimed site "' || COALESCE(v_site.site_name, 'Unknown') || '". Please accept the assignment within 2 days to proceed. Fee: ' || v_fee || ' SDG',
     'success',
     '/site-visits?status=claimed',
     p_site_id,
@@ -169,13 +173,14 @@ BEGIN
 
   RETURN jsonb_build_object(
     'success', true,
-    'message', 'Site claimed successfully! Please accept the assignment to proceed.',
+    'message', 'Site claimed successfully! Please accept the assignment within 2 days to proceed.',
     'site_id', p_site_id,
     'site_name', v_site.site_name,
     'enumerator_fee', v_fee,
     'transport_fee', COALESCE(v_site.transport_fee, 0),
     'total_payout', COALESCE(v_site.transport_fee, 0) + v_fee,
-    'claimed_at', NOW()::TEXT
+    'claimed_at', NOW()::TEXT,
+    'autorelease_at', v_autorelease_at::TEXT
   );
 
 EXCEPTION
@@ -192,6 +197,7 @@ $$;
 GRANT EXECUTE ON FUNCTION public.claim_site_visit(UUID, UUID, NUMERIC, NUMERIC, TEXT, TEXT, TEXT) TO authenticated;
 
 -- Add comment
-COMMENT ON FUNCTION public.claim_site_visit IS 'Atomic function to claim a dispatched site with race condition prevention and fee calculation';
+COMMENT ON FUNCTION public.claim_site_visit IS 'Atomic function to claim a dispatched site with race condition prevention, fee calculation, and 2-day confirmation deadline';
 
-COMMIT;
+COMMIT;</content>
+<parameter name="filePath">c:\Users\Kazibwe Francis Bant\Downloads\PACT_mobile\supabase\migrations\20251201_add_confirmation_deadline_to_claim.sql

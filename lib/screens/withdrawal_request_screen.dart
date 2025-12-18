@@ -116,7 +116,7 @@ class _WithdrawalRequestScreenState extends ConsumerState<WithdrawalRequestScree
 
         _showSuccess(
           'Withdrawal request submitted successfully!\n'
-          'Status: Pending supervisor approval',
+          'You will be notified when it\'s processed.',
         );
 
         Navigator.pop(context);

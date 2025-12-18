@@ -10,6 +10,7 @@ import '../providers/offline_provider.dart';
 import '../providers/active_visit_provider.dart';
 import '../models/site_visit.dart';
 import '../repositories/wallet_repository.dart';
+import '../services/wallet_service.dart';
 
 class CompleteVisitButton extends ConsumerStatefulWidget {
   final SiteVisit visit;
@@ -235,23 +236,24 @@ class _CompleteVisitButtonState extends ConsumerState<CompleteVisitButton> {
     try {
       final supabase = Supabase.instance.client;
       final walletRepository = WalletRepository();
+      final walletService = WalletService();
 
-      // Get visit details to check for fees
+      // Get visit details to check for transport fee
       final visitData = await supabase
           .from('mmp_site_entries')
-          .select('enumerator_fee, transport_fee')
+          .select('transport_fee')
           .eq('id', widget.visit.id)
           .single();
 
-      final enumeratorFee = _parseDouble(visitData['enumerator_fee']);
-      final transportFee = _parseDouble(visitData['transport_fee']);
+      final transportFee = _parseDouble(visitData['transport_fee']) ?? 0.0;
 
-      if (enumeratorFee == null && transportFee == null) {
-        debugPrint('No fees configured for visit ${widget.visit.id}');
-        return;
-      }
+      // Recalculate enumerator fee based on current user classification
+      final enumeratorFee = await walletService.calculateSiteVisitFeeFromClassification(
+        userId: userId,
+        complexityMultiplier: 1.0, // Default multiplier
+      );
 
-      final totalFee = (enumeratorFee ?? 0) + (transportFee ?? 0);
+      final totalFee = enumeratorFee + transportFee;
 
       if (totalFee <= 0) {
         debugPrint('Total fee is zero or negative, skipping wallet transaction');
@@ -262,12 +264,12 @@ class _CompleteVisitButtonState extends ConsumerState<CompleteVisitButton> {
       await walletRepository.processVisitPayment(
         userId: userId,
         siteVisitId: widget.visit.id,
-        enumeratorFee: enumeratorFee ?? 0,
-        transportFee: transportFee ?? 0,
+        enumeratorFee: enumeratorFee,
+        transportFee: transportFee,
         referenceId: widget.visit.id, // Use visit ID as reference for dedup
       );
 
-      debugPrint('Wallet transaction created successfully: $totalFee SDG');
+      debugPrint('Wallet transaction created successfully: Enumerator: $enumeratorFee, Transport: $transportFee, Total: $totalFee SDG');
     } catch (e) {
       debugPrint('Error processing wallet transaction: $e');
       // Don't fail the visit completion if wallet processing fails

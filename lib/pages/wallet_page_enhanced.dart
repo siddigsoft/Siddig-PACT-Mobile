@@ -10,6 +10,9 @@ import '../utils/currency_utils.dart';
 import '../utils/export_utils.dart';
 import '../widgets/transaction_search.dart';
 import '../widgets/payment_methods_card.dart';
+import '../providers/down_payment_provider.dart';
+import '../models/down_payment_request.dart';
+import '../widgets/down_payment_request_dialog.dart';
 
 class WalletPageEnhanced extends ConsumerStatefulWidget {
   const WalletPageEnhanced({Key? key}) : super(key: key);
@@ -28,7 +31,7 @@ class _WalletPageEnhancedState extends ConsumerState<WalletPageEnhanced>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 5, vsync: this);
+    _tabController = TabController(length: 6, vsync: this);
   }
 
   @override
@@ -611,6 +614,7 @@ class _WalletPageEnhancedState extends ConsumerState<WalletPageEnhanced>
               Tab(text: 'Transactions'),
               Tab(text: 'Withdrawals'),
               Tab(text: 'Earnings'),
+              Tab(text: 'Down Payments'),
               Tab(text: 'Activity'),
             ],
           ),
@@ -632,6 +636,7 @@ class _WalletPageEnhancedState extends ConsumerState<WalletPageEnhanced>
                   rejectedWithdrawals,
                 ),
                 _buildEarningsTab(siteVisitEarnings),
+                _buildDownPaymentsTab(),
                 _buildActivityTab(state, withdrawalSuccessRate),
               ],
             ),
@@ -1146,5 +1151,297 @@ class _WalletPageEnhancedState extends ConsumerState<WalletPageEnhanced>
         ],
       ),
     );
+  }
+
+  Widget _buildDownPaymentsTab() {
+    return Consumer(
+      builder: (context, ref, child) {
+        final userId = ref.watch(walletServiceProvider).getCurrentUserId();
+        if (userId == null) {
+          return const Center(child: Text('User not authenticated'));
+        }
+
+        final downPaymentState = ref.watch(downPaymentProvider(userId));
+        final downPaymentStream = ref.watch(userDownPaymentStreamProvider(userId));
+
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Down Payment Requests',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  ),
+                  ElevatedButton.icon(
+                    onPressed: () => _showCreateDownPaymentDialog(context, ref, userId),
+                    icon: const Icon(Icons.add),
+                    label: const Text('Request Advance'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+
+              // Status summary
+              downPaymentStream.when(
+                data: (requests) => _buildDownPaymentSummary(requests),
+                loading: () => const CircularProgressIndicator(),
+                error: (error, stack) => Text('Error: $error'),
+              ),
+
+              const SizedBox(height: 24),
+
+              // Requests list
+              downPaymentStream.when(
+                data: (requests) => _buildDownPaymentRequestsList(requests, context, ref, userId),
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (error, stack) => Center(child: Text('Error loading requests: $error')),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildDownPaymentSummary(List<DownPaymentRequest> requests) {
+    final pending = requests.where((r) => r.status == 'pending_supervisor' || r.status == 'pending_admin').length;
+    final approved = requests.where((r) => r.status == 'approved').length;
+    final rejected = requests.where((r) => r.status == 'rejected').length;
+    final paid = requests.where((r) => r.status == 'fully_paid').length;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            const Text(
+              'Request Summary',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _buildSummaryItem('Pending', pending.toString(), Colors.orange),
+                _buildSummaryItem('Approved', approved.toString(), Colors.green),
+                _buildSummaryItem('Rejected', rejected.toString(), Colors.red),
+                _buildSummaryItem('Paid', paid.toString(), Colors.blue),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSummaryItem(String label, String value, Color color) {
+    return Column(
+      children: [
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+            color: color,
+          ),
+        ),
+        Text(
+          label,
+          style: TextStyle(fontSize: 12, color: color),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDownPaymentRequestsList(
+    List<DownPaymentRequest> requests,
+    BuildContext context,
+    WidgetRef ref,
+    String userId,
+  ) {
+    if (requests.isEmpty) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(32),
+          child: Text(
+            'No down payment requests yet.\nTap "Request Advance" to create your first request.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.grey),
+          ),
+        ),
+      );
+    }
+
+    return ListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: requests.length,
+      itemBuilder: (context, index) {
+        final request = requests[index];
+        return Card(
+          margin: const EdgeInsets.only(bottom: 12),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        request.siteName,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    _buildStatusChip(request.status),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Requested: ${CurrencyUtils.formatCurrency(request.requestedAmount)}',
+                  style: const TextStyle(fontSize: 14),
+                ),
+                Text(
+                  'Budget: ${CurrencyUtils.formatCurrency(request.totalTransportationBudget)}',
+                  style: const TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Requested on: ${DateFormat('MMM dd, yyyy').format(request.requestedAt)}',
+                  style: const TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+                if (request.status == 'pending_supervisor' ||
+                    request.status == 'pending_admin' ||
+                    request.status == 'approved') ...[
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      if (request.status == 'pending_supervisor' ||
+                          request.status == 'pending_admin' ||
+                          request.status == 'approved')
+                        TextButton.icon(
+                          onPressed: () => _cancelDownPaymentRequest(context, ref, request.id, userId),
+                          icon: const Icon(Icons.cancel, size: 16),
+                          label: const Text('Cancel'),
+                          style: TextButton.styleFrom(foregroundColor: Colors.red),
+                        ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildStatusChip(String status) {
+    Color color;
+    String label;
+
+    switch (status) {
+      case 'pending_supervisor':
+        color = Colors.orange;
+        label = 'Pending Supervisor';
+        break;
+      case 'pending_admin':
+        color = Colors.blue;
+        label = 'Pending Admin';
+        break;
+      case 'approved':
+        color = Colors.green;
+        label = 'Approved';
+        break;
+      case 'rejected':
+        color = Colors.red;
+        label = 'Rejected';
+        break;
+      case 'partially_paid':
+        color = Colors.purple;
+        label = 'Partially Paid';
+        break;
+      case 'fully_paid':
+        color = Colors.teal;
+        label = 'Fully Paid';
+        break;
+      case 'cancelled':
+        color = Colors.grey;
+        label = 'Cancelled';
+        break;
+      default:
+        color = Colors.grey;
+        label = status;
+    }
+
+    return Chip(
+      label: Text(
+        label,
+        style: const TextStyle(color: Colors.white, fontSize: 12),
+      ),
+      backgroundColor: color,
+      padding: EdgeInsets.zero,
+    );
+  }
+
+  Future<void> _showCreateDownPaymentDialog(
+    BuildContext context,
+    WidgetRef ref,
+    String userId,
+  ) async {
+    await showDialog(
+      context: context,
+      builder: (context) => DownPaymentRequestDialog(userId: userId),
+    );
+  }
+
+  Future<void> _cancelDownPaymentRequest(
+    BuildContext context,
+    WidgetRef ref,
+    String requestId,
+    String userId,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Cancel Request'),
+        content: const Text('Are you sure you want to cancel this down payment request?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('No'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Yes'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      try {
+        await ref.read(downPaymentProvider(userId).notifier).cancelRequest(requestId);
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Request cancelled successfully')),
+          );
+        }
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to cancel request: $e')),
+          );
+        }
+      }
+    }
   }
 }

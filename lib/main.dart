@@ -151,8 +151,35 @@ void main() async {
           navigatorKey.currentState?.pushNamed(
             '/main',
             arguments: {'notificationId': notificationId},
+          );        } else if (payload.startsWith('cost_submission_approved:')) {
+          final submissionId = payload.substring(24);
+          navigatorKey.currentState?.pushNamed(
+            '/main',
+            arguments: {'costSubmissionId': submissionId, 'tab': 'cost_submissions'},
           );
-        } else if (payload.startsWith('update:')) {
+        } else if (payload.startsWith('cost_submission_rejected:')) {
+          final submissionId = payload.substring(24);
+          navigatorKey.currentState?.pushNamed(
+            '/main',
+            arguments: {'costSubmissionId': submissionId, 'tab': 'cost_submissions'},
+          );
+        } else if (payload.startsWith('cost_submission_revision:')) {
+          final submissionId = payload.substring(23);
+          navigatorKey.currentState?.pushNamed(
+            '/main',
+            arguments: {'costSubmissionId': submissionId, 'tab': 'cost_submissions'},
+          );
+        } else if (payload.startsWith('budget_alert:')) {
+          final siteVisitId = payload.substring(13);
+          navigatorKey.currentState?.pushNamed(
+            '/main',
+            arguments: {'siteVisitId': siteVisitId, 'tab': 'cost_submissions'},
+          );
+        } else if (payload == 'offline_sync_completed') {
+          navigatorKey.currentState?.pushNamed(
+            '/main',
+            arguments: {'tab': 'cost_submissions'},
+          );        } else if (payload.startsWith('update:')) {
           // Handle update notification tap
           UpdateService().downloadAndInstallUpdate();
         }

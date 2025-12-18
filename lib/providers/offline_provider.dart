@@ -256,6 +256,25 @@ final claimSiteOfflineProvider = FutureProvider.autoDispose
   syncManager.forceSync();
 });
 
+/// Accept an assignment offline
+final acceptAssignmentOfflineProvider = FutureProvider.autoDispose
+    .family<void, String>((ref, siteEntryId) async {
+  final db = ref.watch(offlineDbProvider);
+  final syncManager = ref.watch(syncManagerProvider);
+
+  await db.addPendingSync(PendingSyncAction(
+    id: const Uuid().v4(),
+    type: 'assignment_accept',
+    payload: {
+      'siteEntryId': siteEntryId,
+      'userId': Supabase.instance.client.auth.currentUser?.id ?? '',
+    },
+    timestamp: DateTime.now().millisecondsSinceEpoch,
+  ));
+
+  syncManager.forceSync();
+});
+
 /// Queue a photo upload
 final queuePhotoUploadProvider = FutureProvider.autoDispose
     .family<void, ({String base64Data, String fileName, String siteEntryId})>((ref, params) async {

@@ -1,8 +1,12 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import '../models/cost_submission_models.dart';
 import '../repositories/cost_submission_repository.dart';
 import '../services/cost_submission_service.dart';
+import '../services/budget_restriction_service.dart';
+import '../services/cache_service.dart';
+import '../services/notification_service.dart';
 
 // Supabase client provider
 final supabaseClientProvider = Provider<SupabaseClient>((ref) {
@@ -18,6 +22,11 @@ final costSubmissionRepositoryProvider = Provider<CostSubmissionRepository>((ref
 // Cost submission service provider
 final costSubmissionServiceProvider = Provider<CostSubmissionService>((ref) {
   return CostSubmissionService();
+});
+
+// Budget restriction service provider
+final budgetRestrictionServiceProvider = Provider<BudgetRestrictionService>((ref) {
+  return BudgetRestrictionService();
 });
 
 // Current user ID provider (assumes user is authenticated)
@@ -126,18 +135,114 @@ class CreateCostSubmissionNotifier extends StateNotifier<AsyncValue<CostSubmissi
 
   Future<void> create(CreateCostSubmissionRequest request) async {
     state = const AsyncValue.loading();
-    
+
     try {
       final repository = ref.read(costSubmissionRepositoryProvider);
       final userId = ref.read(currentUserIdProvider);
-      
+      final budgetService = ref.read(budgetRestrictionServiceProvider);
+
       if (userId.isEmpty) {
         throw CostSubmissionException('User not authenticated');
       }
-      
-      final submission = await repository.createCostSubmission(request, userId);
-      state = AsyncValue.data(submission);
-      
+
+      // Calculate total cost
+      final totalCostCents = request.transportationCostCents +
+                           request.accommodationCostCents +
+                           request.mealAllowanceCents +
+                           request.otherCostsCents;
+
+      // Check connectivity
+      final connectivityResult = await Connectivity().checkConnectivity();
+      final isOnline = connectivityResult != ConnectivityResult.none;
+
+      if (isOnline) {
+        // Online: Perform normal validation and submission
+        // Check budget restrictions
+        final budgetCheck = await budgetService.checkCostSubmissionBudget(
+          siteVisitId: request.siteVisitId,
+          totalCostCents: totalCostCents,
+          userId: userId,
+        );
+
+        if (!budgetCheck.allowed) {
+          throw CostSubmissionException(budgetCheck.message ?? 'Budget restriction violated');
+        }
+
+        // Check monthly submission limits
+        final monthlyCheck = await budgetService.checkMonthlySubmissionLimit(
+          userId: userId,
+          totalCostCents: totalCostCents,
+        );
+
+        if (!monthlyCheck.allowed) {
+          throw CostSubmissionException(monthlyCheck.message ?? 'Monthly limit exceeded');
+        }
+
+        final submission = await repository.createCostSubmission(request, userId);
+        state = AsyncValue.data(submission);
+      } else {
+        // Offline: Cache submission for later sync
+        final submissionData = {
+          'siteVisitId': request.siteVisitId,
+          'transportationCostCents': request.transportationCostCents,
+          'accommodationCostCents': request.accommodationCostCents,
+          'mealAllowanceCents': request.mealAllowanceCents,
+          'otherCostsCents': request.otherCostsCents,
+          'transportationDetails': request.transportationDetails,
+          'accommodationDetails': request.accommodationDetails,
+          'mealDetails': request.mealDetails,
+          'otherCostsDetails': request.otherCostsDetails,
+          'submissionNotes': request.submissionNotes,
+          'currency': request.currency,
+          'supportingDocuments': request.supportingDocuments?.map((doc) => doc.toJson()).toList(),
+          'userId': userId,
+          'totalCostCents': totalCostCents,
+          'createdAt': DateTime.now().toIso8601String(),
+        };
+
+        await SubmissionCacheService.cacheSubmissionForOffline(submissionData);
+
+        // Create a temporary offline submission object
+        final offlineSubmission = CostSubmission(
+          id: 'offline_${DateTime.now().millisecondsSinceEpoch}',
+          siteVisitId: request.siteVisitId,
+          mmpFileId: null,
+          projectId: null,
+          submittedBy: userId,
+          submittedAt: DateTime.now(),
+          transportationCostCents: request.transportationCostCents,
+          accommodationCostCents: request.accommodationCostCents,
+          mealAllowanceCents: request.mealAllowanceCents,
+          otherCostsCents: request.otherCostsCents,
+          totalCostCents: totalCostCents,
+          currency: request.currency ?? 'UGX',
+          transportationDetails: request.transportationDetails,
+          accommodationDetails: request.accommodationDetails,
+          mealDetails: request.mealDetails,
+          otherCostsDetails: request.otherCostsDetails,
+          submissionNotes: request.submissionNotes,
+          supportingDocuments: request.supportingDocuments ?? [],
+          status: CostSubmissionStatus.pending,
+          reviewedBy: null,
+          reviewedAt: null,
+          reviewerNotes: null,
+          approvalNotes: null,
+          walletTransactionId: null,
+          paidAt: null,
+          paidAmountCents: null,
+          paymentNotes: null,
+          classificationLevel: null,
+          roleScope: null,
+          revisionRequested: false,
+          revisionNotes: null,
+          revisionCount: 0,
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        );
+
+        state = AsyncValue.data(offlineSubmission);
+      }
+
       // Invalidate related providers
       ref.invalidate(userCostSubmissionsProvider);
       ref.invalidate(userCostSubmissionsStreamProvider);
@@ -154,6 +259,102 @@ class CreateCostSubmissionNotifier extends StateNotifier<AsyncValue<CostSubmissi
 
 final createCostSubmissionProvider = StateNotifierProvider.autoDispose<CreateCostSubmissionNotifier, AsyncValue<CostSubmission?>>((ref) {
   return CreateCostSubmissionNotifier(ref);
+});
+
+// Provider for offline submissions
+final offlineSubmissionsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
+  return SubmissionCacheService.getCachedSubmissions();
+});
+
+// Provider to check if there are offline submissions
+final hasOfflineSubmissionsProvider = FutureProvider<bool>((ref) async {
+  return SubmissionCacheService.hasOfflineSubmissions();
+});
+
+// State notifier for syncing offline submissions
+class SyncOfflineSubmissionsNotifier extends StateNotifier<AsyncValue<int>> {
+  SyncOfflineSubmissionsNotifier(this.ref) : super(const AsyncValue.data(0));
+
+  final Ref ref;
+
+  Future<void> syncOfflineSubmissions() async {
+    state = const AsyncValue.loading();
+
+    try {
+      final cachedSubmissions = await SubmissionCacheService.getCachedSubmissions();
+      if (cachedSubmissions.isEmpty) {
+        state = const AsyncValue.data(0);
+        return;
+      }
+
+      final repository = ref.read(costSubmissionRepositoryProvider);
+      final budgetService = ref.read(budgetRestrictionServiceProvider);
+      int syncedCount = 0;
+
+      for (final cachedSubmission in cachedSubmissions) {
+        try {
+          final userId = cachedSubmission['userId'] as String;
+          final totalCostCents = cachedSubmission['totalCostCents'] as int;
+
+          // Re-validate budget when syncing (in case budget changed while offline)
+          final budgetCheck = await budgetService.checkCostSubmissionBudget(
+            siteVisitId: cachedSubmission['siteVisitId'] as String,
+            totalCostCents: totalCostCents,
+            userId: userId,
+          );
+
+          if (budgetCheck.allowed) {
+            // Convert cached data back to request format
+            final request = CreateCostSubmissionRequest(
+              siteVisitId: cachedSubmission['siteVisitId'] as String,
+              transportationCostCents: cachedSubmission['transportationCostCents'] as int,
+              accommodationCostCents: cachedSubmission['accommodationCostCents'] as int,
+              mealAllowanceCents: cachedSubmission['mealAllowanceCents'] as int,
+              otherCostsCents: cachedSubmission['otherCostsCents'] as int,
+              transportationDetails: cachedSubmission['transportationDetails'] as String?,
+              accommodationDetails: cachedSubmission['accommodationDetails'] as String?,
+              mealDetails: cachedSubmission['mealDetails'] as String?,
+              otherCostsDetails: cachedSubmission['otherCostsDetails'] as String?,
+              submissionNotes: cachedSubmission['submissionNotes'] as String?,
+              currency: cachedSubmission['currency'] as String,
+              supportingDocuments: (cachedSubmission['supportingDocuments'] as List<dynamic>?)
+                  ?.map((doc) => SupportingDocument.fromJson(doc as Map<String, dynamic>))
+                  .toList(),
+            );
+
+            await repository.createCostSubmission(request, userId);
+            await SubmissionCacheService.removeCachedSubmission(cachedSubmission['id'] as String);
+            syncedCount++;
+          }
+        } catch (e) {
+          // Log error but continue with other submissions
+          print('Failed to sync submission ${cachedSubmission['id']}: $e');
+        }
+      }
+
+      state = AsyncValue.data(syncedCount);
+
+      // Show notification for successful sync
+      if (syncedCount > 0) {
+        await NotificationService.showOfflineSyncCompletedNotification(
+          syncedCount: syncedCount,
+        );
+      }
+
+      // Invalidate related providers
+      ref.invalidate(userCostSubmissionsProvider);
+      ref.invalidate(userCostSubmissionsStreamProvider);
+      ref.invalidate(costSubmissionStatsProvider);
+      ref.invalidate(offlineSubmissionsProvider);
+      ref.invalidate(hasOfflineSubmissionsProvider);
+    } catch (e, stack) {
+      state = AsyncValue.error(e, stack);
+    }
+  }
+}
+
+final syncOfflineSubmissionsProvider = StateNotifierProvider.autoDispose<SyncOfflineSubmissionsNotifier, AsyncValue<int>>((ref) {
+  return SyncOfflineSubmissionsNotifier(ref);
 });
 
 // State notifier for updating cost submission
@@ -250,18 +451,6 @@ final totalPaidAmountProvider = FutureProvider.autoDispose<int>((ref) async {
 // NEW PROVIDERS FOR IMPROVEMENTS
 // ============================================================================
 
-// Stream provider for pending approvals (admin/finance only)
-final pendingApprovalsStreamProvider = StreamProvider.autoDispose<List<CostSubmission>>((ref) {
-  final repository = ref.watch(costSubmissionRepositoryProvider);
-  return repository.watchPendingApprovals();
-});
-
-// Future provider for pending approvals
-final pendingApprovalsProvider = FutureProvider.autoDispose<List<CostSubmission>>((ref) async {
-  final repository = ref.watch(costSubmissionRepositoryProvider);
-  return repository.getPendingApprovals();
-});
-
 // Provider for revision requested submissions
 final revisionRequestedProvider = FutureProvider.autoDispose<List<CostSubmission>>((ref) async {
   final repository = ref.watch(costSubmissionRepositoryProvider);
@@ -288,29 +477,69 @@ class ReviewCostSubmissionNotifier extends StateNotifier<AsyncValue<CostSubmissi
 
   Future<void> reviewSubmission(ReviewCostSubmissionRequest request) async {
     state = const AsyncValue.loading();
-    
+
     try {
       final repository = ref.read(costSubmissionRepositoryProvider);
       final userId = ref.read(currentUserIdProvider);
-      
+
       if (userId.isEmpty) {
         throw CostSubmissionException('User not authenticated');
       }
-      
+
+      // Get the submission before review to send notifications
+      final submissionBeforeReview = await repository.getCostSubmissionById(request.submissionId);
+
       final submission = await repository.reviewCostSubmission(request, userId);
       state = AsyncValue.data(submission);
-      
+
+      // Send notification to the submitter based on the review action
+      if (submissionBeforeReview != null) {
+        await _sendReviewNotification(submissionBeforeReview, request);
+      }
+
       // Invalidate related providers
       ref.invalidate(userCostSubmissionsProvider);
       ref.invalidate(userCostSubmissionsStreamProvider);
-      ref.invalidate(pendingApprovalsProvider);
-      ref.invalidate(pendingApprovalsStreamProvider);
       ref.invalidate(costSubmissionStatsProvider);
       ref.invalidate(costSubmissionByIdProvider(request.submissionId));
       ref.invalidate(approvalHistoryProvider(request.submissionId));
     } catch (e, stack) {
       state = AsyncValue.error(e, stack);
       rethrow;
+    }
+  }
+
+  Future<void> _sendReviewNotification(CostSubmission submission, ReviewCostSubmissionRequest request) async {
+    try {
+      final amount = (submission.totalCostCents / 100).toDouble();
+
+      switch (request.action) {
+        case ReviewAction.approve:
+          await NotificationService.showCostSubmissionApprovedNotification(
+            submissionId: submission.id,
+            siteVisitId: submission.siteVisitId,
+            approvedAmount: amount,
+            currency: submission.currency,
+          );
+          break;
+        case ReviewAction.reject:
+          await NotificationService.showCostSubmissionRejectedNotification(
+            submissionId: submission.id,
+            siteVisitId: submission.siteVisitId,
+            rejectionReason: request.reviewerNotes ?? 'No reason provided',
+          );
+          break;
+        case ReviewAction.requestRevision:
+          await NotificationService.showCostSubmissionRevisionRequestedNotification(
+            submissionId: submission.id,
+            siteVisitId: submission.siteVisitId,
+            revisionNotes: request.revisionNotes ?? request.reviewerNotes ?? 'Revision required',
+          );
+          break;
+      }
+    } catch (e) {
+      // Log notification error but don't fail the review process
+      print('Failed to send review notification: $e');
     }
   }
 
@@ -348,3 +577,6 @@ class ReviewCostSubmissionNotifier extends StateNotifier<AsyncValue<CostSubmissi
 final reviewCostSubmissionProvider = StateNotifierProvider.autoDispose<ReviewCostSubmissionNotifier, AsyncValue<CostSubmission?>>((ref) {
   return ReviewCostSubmissionNotifier(ref);
 });
+
+// Alias for backward compatibility
+final costSubmissionApprovalProvider = reviewCostSubmissionProvider;

@@ -131,6 +131,65 @@ class SiteVisitService {
     return response.map((json) => SiteVisit.fromJson(json)).toList();
   }
 
+  // Real-time stream for assigned site visits
+  Stream<List<Map<String, dynamic>>> watchAssignedSiteVisits(String userId) {
+    return _supabase
+        .from('site_visits')
+        .stream(primaryKey: ['id'])
+        .eq('assigned_to', userId)
+        .order('created_at', ascending: false)
+        .map((data) => List<Map<String, dynamic>>.from(data));
+  }
+
+  // Real-time stream for available site visits
+  Stream<List<SiteVisit>> watchAvailableSiteVisits() {
+    return _supabase
+        .from('mmp_site_entries')
+        .stream(primaryKey: ['id'])
+        .eq('status', 'Dispatched')
+        .order('created_at', ascending: false)
+        .map((data) => data.map((json) => SiteVisit.fromJson(json)).toList());
+  }
+
+  // Real-time stream for accepted site visits
+  Stream<List<SiteVisit>> watchAcceptedSiteVisits(String userId) {
+    return _supabase
+        .from('mmp_site_entries')
+        .stream(primaryKey: ['id'])
+        .eq('accepted_by', userId)
+        .order('created_at', ascending: false)
+        .map((data) => data
+            .where((item) => ['Accepted', 'Accept'].contains(item['status']))
+            .map((json) => SiteVisit.fromJson(json))
+            .toList());
+  }
+
+  // Real-time stream for ongoing site visits
+  Stream<List<SiteVisit>> watchOngoingSiteVisits(String userId) {
+    return _supabase
+        .from('mmp_site_entries')
+        .stream(primaryKey: ['id'])
+        .eq('accepted_by', userId)
+        .order('created_at', ascending: false)
+        .map((data) => data
+            .where((item) => ['Ongoing', 'In Progress'].contains(item['status']))
+            .map((json) => SiteVisit.fromJson(json))
+            .toList());
+  }
+
+  // Real-time stream for completed site visits
+  Stream<List<SiteVisit>> watchCompletedSiteVisits(String userId) {
+    return _supabase
+        .from('mmp_site_entries')
+        .stream(primaryKey: ['id'])
+        .eq('accepted_by', userId)
+        .order('updated_at', ascending: false)
+        .map((data) => data
+            .where((item) => ['Completed', 'Complete'].contains(item['status']))
+            .map((json) => SiteVisit.fromJson(json))
+            .toList());
+  }
+
   Future<void> acceptVisit(String visitId, String userId) async {
     print('Attempting to accept visit: $visitId by user: $userId');
     try {

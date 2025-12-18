@@ -6,11 +6,13 @@ import 'package:workmanager/workmanager.dart';
 import '../repositories/equipment_repository.dart';
 import '../repositories/incident_repository.dart';
 import '../repositories/safety_checklist_repository.dart';
+import '../services/auto_release_service.dart';
 import '../services/database_service.dart';
 import '../services/supabase_service.dart';
 
 class SyncService {
   static const String syncTaskKey = 'syncData';
+  static const String autoReleaseTaskKey = 'autoReleaseSites';
   final DatabaseService _databaseService;
   final SupabaseService _supabaseService;
   Timer? _syncTimer;
@@ -35,6 +37,17 @@ class SyncService {
       syncTaskKey,
       syncTaskKey,
       frequency: const Duration(hours: 1),
+      constraints: Constraints(
+        networkType: NetworkType.connected,
+        requiresBatteryNotLow: true,
+      ),
+    );
+    
+    // Register auto-release task to run every 30 minutes
+    await Workmanager().registerPeriodicTask(
+      autoReleaseTaskKey,
+      autoReleaseTaskKey,
+      frequency: const Duration(minutes: 30),
       constraints: Constraints(
         networkType: NetworkType.connected,
         requiresBatteryNotLow: true,
@@ -92,6 +105,11 @@ void callbackDispatcher() {
         
         final syncService = SyncService(DatabaseService(), supabase);
         await syncService.syncData();
+        break;
+      case SyncService.autoReleaseTaskKey:
+        final autoReleaseService = AutoReleaseService();
+        final releasedCount = await autoReleaseService.checkAndReleaseSites();
+        debugPrint('Auto-release task completed: $releasedCount sites released');
         break;
     }
     return true;

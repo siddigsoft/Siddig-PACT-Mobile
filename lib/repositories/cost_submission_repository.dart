@@ -376,33 +376,6 @@ class CostSubmissionRepository {
     }
   }
 
-  /// Watch pending approvals (admin/finance only)
-  Stream<List<CostSubmission>> watchPendingApprovals() {
-    return _supabase
-        .from('site_visit_cost_submissions')
-        .stream(primaryKey: ['id'])
-        .eq('status', 'pending')
-        .order('submitted_at', ascending: false)
-        .map((data) => data.map((json) => CostSubmission.fromJson(json)).toList());
-  }
-
-  /// Get all pending approvals (admin/finance only)
-  Future<List<CostSubmission>> getPendingApprovals() async {
-    try {
-      final response = await _supabase
-          .from('site_visit_cost_submissions')
-          .select()
-          .eq('status', 'pending')
-          .order('submitted_at', ascending: false);
-
-      return (response as List)
-          .map((json) => CostSubmission.fromJson(json))
-          .toList();
-    } catch (e) {
-      throw CostSubmissionException('Failed to fetch pending approvals: $e');
-    }
-  }
-
   /// Get submissions requiring revision
   Future<List<CostSubmission>> getRevisionRequested(String userId) async {
     try {
