@@ -466,7 +466,7 @@ class WebRTCService {
   Future<void> _playRingingSound() async {
     try {
       await _audioPlayer.setReleaseMode(ReleaseMode.loop);
-      await _audioPlayer.play(AssetSource('sounds/ringtone.mp3'));
+      await _audioPlayer.play(AssetSource('sounds/Phone Dial Tone - Sound Effect (HD).mp3'));
     } catch (e) {
       debugPrint('Error playing ringing sound: $e');
     }
