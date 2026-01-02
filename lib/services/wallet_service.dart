@@ -552,7 +552,7 @@ class WalletService {
     }
   }
 
-  /// Create a new withdrawal request
+  /// Create a new withdrawal request (matches dashboard WalletContext.tsx createWithdrawalRequest)
   Future<WithdrawalRequest> createWithdrawalRequest({
     required double amount,
     required String requestReason,
@@ -566,9 +566,21 @@ class WalletService {
         throw Exception('Withdrawal amount must be greater than 0');
       }
 
+      // Fetch wallet to get wallet_id and validate balance (per dashboard spec)
+      final wallet = await fetchWallet();
+      if (wallet == null) {
+        throw Exception('Wallet not found. Please contact support.');
+      }
+
+      final currentBalance = wallet.currentBalance;
+      if (amount > currentBalance) {
+        throw Exception('Insufficient balance. Available: ${formatCurrency(currentBalance)}');
+      }
+
       final now = DateTime.now();
       final data = {
         'user_id': userId,
+        'wallet_id': wallet.id, // Include wallet_id per dashboard spec
         'amount': amount,
         'currency': DEFAULT_CURRENCY,
         'status': WITHDRAWAL_STATUS_PENDING,

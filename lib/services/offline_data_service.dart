@@ -39,15 +39,68 @@ class OfflineDataService {
 
   // ==================== SITE VISITS ====================
 
-  /// Cache site visits for offline access
+  /// Cache site visits for offline access (raw JSON)
   Future<void> cacheSiteVisits(List<Map<String, dynamic>> visits) async {
     final box = Hive.box(_siteVisitsBox);
-    await box.clear();
-
+    // Don't clear - merge with existing to preserve local modifications
     for (var visit in visits) {
-      await box.put(visit['id'], jsonEncode(visit));
+      final id = visit['id']?.toString();
+      if (id == null) continue;
+      
+      // Check if we have a local modification that hasn't synced
+      final existingData = box.get(id);
+      if (existingData != null) {
+        final existing = Map<String, dynamic>.from(jsonDecode(existingData));
+        if (existing['_offline_modified'] == true && existing['_synced'] != true) {
+          // Skip - local changes take priority until synced
+          continue;
+        }
+      }
+      
+      await box.put(id, jsonEncode(visit));
     }
 
+    await _updateLastSync('site_visits');
+  }
+
+  /// Cache site visits by category for offline access
+  Future<void> cacheSiteVisitsByCategory({
+    List<Map<String, dynamic>>? available,
+    List<Map<String, dynamic>>? claimed,
+    List<Map<String, dynamic>>? accepted,
+    List<Map<String, dynamic>>? ongoing,
+    List<Map<String, dynamic>>? completed,
+  }) async {
+    final box = Hive.box(_siteVisitsBox);
+    
+    // Cache each category with a category marker
+    void cacheCategory(List<Map<String, dynamic>>? visits, String category) {
+      if (visits == null) return;
+      for (var visit in visits) {
+        final id = visit['id']?.toString();
+        if (id == null) continue;
+        
+        // Check if we have a local modification that hasn't synced
+        final existingData = box.get(id);
+        if (existingData != null) {
+          final existing = Map<String, dynamic>.from(jsonDecode(existingData));
+          if (existing['_offline_modified'] == true && existing['_synced'] != true) {
+            // Skip - local changes take priority until synced
+            continue;
+          }
+        }
+        
+        visit['_category'] = category;
+        box.put(id, jsonEncode(visit));
+      }
+    }
+    
+    cacheCategory(available, 'available');
+    cacheCategory(claimed, 'claimed');
+    cacheCategory(accepted, 'accepted');
+    cacheCategory(ongoing, 'ongoing');
+    cacheCategory(completed, 'completed');
+    
     await _updateLastSync('site_visits');
   }
 
@@ -66,15 +119,65 @@ class OfflineDataService {
     return visits;
   }
 
+  /// Get cached site visits by category
+  Future<List<Map<String, dynamic>>> getCachedSiteVisitsByCategory(String category) async {
+    final allVisits = await getCachedSiteVisits();
+    return allVisits.where((v) => v['_category'] == category).toList();
+  }
+
+  /// Get cached site visits for a specific user
+  Future<List<Map<String, dynamic>>> getCachedUserSiteVisits(String userId) async {
+    final allVisits = await getCachedSiteVisits();
+    return allVisits.where((v) => 
+      v['accepted_by'] == userId || 
+      v['claimed_by'] == userId ||
+      v['assigned_to'] == userId
+    ).toList();
+  }
+
+  /// Update a cached site visit locally (for offline modifications)
+  Future<void> updateCachedSiteVisit(String visitId, Map<String, dynamic> updates) async {
+    final box = Hive.box(_siteVisitsBox);
+    final existingData = box.get(visitId);
+    
+    if (existingData != null) {
+      final existing = Map<String, dynamic>.from(jsonDecode(existingData));
+      existing.addAll(updates);
+      existing['_offline_modified'] = true;
+      existing['_synced'] = false;
+      existing['_modified_at'] = DateTime.now().toIso8601String();
+      await box.put(visitId, jsonEncode(existing));
+    }
+  }
+
+  /// Mark a cached site visit as synced
+  Future<void> markSiteVisitSynced(String visitId) async {
+    final box = Hive.box(_siteVisitsBox);
+    final existingData = box.get(visitId);
+    
+    if (existingData != null) {
+      final existing = Map<String, dynamic>.from(jsonDecode(existingData));
+      existing['_synced'] = true;
+      existing['_offline_modified'] = false;
+      await box.put(visitId, jsonEncode(existing));
+    }
+  }
+
+  /// Get unsynced site visits (locally modified)
+  Future<List<Map<String, dynamic>>> getUnsyncedSiteVisits() async {
+    final allVisits = await getCachedSiteVisits();
+    return allVisits.where((v) => v['_offline_modified'] == true && v['_synced'] != true).toList();
+  }
+
   /// Get site visits (online or offline)
   Future<List<Map<String, dynamic>>> getSiteVisits({String? assignedTo}) async {
     if (await isOnline()) {
       try {
         // Fetch from Supabase
-        var query = _supabase.from('site_visits').select();
+        var query = _supabase.from('mmp_site_entries').select();
 
         if (assignedTo != null) {
-          query = query.eq('assigned_to', assignedTo);
+          query = query.eq('user_id', assignedTo);
         }
 
         final List<dynamic> data = await query;
@@ -353,6 +456,8 @@ class OfflineDataService {
   /// Sync all pending data
   Future<Map<String, int>> syncAll() async {
     final results = {
+      'accept_visit': await syncPendingAcceptVisits(),
+      'start_visit': await syncPendingStartVisits(),
       'visit_status': await syncPendingVisitStatuses(),
       'reports': await syncPendingReports(),
       'site_locations': await syncPendingSiteLocations(),
@@ -534,5 +639,268 @@ class OfflineDataService {
       }
     }
     return synced;
+  }
+
+  // ==================== ACCEPT VISIT OFFLINE QUEUE ====================
+
+  /// Queue an accept visit operation for later sync
+  Future<String> queueAcceptVisit({
+    required String visitId,
+    required String userId,
+    Map<String, dynamic>? locationData,
+  }) async {
+    final box = Hive.box(_syncQueueBox);
+    final id = 'accept_visit_${DateTime.now().millisecondsSinceEpoch}';
+
+    final payload = {
+      'visit_id': visitId,
+      'user_id': userId,
+      'location': locationData,
+      'accepted_at': DateTime.now().toIso8601String(),
+    };
+
+    final queueItem = {
+      'id': id,
+      'type': 'accept_visit',
+      'data': payload,
+      'timestamp': DateTime.now().toIso8601String(),
+      'synced': false,
+    };
+    await box.put(id, jsonEncode(queueItem));
+
+    // Also update the cached visit locally
+    await updateCachedSiteVisit(visitId, {
+      'status': 'Accepted',
+      'accepted_by': userId,
+      'accepted_at': DateTime.now().toIso8601String(),
+      '_category': 'accepted',
+    });
+
+    return id;
+  }
+
+  /// Sync pending accept visit operations
+  Future<int> syncPendingAcceptVisits() async {
+    if (!await isOnline()) return 0;
+
+    final box = Hive.box(_syncQueueBox);
+    int synced = 0;
+    for (final key in box.keys.toList()) {
+      final data = box.get(key);
+      if (data == null) continue;
+      final queueItem = Map<String, dynamic>.from(jsonDecode(data));
+      if (queueItem['synced'] == true) continue;
+      if (queueItem['type'] != 'accept_visit') continue;
+
+      try {
+        final payload = Map<String, dynamic>.from(queueItem['data']);
+        final visitId = payload['visit_id'] as String;
+        final userId = payload['user_id'] as String;
+        final acceptedAt = payload['accepted_at'] as String;
+
+        await _supabase.from('mmp_site_entries').update({
+          'status': 'Accepted',
+          'accepted_by': userId,
+          'accepted_at': acceptedAt,
+          'updated_at': DateTime.now().toIso8601String(),
+        }).eq('id', visitId);
+
+        // Mark as synced
+        queueItem['synced'] = true;
+        await box.put(key, jsonEncode(queueItem));
+        await markSiteVisitSynced(visitId);
+        synced++;
+
+        debugPrint('Synced accept visit: $visitId');
+      } catch (e) {
+        debugPrint('Error syncing accept visit $key: $e');
+      }
+    }
+
+    return synced;
+  }
+
+  // ==================== START VISIT OFFLINE QUEUE ====================
+
+  /// Queue a start visit operation for later sync
+  Future<String> queueStartVisit({
+    required String visitId,
+    required String userId,
+    required Map<String, dynamic> startLocation,
+  }) async {
+    final box = Hive.box(_syncQueueBox);
+    final id = 'start_visit_${DateTime.now().millisecondsSinceEpoch}';
+
+    final payload = {
+      'visit_id': visitId,
+      'user_id': userId,
+      'start_location': startLocation,
+      'started_at': DateTime.now().toIso8601String(),
+    };
+
+    final queueItem = {
+      'id': id,
+      'type': 'start_visit',
+      'data': payload,
+      'timestamp': DateTime.now().toIso8601String(),
+      'synced': false,
+    };
+    await box.put(id, jsonEncode(queueItem));
+
+    // Also update the cached visit locally
+    await updateCachedSiteVisit(visitId, {
+      'status': 'Ongoing',
+      'visit_started_by': userId,
+      'visit_started_at': DateTime.now().toIso8601String(),
+      '_category': 'ongoing',
+    });
+
+    return id;
+  }
+
+  /// Sync pending start visit operations
+  Future<int> syncPendingStartVisits() async {
+    if (!await isOnline()) return 0;
+
+    final box = Hive.box(_syncQueueBox);
+    int synced = 0;
+    for (final key in box.keys.toList()) {
+      final data = box.get(key);
+      if (data == null) continue;
+      final queueItem = Map<String, dynamic>.from(jsonDecode(data));
+      if (queueItem['synced'] == true) continue;
+      if (queueItem['type'] != 'start_visit') continue;
+
+      try {
+        final payload = Map<String, dynamic>.from(queueItem['data']);
+        final visitId = payload['visit_id'] as String;
+        final userId = payload['user_id'] as String;
+        final startedAt = payload['started_at'] as String;
+        final startLocation = payload['start_location'] as Map<String, dynamic>;
+
+        // First get existing additional_data
+        final existing = await _supabase
+            .from('mmp_site_entries')
+            .select('additional_data')
+            .eq('id', visitId)
+            .maybeSingle();
+
+        final existingData = (existing?['additional_data'] as Map<String, dynamic>?) ?? {};
+        final mergedData = {
+          ...existingData,
+          'start_location': startLocation,
+        };
+
+        await _supabase.from('mmp_site_entries').update({
+          'status': 'Ongoing',
+          'visit_started_by': userId,
+          'visit_started_at': startedAt,
+          'additional_data': mergedData,
+          'updated_at': DateTime.now().toIso8601String(),
+        }).eq('id', visitId);
+
+        // Mark as synced
+        queueItem['synced'] = true;
+        await box.put(key, jsonEncode(queueItem));
+        await markSiteVisitSynced(visitId);
+        synced++;
+
+        debugPrint('Synced start visit: $visitId');
+      } catch (e) {
+        debugPrint('Error syncing start visit $key: $e');
+      }
+    }
+
+    return synced;
+  }
+
+  // ==================== COMPLETE VISIT OFFLINE QUEUE ====================
+
+  /// Queue a complete visit operation for later sync (photos handled separately)
+  Future<String> queueCompleteVisit({
+    required String visitId,
+    required String userId,
+    required Map<String, dynamic> endLocation,
+    String? notes,
+    String? activities,
+    int? durationMinutes,
+    List<String>? photoDataUrls, // base64 encoded photos
+  }) async {
+    final box = Hive.box(_syncQueueBox);
+    final id = 'complete_visit_${DateTime.now().millisecondsSinceEpoch}';
+
+    final payload = {
+      'visit_id': visitId,
+      'user_id': userId,
+      'end_location': endLocation,
+      'notes': notes,
+      'activities': activities,
+      'duration_minutes': durationMinutes,
+      'completed_at': DateTime.now().toIso8601String(),
+      'photos': photoDataUrls ?? [],
+    };
+
+    final queueItem = {
+      'id': id,
+      'type': 'complete_visit',
+      'data': payload,
+      'timestamp': DateTime.now().toIso8601String(),
+      'synced': false,
+    };
+    await box.put(id, jsonEncode(queueItem));
+
+    // Also update the cached visit locally
+    await updateCachedSiteVisit(visitId, {
+      'status': 'Completed',
+      'visit_completed_by': userId,
+      'visit_completed_at': DateTime.now().toIso8601String(),
+      '_category': 'completed',
+    });
+
+    return id;
+  }
+
+  /// Get pending actions count by type
+  Future<Map<String, int>> getPendingActionsByType() async {
+    final box = Hive.box(_syncQueueBox);
+    final counts = <String, int>{};
+
+    for (var key in box.keys) {
+      final data = box.get(key);
+      if (data == null) continue;
+
+      final queueItem = Map<String, dynamic>.from(jsonDecode(data));
+      if (queueItem['synced'] == true) continue;
+
+      final type = queueItem['type'] as String? ?? 'unknown';
+      counts[type] = (counts[type] ?? 0) + 1;
+    }
+
+    return counts;
+  }
+
+  /// Get all pending visit IDs that have offline changes
+  Future<Set<String>> getPendingVisitIds() async {
+    final box = Hive.box(_syncQueueBox);
+    final ids = <String>{};
+
+    for (var key in box.keys) {
+      final data = box.get(key);
+      if (data == null) continue;
+
+      final queueItem = Map<String, dynamic>.from(jsonDecode(data));
+      if (queueItem['synced'] == true) continue;
+
+      final type = queueItem['type'] as String?;
+      if (type == 'accept_visit' || type == 'start_visit' || type == 'complete_visit' || type == 'visit_status') {
+        final payload = queueItem['data'] as Map<String, dynamic>?;
+        final visitId = payload?['visit_id'] as String?;
+        if (visitId != null) {
+          ids.add(visitId);
+        }
+      }
+    }
+
+    return ids;
   }
 }

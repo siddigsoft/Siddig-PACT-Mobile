@@ -105,6 +105,7 @@ class _FieldOperationsEnhancedScreenState
   List<SiteVisit> _myVisits = [];
   List<SiteVisit> _assignedVisits = []; // For displaying assigned/accepted visits
   int _completedVisitsCount = 0; // Track completed visits count
+  Set<String> _pendingSyncVisitIds = {}; // Track visits with pending offline changes
 
   // Task data
   List<SiteVisitWithDistance> _nearbyTasks = [];
@@ -199,6 +200,8 @@ class _FieldOperationsEnhancedScreenState
         results.contains(ConnectivityResult.wifi) ||
         results.contains(ConnectivityResult.ethernet);
 
+    final wasOffline = !_isOnline;
+    
     setState(() {
       _isOnline = hasConnectivity;
     });
@@ -212,6 +215,100 @@ class _FieldOperationsEnhancedScreenState
                 'user_id', _authService.currentUser!.id);
       } catch (e) {
         debugPrint('Error updating user status: $e');
+      }
+    }
+    
+    // If we just came online, trigger sync and refresh data
+    if (wasOffline && hasConnectivity) {
+      debugPrint('🔄 Coming online - syncing pending changes...');
+      _syncPendingChanges();
+    }
+  }
+
+  /// Sync pending offline changes when coming online
+  Future<void> _syncPendingChanges() async {
+    if (!_isOnline || _isSyncing) return;
+    
+    setState(() {
+      _isSyncing = true;
+    });
+    
+    try {
+      // Sync pending changes from OfflineDataService
+      final offlineService = OfflineDataService();
+      final pendingCount = await offlineService.getPendingSyncCount();
+      
+      if (pendingCount > 0) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Text('Syncing $pendingCount pending changes...'),
+                ],
+              ),
+              backgroundColor: Colors.blue,
+              behavior: SnackBarBehavior.floating,
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+        
+        final results = await offlineService.syncAll();
+        final totalSynced = results.values.fold<int>(0, (sum, count) => sum + count);
+        
+        if (mounted && totalSynced > 0) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  const Icon(Icons.cloud_done, color: Colors.white, size: 20),
+                  const SizedBox(width: 8),
+                  Text('Synced $totalSynced changes successfully!'),
+                ],
+              ),
+              backgroundColor: Colors.green,
+              behavior: SnackBarBehavior.floating,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
+      }
+      
+      // Refresh data from server
+      await _loadVisits();
+    } catch (e) {
+      debugPrint('Error syncing pending changes: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.error_outline, color: Colors.white, size: 20),
+                const SizedBox(width: 8),
+                Expanded(child: Text('Sync failed: $e')),
+              ],
+            ),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSyncing = false;
+        });
       }
     }
   }
@@ -598,7 +695,7 @@ class _FieldOperationsEnhancedScreenState
     }
   }
 
-  // Load visits from Supabase
+  // Load visits from Supabase or local cache
   Future<void> _loadVisits() async {
     if (!mounted) return;
 
@@ -612,49 +709,123 @@ class _FieldOperationsEnhancedScreenState
         throw Exception('User not authenticated');
       }
 
-      // Fetch from service methods - following complete workflow
-      final available = await _siteVisitService.getAvailableSiteVisits(); // Dispatched
-      final claimed = await _siteVisitService.getClaimedSiteVisits(userId); // Assigned/Claimed
-      final accepted = await _siteVisitService.getAcceptedSiteVisits(userId); // Accepted
-      final ongoing = await _siteVisitService.getOngoingSiteVisits(userId); // In Progress
-      final completed = await _siteVisitService.getCompletedSiteVisits(userId); // Completed
-      
-      // Store completed visits count for stats
-      _completedVisitsCount = completed.length;
+      // Check connectivity
+      final offlineService = OfflineDataService();
+      final isOnline = await offlineService.isOnline();
 
-      if (mounted) {
-        setState(() {
-          // Available: Dispatched visits that can be claimed
-          _availableVisits = available;
+      if (isOnline) {
+        // ONLINE: Fetch from service methods and cache for offline
+        try {
+          final available = await _siteVisitService.getAvailableSiteVisits();
+          final claimed = await _siteVisitService.getClaimedSiteVisits(userId);
+          final accepted = await _siteVisitService.getAcceptedSiteVisits(userId);
+          final ongoing = await _siteVisitService.getOngoingSiteVisits(userId);
+          final completed = await _siteVisitService.getCompletedSiteVisits(userId);
           
-          // My Visits: Include all stages - available (dispatched), claimed, accepted, and ongoing
-          _myVisits = [...available, ...claimed, ...accepted, ...ongoing];
+          // Cache for offline use
+          await offlineService.cacheSiteVisitsByCategory(
+            available: available.map((v) => v.toJson()).toList(),
+            claimed: claimed.map((v) => v.toJson()).toList(),
+            accepted: accepted.map((v) => v.toJson()).toList(),
+            ongoing: ongoing.map((v) => v.toJson()).toList(),
+            completed: completed.map((v) => v.toJson()).toList(),
+          );
           
-          // Assigned Visits: For display in the horizontal scroll
-          _assignedVisits = [...available, ...claimed, ...accepted, ...ongoing];
-          
-          _isLoading = false;
-        });
+          _completedVisitsCount = completed.length;
+
+          if (mounted) {
+            setState(() {
+              _availableVisits = available;
+              _myVisits = [...available, ...claimed, ...accepted, ...ongoing];
+              _assignedVisits = [...available, ...claimed, ...accepted, ...ongoing];
+              _isLoading = false;
+            });
+          }
+          _updateMarkers();
+        } catch (e) {
+          debugPrint('Error fetching visits online, falling back to cache: $e');
+          // Fall back to cached data
+          await _loadVisitsFromCache(userId);
+        }
+      } else {
+        // OFFLINE: Load from local cache
+        debugPrint('📦 Loading visits from offline cache...');
+        await _loadVisitsFromCache(userId);
       }
-      _updateMarkers();
     } catch (e) {
       debugPrint('Error loading visits: $e');
       if (mounted) {
         setState(() {
           _isLoading = false;
         });
-        // Schedule SnackBar for after build completes
         SchedulerBinding.instance.addPostFrameCallback((_) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('Error loading visits: $e'),
+                content: Text(_isOnline ? 'Error loading visits: $e' : 'Viewing offline data. Some information may be outdated.'),
                 behavior: SnackBarBehavior.floating,
               ),
             );
           }
         });
       }
+    }
+  }
+
+  /// Load visits from local cache when offline
+  Future<void> _loadVisitsFromCache(String userId) async {
+    final offlineService = OfflineDataService();
+    
+    // Get cached visits by category
+    final availableData = await offlineService.getCachedSiteVisitsByCategory('available');
+    final claimedData = await offlineService.getCachedSiteVisitsByCategory('claimed');
+    final acceptedData = await offlineService.getCachedSiteVisitsByCategory('accepted');
+    final ongoingData = await offlineService.getCachedSiteVisitsByCategory('ongoing');
+    final completedData = await offlineService.getCachedSiteVisitsByCategory('completed');
+    
+    // Convert to SiteVisit objects
+    final available = availableData.map((j) => SiteVisit.fromJson(j)).toList();
+    final claimed = claimedData.map((j) => SiteVisit.fromJson(j)).toList();
+    final accepted = acceptedData.map((j) => SiteVisit.fromJson(j)).toList();
+    final ongoing = ongoingData.map((j) => SiteVisit.fromJson(j)).toList();
+    final completed = completedData.map((j) => SiteVisit.fromJson(j)).toList();
+    
+    _completedVisitsCount = completed.length;
+    
+    // Get pending sync visit IDs
+    final pendingIds = await offlineService.getPendingVisitIds();
+
+    if (mounted) {
+      setState(() {
+        _availableVisits = available;
+        _myVisits = [...available, ...claimed, ...accepted, ...ongoing];
+        _assignedVisits = [...available, ...claimed, ...accepted, ...ongoing];
+        _pendingSyncVisitIds = pendingIds;
+        _isLoading = false;
+      });
+    }
+    _updateMarkers();
+    
+    // Show offline indicator
+    if (mounted && !_isOnline) {
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Row(
+                children: [
+                  Icon(Icons.cloud_off, color: Colors.white, size: 20),
+                  SizedBox(width: 8),
+                  Text('Offline mode - showing cached data'),
+                ],
+              ),
+              backgroundColor: Colors.orange,
+              behavior: SnackBarBehavior.floating,
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
+      });
     }
   }
 
@@ -2136,18 +2307,43 @@ class _FieldOperationsEnhancedScreenState
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Container(
-                    width: 20,
-                    height: 20,
-                    decoration: BoxDecoration(
-                      color: statusColor.withOpacity(0.1),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      statusIcon,
-                      color: statusColor,
-                      size: 12,
-                    ),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 20,
+                        height: 20,
+                        decoration: BoxDecoration(
+                          color: statusColor.withOpacity(0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          statusIcon,
+                          color: statusColor,
+                          size: 12,
+                        ),
+                      ),
+                      // Pending sync indicator
+                      if (_pendingSyncVisitIds.contains(visit.id)) ...[
+                        const SizedBox(width: 4),
+                        Tooltip(
+                          message: 'Pending sync - will upload when online',
+                          child: Container(
+                            width: 18,
+                            height: 18,
+                            decoration: BoxDecoration(
+                              color: Colors.orange.withOpacity(0.15),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.cloud_upload_outlined,
+                              color: Colors.orange,
+                              size: 10,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                   if (visit.siteCode.isNotEmpty)
                     Container(

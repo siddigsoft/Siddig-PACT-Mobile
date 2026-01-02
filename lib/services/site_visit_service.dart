@@ -18,9 +18,9 @@ class SiteVisitService {
     String userId,
   ) async {
     final response = await _supabase
-        .from('site_visits')
+        .from('mmp_site_entries')
         .select()
-        .eq('assigned_to', userId)
+        .eq('user_id', userId)
         .order('created_at', ascending: false);
 
     return List<Map<String, dynamic>>.from(response);
@@ -28,7 +28,7 @@ class SiteVisitService {
 
   Future<Map<String, dynamic>> getSiteVisitDetails(String visitId) async {
     final response =
-        await _supabase.from('site_visits').select().eq('id', visitId).single();
+        await _supabase.from('mmp_site_entries').select().eq('id', visitId).single();
 
     return response;
   }
@@ -146,9 +146,9 @@ class SiteVisitService {
   // Real-time stream for assigned site visits
   Stream<List<Map<String, dynamic>>> watchAssignedSiteVisits(String userId) {
     return _supabase
-        .from('site_visits')
+        .from('mmp_site_entries')
         .stream(primaryKey: ['id'])
-        .eq('assigned_to', userId)
+        .eq('user_id', userId)
         .order('created_at', ascending: false)
         .map((data) => List<Map<String, dynamic>>.from(data));
   }
@@ -206,6 +206,42 @@ class SiteVisitService {
 
   Future<void> acceptVisit(String visitId, String userId) async {
     print('Attempting to accept visit: $visitId by user: $userId');
+    
+    // Check connectivity first
+    final connectivity = await Connectivity().checkConnectivity();
+    final hasConnection = !connectivity.contains(ConnectivityResult.none);
+    
+    if (!hasConnection) {
+      // OFFLINE: Queue for sync and update local cache
+      print('📦 Offline mode - queuing accept visit for sync...');
+      Map<String, dynamic>? locationData;
+      
+      // Try to get location even offline
+      try {
+        final position = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.low,
+          timeLimit: const Duration(seconds: 3),
+        );
+        locationData = {
+          'lat': position.latitude,
+          'lng': position.longitude,
+          'accuracy': position.accuracy,
+          'timestamp': DateTime.now().toIso8601String(),
+        };
+      } catch (e) {
+        print('⚠️ Could not get location offline: $e');
+      }
+      
+      await OfflineDataService().queueAcceptVisit(
+        visitId: visitId,
+        userId: userId,
+        locationData: locationData,
+      );
+      
+      print('✅ Accept visit queued for sync when online');
+      return;
+    }
+    
     try {
       // First check whether the visit exists in mmp_site_entries
       final existing = await _supabase
@@ -313,6 +349,66 @@ class SiteVisitService {
 
   Future<void> startVisit(String visitId) async {
     print('Starting visit: $visitId');
+    final userId = _supabase.auth.currentUser?.id;
+    
+    // Capture start location first (needed for both online and offline)
+    Map<String, dynamic> startLocationData = {};
+    try {
+      print('📍 Capturing start location...');
+      Position? position;
+      try {
+        position = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.high,
+          timeLimit: const Duration(seconds: 5),
+        );
+      } catch (e) {
+        print('⚠️ High accuracy start location failed: $e');
+        try {
+          position = await Geolocator.getCurrentPosition(
+            desiredAccuracy: LocationAccuracy.low,
+            timeLimit: const Duration(seconds: 3),
+          );
+        } catch (e2) {
+          print('⚠️ Low accuracy start location failed: $e2');
+          position = null;
+        }
+      }
+      
+      if (position != null) {
+        startLocationData = {
+          'lat': position.latitude,
+          'lng': position.longitude,
+          'accuracy': position.accuracy,
+          'timestamp': DateTime.now().toIso8601String(),
+        };
+        print('✓ Start location captured: ${position.latitude}, ${position.longitude}');
+      }
+    } catch (e) {
+      print('⚠️ Could not capture start location: $e');
+    }
+    
+    // Check connectivity
+    final connectivity = await Connectivity().checkConnectivity();
+    final hasConnection = !connectivity.contains(ConnectivityResult.none);
+    
+    if (!hasConnection) {
+      // OFFLINE: Queue for sync and update local cache
+      print('📦 Offline mode - queuing start visit for sync...');
+      
+      if (userId == null) {
+        throw Exception('User not authenticated');
+      }
+      
+      await OfflineDataService().queueStartVisit(
+        visitId: visitId,
+        userId: userId,
+        startLocation: startLocationData,
+      );
+      
+      print('✅ Start visit queued for sync when online');
+      return;
+    }
+    
     try {
       // Verify whether this visit exists in mmp_site_entries
       final existing = await _supabase
@@ -325,55 +421,17 @@ class SiteVisitService {
         throw Exception('Visit $visitId not found in mmp_site_entries');
       }
 
-      // Capture start location first
-      Map<String, dynamic> startLocationData = {};
-      try {
-        print('📍 Capturing start location...');
-        Position? position;
-        try {
-          position = await Geolocator.getCurrentPosition(
-            desiredAccuracy: LocationAccuracy.high,
-            timeLimit: const Duration(seconds: 5),
-          );
-        } catch (e) {
-          print('⚠️ High accuracy start location failed: $e');
-          try {
-            position = await Geolocator.getCurrentPosition(
-              desiredAccuracy: LocationAccuracy.low,
-              timeLimit: const Duration(seconds: 3),
-            );
-          } catch (e2) {
-            print('⚠️ Low accuracy start location failed: $e2');
-            position = null;
-          }
-        }
-        
-        if (position != null) {
-          startLocationData = {
-            'start_location': {
-              'lat': position.latitude,
-              'lng': position.longitude,
-              'accuracy': position.accuracy,
-              'timestamp': DateTime.now().toIso8601String(),
-            }
-          };
-          print('✓ Start location captured: ${position.latitude}, ${position.longitude}');
-        }
-      } catch (e) {
-        print('⚠️ Could not capture start location: $e');
-      }
-
       final response = await _supabase
           .from('mmp_site_entries')
           .update({
             'status': 'Ongoing',
-            'visit_started_by': _supabase.auth.currentUser?.id,
+            'visit_started_by': userId,
             'visit_started_at': DateTime.now().toIso8601String(),
             'updated_at': DateTime.now().toIso8601String(),
             if (startLocationData.isNotEmpty)
               'additional_data': {
                 ...((existing['additional_data'] as Map<String, dynamic>?) ?? {}),
-                ...startLocationData,
+                'start_location': startLocationData,
               },
           })
           .eq('id', visitId)
@@ -502,10 +560,10 @@ class SiteVisitService {
 
   Future<List<SiteVisit>> getAssignedPendingSiteVisits(String userId) async {
     final response = await _supabase
-        .from('site_visits')
+        .from('mmp_site_entries')
         .select()
-        .eq('assigned_to', userId)
-        .eq('status', 'assigned')
+        .eq('user_id', userId)
+        .eq('status', 'Dispatched')
         .order('created_at', ascending: false);
 
     return response.map((json) => SiteVisit.fromJson(json)).toList();
@@ -804,10 +862,10 @@ class SiteVisitService {
     if (user == null) return [];
 
     final response = await _supabase
-        .from('site_visits')
+        .from('mmp_site_entries')
         .select()
-        .eq('assigned_to', user.id)
-        .order('due_date', ascending: true);
+        .eq('user_id', user.id)
+        .order('created_at', ascending: true);
 
     return List<Map<String, dynamic>>.from(response);
   }

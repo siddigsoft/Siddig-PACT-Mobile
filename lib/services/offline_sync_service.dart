@@ -135,7 +135,7 @@ class OfflineSyncService {
     int uploaded = 0;
     int downloaded = 0;
 
-    // Upload unsynced tasks -> map to site_visits schema safely
+    // Upload unsynced tasks -> map to mmp_site_entries schema safely
     for (final task in unsyncedTasks) {
       try {
         final data = <String, dynamic>{
@@ -154,7 +154,7 @@ class OfflineSyncService {
             'completed_at': task.departureTime!.toIso8601String(),
         };
 
-        await _supabase.from('site_visits').upsert(data);
+        await _supabase.from('mmp_site_entries').upsert(data);
         _localStorage.markAsSynced('tasks', task.id);
         uploaded++;
       } catch (e) {
@@ -165,7 +165,7 @@ class OfflineSyncService {
 
     // Download latest tasks from server
     try {
-      final response = await _supabase.from('site_visits').select('*');
+      final response = await _supabase.from('mmp_site_entries').select('*');
       final serverTasks = (response as List).map((json) {
         // Convert site_visits row to Task model for local storage
         final sv = SiteVisit.fromJson(json as Map<String, dynamic>);

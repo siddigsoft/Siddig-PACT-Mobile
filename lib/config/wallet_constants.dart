@@ -10,8 +10,10 @@ const String TRANSACTION_TYPE_BONUS = 'bonus';
 const String TRANSACTION_TYPE_PENALTY = 'penalty';
 const String TRANSACTION_TYPE_ADJUSTMENT = 'adjustment';
 
-/// Withdrawal status constants
+/// Withdrawal status constants (matching dashboard spec)
 const String WITHDRAWAL_STATUS_PENDING = 'pending';
+const String WITHDRAWAL_STATUS_SUPERVISOR_APPROVED = 'supervisor_approved';
+const String WITHDRAWAL_STATUS_PROCESSING = 'processing';
 const String WITHDRAWAL_STATUS_APPROVED = 'approved';
 const String WITHDRAWAL_STATUS_REJECTED = 'rejected';
 const String WITHDRAWAL_STATUS_CANCELLED = 'cancelled';

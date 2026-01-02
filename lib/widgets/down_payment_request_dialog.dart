@@ -52,7 +52,9 @@ class _DownPaymentRequestDialogState extends ConsumerState<DownPaymentRequestDia
             // Site visit selection
             siteVisitsAsync.when(
               data: (siteVisits) {
-                final acceptedVisits = siteVisits.where((visit) => visit.status == 'accepted').toList();
+                // Filter for accepted status (case-insensitive to handle 'Accepted', 'Accept', 'accepted')
+                final acceptedVisits = siteVisits.where((visit) => 
+                  visit.status.toLowerCase().startsWith('accept')).toList();
 
                 if (acceptedVisits.isEmpty) {
                   return const Padding(
@@ -74,7 +76,7 @@ class _DownPaymentRequestDialogState extends ConsumerState<DownPaymentRequestDia
                     return DropdownMenuItem(
                       value: visit,
                       child: Text(
-                        '${visit.siteName ?? 'Unknown Site'} - ${CurrencyUtils.formatCurrency((visit.transportFee ?? 0) * 100)} budget',
+                        '${visit.siteName} - ${formatCurrency((visit.transportFee ?? 0) * 100)} budget',
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -165,10 +167,10 @@ class _DownPaymentRequestDialogState extends ConsumerState<DownPaymentRequestDia
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Total Transportation Budget: ${CurrencyUtils.formatCurrency((_selectedSiteVisit!.transportFee ?? 0) * 100)}',
+                        'Total Transportation Budget: ${formatCurrency((_selectedSiteVisit!.transportFee ?? 0) * 100)}',
                       ),
                       Text(
-                        'Requested Amount: ${CurrencyUtils.formatCurrency(double.tryParse(_amountController.text) ?? 0)}',
+                        'Requested Amount: ${formatCurrency(double.tryParse(_amountController.text) ?? 0)}',
                       ),
                       if (((_selectedSiteVisit!.transportFee ?? 0) * 100) <
                           (double.tryParse(_amountController.text) ?? 0))
@@ -234,11 +236,11 @@ class _DownPaymentRequestDialogState extends ConsumerState<DownPaymentRequestDia
     try {
       await ref.read(downPaymentProvider(widget.userId).notifier).createRequest(
         siteVisitId: _selectedSiteVisit!.id,
-        mmpSiteEntryId: _selectedSiteVisit!.mmpSiteEntryId ?? '',
-        siteName: _selectedSiteVisit!.siteName ?? 'Unknown Site',
+        mmpSiteEntryId: _selectedSiteVisit!.mmpId ?? '',
+        siteName: _selectedSiteVisit!.siteName,
         requesterRole: 'dataCollector', // This should come from user profile
-        hubId: _selectedSiteVisit!.hubId,
-        hubName: _selectedSiteVisit!.hubName,
+        hubId: null, // Hub info not available in current SiteVisit model
+        hubName: null, // Hub info not available in current SiteVisit model
         totalTransportationBudget: (_selectedSiteVisit!.transportFee ?? 0) * 100,
         requestedAmount: amount,
         paymentType: _paymentType,

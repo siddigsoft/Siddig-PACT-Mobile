@@ -122,7 +122,7 @@ class PaymentMethodsScreen extends ConsumerWidget {
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Icon(
-                    method.type.icon,
+                    method.paymentType.icon,
                     color: const Color(0xFF1976D2),
                     size: 24,
                   ),
@@ -166,7 +166,7 @@ class PaymentMethodsScreen extends ConsumerWidget {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        method.type.displayName,
+                        method.paymentType.displayName,
                         style: TextStyle(
                           fontSize: 12,
                           color: Colors.grey[600],
@@ -557,11 +557,15 @@ class _AddPaymentMethodDialogState extends State<AddPaymentMethodDialog> {
     try {
       final request = CreatePaymentMethodRequest(
         type: _selectedType,
+        // Map provider name or cardholder name to 'name' field based on type
+        name: _selectedType == PaymentType.bank 
+            ? _bankNameController.text
+            : _selectedType == PaymentType.mobileMoney
+                ? _providerNameController.text
+                : _cardholderNameController.text,
         bankName: _selectedType == PaymentType.bank ? _bankNameController.text : null,
         accountNumber: _selectedType == PaymentType.bank ? _accountNumberController.text : null,
-        providerName: _selectedType == PaymentType.mobileMoney ? _providerNameController.text : null,
         phoneNumber: _selectedType == PaymentType.mobileMoney ? _phoneNumberController.text : null,
-        cardholderName: _selectedType == PaymentType.card ? _cardholderNameController.text : null,
         cardNumber: _selectedType == PaymentType.card ? _cardNumberController.text : null,
       );
 

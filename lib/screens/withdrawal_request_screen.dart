@@ -535,7 +535,7 @@ class _WithdrawalRequestScreenState extends ConsumerState<WithdrawalRequestScree
                     child: Row(
                       children: [
                         Icon(
-                          method.type.icon,
+                          method.paymentType.icon,
                           color: isSelected ? const Color(0xFF1976D2) : Colors.grey[600],
                           size: 24,
                         ),
@@ -554,7 +554,7 @@ class _WithdrawalRequestScreenState extends ConsumerState<WithdrawalRequestScree
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                method.details,
+                                method.maskedDetails,
                                 style: TextStyle(
                                   fontSize: 13,
                                   color: Colors.grey[600],

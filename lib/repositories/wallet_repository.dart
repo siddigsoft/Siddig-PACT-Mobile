@@ -541,8 +541,8 @@ class WalletRepository {
 
       // Validate that the site visit exists and is accepted
       final siteVisit = await _supabase
-          .from('site_visits')
-          .select('status, assigned_to')
+          .from('mmp_site_entries')
+          .select('status, user_id')
           .eq('id', siteVisitId)
           .single();
 
@@ -550,7 +550,7 @@ class WalletRepository {
         throw WalletException('Can only request down payment for accepted site visits');
       }
 
-      if (siteVisit['assigned_to'] != userId) {
+      if (siteVisit['user_id'] != userId) {
         throw WalletException('Can only request down payment for sites assigned to you');
       }
 

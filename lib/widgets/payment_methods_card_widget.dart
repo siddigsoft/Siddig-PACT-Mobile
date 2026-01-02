@@ -63,12 +63,15 @@ class _PaymentMethodsCardWidgetState extends ConsumerState<PaymentMethodsCardWid
 
       final request = CreatePaymentMethodRequest(
         type: paymentType,
-        name: _nameController.text.trim(),
+        // Map provider name or cardholder name to 'name' field based on type
+        name: _selectedType == 'bank' 
+            ? (_nameController.text.trim().isNotEmpty ? _nameController.text.trim() : _bankNameController.text.trim())
+            : _selectedType == 'mobile_money'
+                ? (_nameController.text.trim().isNotEmpty ? _nameController.text.trim() : _providerNameController.text.trim())
+                : (_nameController.text.trim().isNotEmpty ? _nameController.text.trim() : _cardholderNameController.text.trim()),
         bankName: _selectedType == 'bank' ? _bankNameController.text.trim() : null,
         accountNumber: _selectedType == 'bank' ? _accountNumberController.text.trim() : null,
-        providerName: _selectedType == 'mobile_money' ? _providerNameController.text.trim() : null,
         phoneNumber: _selectedType == 'mobile_money' ? _phoneNumberController.text.trim() : null,
-        cardholderName: _selectedType == 'card' ? _cardholderNameController.text.trim() : null,
         cardNumber: _selectedType == 'card' ? _cardNumberController.text.trim() : null,
       );
 
@@ -341,7 +344,7 @@ class _PaymentMethodsCardWidgetState extends ConsumerState<PaymentMethodsCardWid
         Row(
           children: [
             Icon(
-              method.type.icon,
+              method.paymentType.icon,
               color: const Color(0xFF1976D2),
               size: 28,
             ),
@@ -385,7 +388,7 @@ class _PaymentMethodsCardWidgetState extends ConsumerState<PaymentMethodsCardWid
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    method.details,
+                    method.maskedDetails,
                     style: TextStyle(
                       fontSize: 13,
                       color: Colors.grey[600],

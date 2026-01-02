@@ -24,17 +24,12 @@ class SiteVisitAssignmentService {
     try {
       // Get all available site visits
       final response = await _supabase
-          .from('site_visits')
+          .from('mmp_site_entries')
           .select()
-          .eq('status', 'available')
-          .execute();
+          .eq('status', 'Dispatched');
 
-      if (response.error != null) {
-        throw response.error!;
-      }
-
-      final visits = (response.data as List)
-          .map((json) => SiteVisit.fromJson(json))
+      final visits = (response as List)
+          .map((json) => SiteVisit.fromJson(json as Map<String, dynamic>))
           .where((visit) => visit.latitude != null && visit.longitude != null)
           .toList();
 

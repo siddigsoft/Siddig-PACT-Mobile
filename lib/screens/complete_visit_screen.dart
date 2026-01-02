@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:typed_data';
+import 'dart:convert';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,12 +8,16 @@ import 'package:image_picker/image_picker.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:uuid/uuid.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_design_system.dart';
 import '../widgets/app_widgets.dart';
 import '../providers/active_visit_provider.dart';
 import '../providers/site_visit_provider.dart';
+import '../providers/offline_provider.dart';
 import '../models/site_visit.dart';
+import '../services/offline/offline_db.dart';
+import '../services/offline/models.dart';
 
 class CompleteVisitScreen extends ConsumerStatefulWidget {
   final SiteVisit visit;
@@ -74,7 +79,11 @@ class _CompleteVisitScreenState extends ConsumerState<CompleteVisitScreen> {
       }
 
       // Try last known first (often available instantly), then fall back to a fresh fix.
-      final lastKnown = await Geolocator.getLastKnownPosition();
+      // NOTE: getLastKnownPosition is NOT supported on web platform
+      Position? lastKnown;
+      if (!kIsWeb) {
+        lastKnown = await Geolocator.getLastKnownPosition();
+      }
 
       final timeout = kIsWeb ? const Duration(seconds: 60) : const Duration(seconds: 20);
 
@@ -207,7 +216,9 @@ class _CompleteVisitScreenState extends ConsumerState<CompleteVisitScreen> {
       final hasConnection = connectivity.first != ConnectivityResult.none;
 
       if (!hasConnection) {
-        throw Exception('No internet connection. Please try again when online.');
+        // OFFLINE MODE: Save locally and queue for sync
+        await _saveOfflineCompletion(userId);
+        return;
       }
 
       // Get current location if not already obtained
@@ -355,6 +366,137 @@ class _CompleteVisitScreenState extends ConsumerState<CompleteVisitScreen> {
         AppSnackBar.show(
           context,
           message: 'Failed to submit report: $e',
+          type: SnackBarType.error,
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+        });
+      }
+    }
+  }
+
+  /// Save visit completion data locally when offline
+  Future<void> _saveOfflineCompletion(String userId) async {
+    try {
+      final db = ref.read(offlineDbProvider);
+      final uuid = const Uuid();
+      final now = DateTime.now();
+
+      // Calculate visit duration
+      final activeVisitState = ref.read(activeVisitProvider);
+      final startTime = activeVisitState.startedAt;
+      final durationMinutes = startTime != null 
+          ? now.difference(startTime).inMinutes 
+          : null;
+
+      // Convert photos to base64 for local storage
+      final List<String> photoDataList = [];
+      for (final photo in _photos) {
+        try {
+          final bytes = kIsWeb 
+              ? await photo.readAsBytes()
+              : await File(photo.path).readAsBytes();
+          final base64 = base64Encode(bytes);
+          photoDataList.add('data:image/jpeg;base64,$base64');
+        } catch (e) {
+          debugPrint('Error encoding photo: $e');
+          // Store file path as fallback for mobile
+          if (!kIsWeb) {
+            photoDataList.add(photo.path);
+          }
+        }
+      }
+
+      // Create offline site visit record
+      // Use first location in history as start location
+      final startLocation = activeVisitState.locationHistory.isNotEmpty 
+          ? activeVisitState.locationHistory.first 
+          : null;
+      
+      final offlineVisit = OfflineSiteVisit(
+        id: uuid.v4(),
+        siteEntryId: widget.visit.id,
+        siteName: widget.visit.siteName,
+        siteCode: widget.visit.siteCode,
+        state: widget.visit.state,
+        locality: widget.visit.locality,
+        status: 'completed',
+        startedAt: startTime ?? now,
+        completedAt: now,
+        startLocation: startLocation != null
+            ? {
+                'lat': startLocation.latitude,
+                'lng': startLocation.longitude,
+                'accuracy': startLocation.accuracy,
+              }
+            : null,
+        endLocation: _currentLocation != null
+            ? {
+                'lat': _currentLocation!.latitude,
+                'lng': _currentLocation!.longitude,
+                'accuracy': _currentLocation!.accuracy,
+              }
+            : null,
+        photos: photoDataList,
+        notes: _notesController.text.trim(),
+        synced: false,
+      );
+
+      await db.saveSiteVisitOffline(offlineVisit);
+
+      // Also create a pending sync action for the completion
+      final syncAction = PendingSyncAction(
+        id: uuid.v4(),
+        type: 'site_visit_complete',
+        payload: {
+          'site_visit_id': widget.visit.id,
+          'notes': _notesController.text.trim(),
+          'activities': _activitiesController.text.trim().isEmpty 
+              ? null 
+              : _activitiesController.text.trim(),
+          'duration_minutes': durationMinutes,
+          'coordinates': _currentLocation != null
+              ? {
+                  'latitude': _currentLocation!.latitude,
+                  'longitude': _currentLocation!.longitude,
+                  'accuracy': _currentLocation!.accuracy,
+                }
+              : null,
+          'submitted_by': userId,
+          'photos': photoDataList,
+          'offline_visit_id': offlineVisit.id,
+        },
+        timestamp: now.millisecondsSinceEpoch,
+      );
+
+      await db.addPendingSync(syncAction);
+
+      // Stop active visit tracking
+      await ref.read(activeVisitProvider.notifier).completeVisit(
+        notes: _notesController.text,
+        photos: _photos.map((p) => p.path).toList(),
+      );
+
+      widget.onCompleteSuccess?.call();
+
+      if (mounted) {
+        AppSnackBar.show(
+          context,
+          message: 'Visit saved offline! Will upload when you have internet.',
+          type: SnackBarType.success,
+          duration: const Duration(seconds: 4),
+        );
+        Navigator.of(context).pop(true);
+      }
+    } catch (e) {
+      debugPrint('Error saving offline completion: $e');
+      if (mounted) {
+        AppSnackBar.show(
+          context,
+          message: 'Failed to save offline: $e',
           type: SnackBarType.error,
         );
       }

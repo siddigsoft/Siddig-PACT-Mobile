@@ -2,8 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../models/wallet_models.dart';
+import '../models/payment_method_models.dart';
 import '../providers/wallet_provider.dart';
+import '../providers/payment_method_provider.dart';
+import '../providers/profile_provider.dart';
 import '../services/wallet_service.dart';
+import '../widgets/down_payment_request_dialog.dart';
 import 'cost_submission_history_screen.dart';
 import 'cost_submission_form_screen.dart';
 import 'withdrawal_request_screen.dart';
@@ -22,7 +26,7 @@ class _WalletScreenState extends ConsumerState<WalletScreen> with SingleTickerPr
   late TabController _tabController;
   final _withdrawalAmountController = TextEditingController();
   final _withdrawalReasonController = TextEditingController();
-  String? _selectedPaymentMethod;
+  PaymentMethod? _selectedPaymentMethod;
 
   @override
   void initState() {
@@ -196,6 +200,29 @@ class _WalletScreenState extends ConsumerState<WalletScreen> with SingleTickerPr
                 ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFFFF9800), // Orange
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 12),
+
+            // Request Down Payment Button
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () => _showDownPaymentDialog(),
+                icon: const Icon(Icons.account_balance_wallet),
+                label: const Text(
+                  'Request Down Payment',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF4CAF50), // Green
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(
@@ -805,79 +832,176 @@ class _WalletScreenState extends ConsumerState<WalletScreen> with SingleTickerPr
   }
 
   void _showWithdrawalDialog(Wallet wallet, WalletService service) {
+    // Reset selected payment method when opening dialog
+    _selectedPaymentMethod = null;
+    
+    // Watch payment methods to show in dropdown
+    final paymentMethodsAsync = ref.read(paymentMethodsProvider);
+    
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Request Withdrawal'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Available Balance: ${service.formatCurrency(wallet.currentBalance)}',
-                style: const TextStyle(fontWeight: FontWeight.w500),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: _withdrawalAmountController,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'Amount',
-                  border: OutlineInputBorder(),
-                  prefixText: 'SDG ',
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Request Withdrawal'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Available Balance: ${service.formatCurrency(wallet.currentBalance)}',
+                  style: const TextStyle(fontWeight: FontWeight.w500),
                 ),
-              ),
-              const SizedBox(height: 16),
-              DropdownButtonFormField<String>(
-                value: _selectedPaymentMethod,
-                decoration: const InputDecoration(
-                  labelText: 'Payment Method',
-                  border: OutlineInputBorder(),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: _withdrawalAmountController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Amount',
+                    border: OutlineInputBorder(),
+                    prefixText: 'SDG ',
+                  ),
                 ),
-                items: ['Bank Transfer', 'Mobile Money', 'Cash Pickup']
-                    .map((method) => DropdownMenuItem(
-                          value: method,
-                          child: Text(method),
-                        ))
-                    .toList(),
-                onChanged: (value) {
-                  setState(() {
-                    _selectedPaymentMethod = value;
-                  });
-                },
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: _withdrawalReasonController,
-                maxLines: 3,
-                decoration: const InputDecoration(
-                  labelText: 'Reason (Optional)',
-                  border: OutlineInputBorder(),
+                const SizedBox(height: 16),
+                // Payment Method dropdown from saved methods
+                paymentMethodsAsync.when(
+                  data: (methods) {
+                    if (methods.isEmpty) {
+                      return Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFF3E0),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: const Color(0xFFFF9800).withOpacity(0.3)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(Icons.warning_amber, color: Color(0xFFFF9800), size: 20),
+                                const SizedBox(width: 8),
+                                const Expanded(
+                                  child: Text(
+                                    'No payment methods saved',
+                                    style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFFFF9800)),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            TextButton(
+                              onPressed: () {
+                                Navigator.pop(dialogContext);
+                                Navigator.push(context, MaterialPageRoute(
+                                  builder: (context) => const PaymentMethodsScreen(),
+                                ));
+                              },
+                              child: const Text('Add Payment Method'),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+                    
+                    return DropdownButtonFormField<PaymentMethod>(
+                      value: _selectedPaymentMethod,
+                      decoration: const InputDecoration(
+                        labelText: 'Payment Method',
+                        border: OutlineInputBorder(),
+                      ),
+                      isExpanded: true,
+                      items: methods.map((method) => DropdownMenuItem(
+                        value: method,
+                        child: Row(
+                          children: [
+                            Icon(method.paymentType.icon, size: 20, color: const Color(0xFF1976D2)),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                '${method.name} (${method.maskedDetails})',
+                                style: const TextStyle(fontWeight: FontWeight.w500),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            if (method.isDefault)
+                              Container(
+                                margin: const EdgeInsets.only(left: 4),
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF4CAF50),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: const Text('Default', style: TextStyle(color: Colors.white, fontSize: 10)),
+                              ),
+                          ],
+                        ),
+                      )).toList(),
+                      onChanged: (value) {
+                        setDialogState(() {
+                          _selectedPaymentMethod = value;
+                        });
+                      },
+                    );
+                  },
+                  loading: () => const Center(child: CircularProgressIndicator()),
+                  error: (error, stack) => Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFEBEE),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text('Error loading payment methods: $error', style: const TextStyle(color: Colors.red)),
+                  ),
                 ),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () => _submitWithdrawal(wallet, service),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFFF9800),
-              foregroundColor: Colors.white,
+                const SizedBox(height: 16),
+                TextField(
+                  controller: _withdrawalReasonController,
+                  maxLines: 3,
+                  decoration: const InputDecoration(
+                    labelText: 'Reason (Optional)',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ],
             ),
-            child: const Text('Submit'),
           ),
-        ],
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => _submitWithdrawal(wallet, service, dialogContext),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFFF9800),
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Submit'),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Future<void> _submitWithdrawal(Wallet wallet, WalletService service) async {
+  /// Show the down payment request dialog
+  void _showDownPaymentDialog() {
+    final profile = ref.read(currentUserProfileProvider);
+    if (profile == null) {
+      _showError('User profile not found. Please log in again.');
+      return;
+    }
+    
+    showDialog(
+      context: context,
+      builder: (context) => DownPaymentRequestDialog(
+        userId: profile.id,
+      ),
+    );
+  }
+
+  Future<void> _submitWithdrawal(Wallet wallet, WalletService service, BuildContext dialogContext) async {
     final amount = double.tryParse(_withdrawalAmountController.text);
     
     if (amount == null || amount <= 0) {
@@ -906,11 +1030,11 @@ class _WalletScreenState extends ConsumerState<WalletScreen> with SingleTickerPr
         amount: amount,
         currency: 'SDG',
         reason: _withdrawalReasonController.text,
-        paymentMethod: _selectedPaymentMethod,
+        paymentMethod: _selectedPaymentMethod!.id, // Use the payment method ID
       );
 
       if (mounted) {
-        Navigator.pop(context);
+        Navigator.pop(dialogContext);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Withdrawal request submitted successfully'),

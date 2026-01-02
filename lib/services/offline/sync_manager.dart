@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'offline_db.dart';
 import 'models.dart';
+import '../offline_data_service.dart';
 
 typedef SyncProgressCallback = void Function(SyncProgress progress);
 typedef SyncCompleteCallback = void Function(SyncResult result);
@@ -447,6 +448,19 @@ class SyncManager {
         percentage: 66 + ((i + 1) / pendingActions.length * 34),
         message: 'Processing action ${i + 1}/${pendingActions.length}',
       ));
+    }
+
+    // Also sync pending actions from OfflineDataService (accept_visit, start_visit, etc.)
+    try {
+      final offlineDataService = OfflineDataService();
+      final offlineSyncResults = await offlineDataService.syncAll();
+      
+      // Count synced items from OfflineDataService
+      for (final entry in offlineSyncResults.entries) {
+        synced += entry.value;
+      }
+    } catch (e) {
+      errors.add('OfflineDataService sync failed: $e');
     }
 
     return (synced, failed, errors);

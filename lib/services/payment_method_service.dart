@@ -16,20 +16,32 @@ class PaymentMethodService {
 
       final response = await _supabase
           .from('payment_methods')
-          .select()
+          .select('id, user_id, type, name, account_number, bank_name, phone_number, card_number, is_default, created_at, updated_at')
           .eq('user_id', userId)
           .order('is_default', ascending: false)
           .order('created_at', ascending: false);
 
-      return (response as List)
-          .map((json) => PaymentMethod.fromJson(json))
-          .toList();
+      if (response == null) {
+        return [];
+      }
+
+      final List<PaymentMethod> methods = [];
+      for (final json in (response as List)) {
+        try {
+          methods.add(PaymentMethod.fromJson(Map<String, dynamic>.from(json)));
+        } catch (e) {
+          // Skip invalid records but log the error
+          print('Error parsing payment method: $e, data: $json');
+        }
+      }
+      return methods;
     } catch (e) {
+      if (e is PaymentMethodException) rethrow;
       throw PaymentMethodException('Failed to fetch payment methods: $e');
     }
   }
 
-  /// Create a new payment method
+  /// Create a new payment method - matches public.payment_methods table schema
   Future<PaymentMethod> createPaymentMethod(
     CreatePaymentMethodRequest request,
   ) async {
@@ -45,35 +57,29 @@ class PaymentMethodService {
         throw PaymentMethodException(validation.error ?? 'Validation failed');
       }
 
-      // Prepare data based on payment type
+      // Prepare data based on payment type - only include columns that exist in table
+      // Table columns: id, user_id, type, name, account_number, bank_name, phone_number, card_number, is_default, created_at, updated_at
       final data = <String, dynamic>{
         'user_id': userId,
-        'type': request.type.name,
-        'created_at': DateTime.now().toIso8601String(),
-        'updated_at': DateTime.now().toIso8601String(),
+        'type': _paymentTypeToString(request.type), // 'bank', 'mobile_money', 'card'
+        'is_default': false, // Default to false, user can set later
       };
 
       switch (request.type) {
         case PaymentType.bank:
+          data['name'] = request.name ?? request.bankName ?? 'Bank Account';
           data['bank_name'] = request.bankName;
           data['account_number'] = request.accountNumber;
-          data['name'] = request.bankName!;
-          data['details'] = 'Account: ***${request.accountNumber!.substring(request.accountNumber!.length - 4)}';
           break;
 
         case PaymentType.mobileMoney:
-          data['provider_name'] = request.providerName;
+          data['name'] = request.name ?? 'Mobile Money';
           data['phone_number'] = request.phoneNumber;
-          data['name'] = request.providerName!;
-          data['details'] = 'Phone: ***${request.phoneNumber!.substring(request.phoneNumber!.length - 4)}';
           break;
 
         case PaymentType.card:
-          data['cardholder_name'] = request.cardholderName;
+          data['name'] = request.name ?? 'Card';
           data['card_number'] = _maskCardNumber(request.cardNumber!);
-          data['card_last_four'] = request.cardNumber!.substring(request.cardNumber!.length - 4);
-          data['name'] = request.cardholderName!;
-          data['details'] = 'Card: ****${data['card_last_four']}';
           break;
       }
 
@@ -87,6 +93,18 @@ class PaymentMethodService {
     } catch (e) {
       if (e is PaymentMethodException) rethrow;
       throw PaymentMethodException('Failed to create payment method: $e');
+    }
+  }
+
+  /// Convert PaymentType enum to database string
+  String _paymentTypeToString(PaymentType type) {
+    switch (type) {
+      case PaymentType.bank:
+        return 'bank';
+      case PaymentType.mobileMoney:
+        return 'mobile_money';
+      case PaymentType.card:
+        return 'card';
     }
   }
 
@@ -170,12 +188,6 @@ class PaymentMethodService {
         break;
 
       case PaymentType.mobileMoney:
-        if (request.providerName == null || request.providerName!.isEmpty) {
-          return PaymentMethodValidationResult(
-            isValid: false,
-            error: 'Provider name is required',
-          );
-        }
         if (request.phoneNumber == null || request.phoneNumber!.isEmpty) {
           return PaymentMethodValidationResult(
             isValid: false,
@@ -191,12 +203,6 @@ class PaymentMethodService {
         break;
 
       case PaymentType.card:
-        if (request.cardholderName == null || request.cardholderName!.isEmpty) {
-          return PaymentMethodValidationResult(
-            isValid: false,
-            error: 'Cardholder name is required',
-          );
-        }
         if (request.cardNumber == null || request.cardNumber!.isEmpty) {
           return PaymentMethodValidationResult(
             isValid: false,
