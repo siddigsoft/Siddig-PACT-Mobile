@@ -11,6 +11,28 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/site_visit.dart';
 import '../services/site_visit_service.dart';
 
+class _VisitReportData {
+  final String reportId;
+  final String siteVisitId;
+  final String notes;
+  final String? activities;
+  final int? durationMinutes;
+  final Map<String, dynamic>? coordinates;
+  final DateTime? submittedAt;
+  final List<String> photoUrls;
+
+  const _VisitReportData({
+    required this.reportId,
+    required this.siteVisitId,
+    required this.notes,
+    required this.activities,
+    required this.durationMinutes,
+    required this.coordinates,
+    required this.submittedAt,
+    required this.photoUrls,
+  });
+}
+
 class ReportsScreen extends StatefulWidget {
   const ReportsScreen({super.key});
 
@@ -25,10 +47,15 @@ class _ReportsScreenState extends State<ReportsScreen> {
   bool _isLoading = true;
   String? _userId;
   Map<String, Map<String, dynamic>> _siteLocations = {}; // site_id -> location data
+  final Map<String, _VisitReportData> _reportByVisitId = {}; // site_visit_id -> report data
 
   // Filter state
   String _filterType = 'Date'; // Date, Month, Year
   DateTime _selectedDate = DateTime.now();
+
+  DateTime? _effectiveCompletedAt(SiteVisit visit) {
+    return visit.completedAt ?? visit.visitCompletedAt ?? visit.updatedAt ?? visit.createdAt;
+  }
 
   @override
   void initState() {
@@ -42,6 +69,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
       _userId = Supabase.instance.client.auth.currentUser?.id;
       if (_userId != null) {
         _allVisits = await _siteVisitService.getCompletedSiteVisits(_userId!);
+        await _loadReportsForVisits();
         await _loadSiteLocations();
         _applyFilter();
       }
@@ -51,6 +79,223 @@ class _ReportsScreenState extends State<ReportsScreen> {
       );
     } finally {
       setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _loadReportsForVisits() async {
+    try {
+      final visitIds = _allVisits.map((v) => v.id).toList();
+      if (visitIds.isEmpty) return;
+      if (_userId == null) return;
+
+      final supabase = Supabase.instance.client;
+
+      final reportsResponse = await supabase
+          .from('reports')
+          .select('id, site_visit_id, notes, activities, duration_minutes, coordinates, submitted_at')
+          .eq('submitted_by', _userId!)
+          .inFilter('site_visit_id', visitIds)
+          .order('submitted_at', ascending: false);
+
+      // Keep latest report per visit
+      final Map<String, Map<String, dynamic>> latestReportRowByVisitId = {};
+      for (final row in reportsResponse) {
+        final siteVisitId = row['site_visit_id']?.toString();
+        if (siteVisitId == null || siteVisitId.isEmpty) continue;
+        latestReportRowByVisitId.putIfAbsent(siteVisitId, () => row);
+      }
+
+      final reportIds = latestReportRowByVisitId.values
+          .map((r) => r['id']?.toString())
+          .whereType<String>()
+          .where((id) => id.isNotEmpty)
+          .toList();
+
+      final Map<String, List<String>> photoUrlsByReportId = {};
+      if (reportIds.isNotEmpty) {
+        final photosResponse = await supabase
+            .from('report_photos')
+            .select('report_id, photo_url')
+            .inFilter('report_id', reportIds);
+
+        for (final row in photosResponse) {
+          final reportId = row['report_id']?.toString();
+          final photoUrl = row['photo_url']?.toString();
+          if (reportId == null || reportId.isEmpty) continue;
+          if (photoUrl == null || photoUrl.isEmpty) continue;
+          (photoUrlsByReportId[reportId] ??= []).add(photoUrl);
+        }
+      }
+
+      _reportByVisitId.clear();
+      latestReportRowByVisitId.forEach((siteVisitId, row) {
+        final reportId = row['id']?.toString() ?? '';
+        final submittedAtRaw = row['submitted_at'];
+        final submittedAt = submittedAtRaw is String ? DateTime.tryParse(submittedAtRaw) : null;
+
+        final durationRaw = row['duration_minutes'];
+        final durationMinutes = durationRaw is int
+            ? durationRaw
+            : durationRaw is num
+                ? durationRaw.toInt()
+                : null;
+
+        final coordinatesRaw = row['coordinates'];
+        final coordinates = coordinatesRaw is Map<String, dynamic>
+            ? coordinatesRaw
+            : coordinatesRaw is Map
+                ? coordinatesRaw.map((k, v) => MapEntry(k.toString(), v))
+                : null;
+
+        _reportByVisitId[siteVisitId] = _VisitReportData(
+          reportId: reportId,
+          siteVisitId: siteVisitId,
+          notes: (row['notes']?.toString() ?? '').trim(),
+          activities: (row['activities']?.toString() ?? '').trim().isEmpty
+              ? null
+              : row['activities']?.toString(),
+          durationMinutes: durationMinutes,
+          coordinates: coordinates,
+          submittedAt: submittedAt,
+          photoUrls: photoUrlsByReportId[reportId] ?? const <String>[],
+        );
+      });
+    } on PostgrestException catch (e) {
+      // Don't block the screen if report rows fail to load, but do surface why.
+      _reportByVisitId.clear();
+      print('Error loading reports (Postgrest): ${e.message}');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Unable to load report details: ${e.message}')),
+        );
+      }
+    } catch (e) {
+      // Don't block the screen if report rows fail to load.
+      _reportByVisitId.clear();
+      print('Error loading reports: $e');
+    }
+  }
+
+  Future<void> _downloadVisitReport(SiteVisit visit) async {
+    try {
+      final report = _reportByVisitId[visit.id];
+      if (report == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No report details found for this visit.')),
+        );
+        return;
+      }
+
+      // Load fonts with fallback
+      pw.Font? font;
+      pw.Font? boldFont;
+      try {
+        font = await PdfGoogleFonts.nunitoRegular();
+        boldFont = await PdfGoogleFonts.nunitoBold();
+      } catch (_) {
+        font = pw.Font.helvetica();
+        boldFont = pw.Font.helveticaBold();
+      }
+
+      // Prefetch a few images (best-effort). If it fails, we still include URLs.
+      final List<pw.ImageProvider> images = [];
+      for (final url in report.photoUrls.take(6)) {
+        try {
+          images.add(await networkImage(url));
+        } catch (_) {
+          // ignore
+        }
+      }
+
+      final pdf = pw.Document();
+
+      final location = _siteLocations[visit.id];
+      final coordinatesText = location != null
+          ? '${location['latitude']?.toStringAsFixed(6) ?? 'N/A'}, ${location['longitude']?.toStringAsFixed(6) ?? 'N/A'}'
+          : (report.coordinates != null
+              ? '${report.coordinates?['latitude'] ?? 'N/A'}, ${report.coordinates?['longitude'] ?? 'N/A'}'
+              : 'Not recorded');
+      final accuracyText = location != null
+          ? '${location['accuracy']?.toStringAsFixed(1) ?? 'N/A'}m'
+          : (report.coordinates?['accuracy'] != null ? '${report.coordinates?['accuracy']}m' : 'N/A');
+
+      final completedAt = visit.completedAt;
+      final submittedAt = report.submittedAt;
+
+      pdf.addPage(
+        pw.MultiPage(
+          pageFormat: PdfPageFormat.a4,
+          build: (pw.Context context) {
+            return [
+              pw.Header(
+                level: 0,
+                child: pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    pw.Text('Visit Report', style: pw.TextStyle(font: boldFont, fontSize: 24)),
+                    pw.Text(
+                      DateFormat('yyyy-MM-dd').format(DateTime.now()),
+                      style: pw.TextStyle(font: font, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+              pw.Text('Site: ${visit.siteName}', style: pw.TextStyle(font: boldFont, fontSize: 14)),
+              pw.Text('Code: ${visit.siteCode}', style: pw.TextStyle(font: font, fontSize: 12)),
+              if (completedAt != null)
+                pw.Text('Completed At: ${DateFormat('yyyy-MM-dd HH:mm').format(completedAt)}', style: pw.TextStyle(font: font, fontSize: 12)),
+              if (submittedAt != null)
+                pw.Text('Submitted At: ${DateFormat('yyyy-MM-dd HH:mm').format(submittedAt)}', style: pw.TextStyle(font: font, fontSize: 12)),
+              if (report.durationMinutes != null)
+                pw.Text('Duration: ${report.durationMinutes} min', style: pw.TextStyle(font: font, fontSize: 12)),
+              pw.SizedBox(height: 10),
+              pw.Text('Final Location', style: pw.TextStyle(font: boldFont, fontSize: 13)),
+              pw.Text('Coordinates: $coordinatesText', style: pw.TextStyle(font: font, fontSize: 12)),
+              pw.Text('Accuracy: $accuracyText', style: pw.TextStyle(font: font, fontSize: 12)),
+              pw.SizedBox(height: 12),
+              pw.Text('Notes', style: pw.TextStyle(font: boldFont, fontSize: 13)),
+              pw.Text(report.notes.isEmpty ? 'No notes' : report.notes, style: pw.TextStyle(font: font, fontSize: 12)),
+              if (report.activities != null && report.activities!.trim().isNotEmpty) ...[
+                pw.SizedBox(height: 12),
+                pw.Text('Activities', style: pw.TextStyle(font: boldFont, fontSize: 13)),
+                pw.Text(report.activities!, style: pw.TextStyle(font: font, fontSize: 12)),
+              ],
+              pw.SizedBox(height: 12),
+              pw.Text('Photos (${report.photoUrls.length})', style: pw.TextStyle(font: boldFont, fontSize: 13)),
+              if (images.isNotEmpty)
+                pw.Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: images
+                      .map((img) => pw.Container(
+                            width: 160,
+                            height: 120,
+                            decoration: pw.BoxDecoration(border: pw.Border.all(color: PdfColors.grey300)),
+                            child: pw.Image(img, fit: pw.BoxFit.cover),
+                          ))
+                      .toList(),
+                )
+              else
+                pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: report.photoUrls
+                      .map((u) => pw.Text(u, style: pw.TextStyle(font: font, fontSize: 9, color: PdfColors.blue)))
+                      .toList(),
+                ),
+              pw.SizedBox(height: 20),
+              pw.Text('Generated by PACT Mobile', style: pw.TextStyle(font: font, fontSize: 10, color: PdfColors.grey)),
+            ];
+          },
+        ),
+      );
+
+      final safeCode = visit.siteCode.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
+      final fileName = 'visit_report_${safeCode}_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}.pdf';
+      await Printing.sharePdf(bytes: await pdf.save(), filename: fileName);
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error downloading report: $e')),
+      );
     }
   }
 
@@ -81,7 +326,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
   void _applyFilter() {
     setState(() {
       _filteredVisits = _allVisits.where((visit) {
-        final date = visit.completedAt;
+        final date = _effectiveCompletedAt(visit);
         if (date == null) return false;
 
         switch (_filterType) {
@@ -113,7 +358,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
     int monthly = 0;
 
     for (var visit in _allVisits) {
-      final date = visit.completedAt;
+      final date = _effectiveCompletedAt(visit);
       if (date == null) continue;
 
       if (date.isAfter(today) || date.isAtSameMomentAs(today)) {
@@ -197,6 +442,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
               headers: ['Site Name', 'Site Code', 'Completed At', 'Coordinates', 'Accuracy', 'Notes'],
               data: _filteredVisits.map((visit) {
                 final location = _siteLocations[visit.id];
+                final report = _reportByVisitId[visit.id];
                 final coordinates = location != null 
                   ? '${location['latitude']?.toStringAsFixed(6) ?? 'N/A'}, ${location['longitude']?.toStringAsFixed(6) ?? 'N/A'}'
                   : 'Not recorded';
@@ -210,7 +456,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                   visit.completedAt != null ? DateFormat('yyyy-MM-dd HH:mm').format(visit.completedAt!) : 'N/A',
                   coordinates,
                   accuracy,
-                  visit.notes ?? 'No notes',
+                  (report != null && report.notes.isNotEmpty) ? report.notes : (visit.notes ?? 'No notes'),
                 ];
               }).toList(),
             ),
@@ -290,6 +536,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                   headers: ['Site Name', 'Site Code', 'Completed At', 'Coordinates', 'Accuracy', 'Notes'],
                   data: _filteredVisits.map((visit) {
                     final location = _siteLocations[visit.id];
+                    final report = _reportByVisitId[visit.id];
                     final coordinates = location != null 
                       ? '${location['latitude']?.toStringAsFixed(6) ?? 'N/A'}, ${location['longitude']?.toStringAsFixed(6) ?? 'N/A'}'
                       : 'Not recorded';
@@ -303,7 +550,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                       visit.completedAt != null ? DateFormat('yyyy-MM-dd HH:mm').format(visit.completedAt!) : 'N/A',
                       coordinates,
                       accuracy,
-                      visit.notes ?? 'No notes',
+                      (report != null && report.notes.isNotEmpty) ? report.notes : (visit.notes ?? 'No notes'),
                     ];
                   }).toList(),
                 ),
@@ -455,6 +702,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                             headers: ['Site Name', 'Site Code', 'Completed At', 'Coordinates', 'Accuracy', 'Notes'],
                             data: _filteredVisits.map((visit) {
                               final location = _siteLocations[visit.id];
+                              final report = _reportByVisitId[visit.id];
                               final coordinates = location != null 
                                 ? '${location['latitude']?.toStringAsFixed(6) ?? 'N/A'}, ${location['longitude']?.toStringAsFixed(6) ?? 'N/A'}'
                                 : 'Not recorded';
@@ -468,7 +716,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                                 visit.completedAt != null ? DateFormat('yyyy-MM-dd HH:mm').format(visit.completedAt!) : 'N/A',
                                 coordinates,
                                 accuracy,
-                                visit.notes ?? 'No notes',
+                                (report != null && report.notes.isNotEmpty) ? report.notes : (visit.notes ?? 'No notes'),
                               ];
                             }).toList(),
                           ),
@@ -666,7 +914,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                       ),
                       const SizedBox(width: 12),
                       Text(
-                        'Results (${_filteredVisits.length})',
+                        'Results (${_filteredVisits.length}) • Completed total (${_allVisits.length})',
                         style: const TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 18,
@@ -686,6 +934,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
                           itemBuilder: (context, index) {
                             final visit = _filteredVisits[index];
                             final location = _siteLocations[visit.id];
+                            final report = _reportByVisitId[visit.id];
+                            final effectiveCompletedAt = _effectiveCompletedAt(visit);
                             
                             return Container(
                               margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
@@ -781,8 +1031,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
                                               const SizedBox(width: 4),
                                               Expanded(
                                                 child: Text(
-                                                  visit.completedAt != null
-                                                      ? DateFormat('MMM dd, yyyy HH:mm').format(visit.completedAt!)
+                                                  effectiveCompletedAt != null
+                                                      ? DateFormat('MMM dd, yyyy HH:mm').format(effectiveCompletedAt)
                                                       : 'No Date',
                                                   style: TextStyle(
                                                     color: Colors.grey.shade600,
@@ -809,6 +1059,54 @@ class _ReportsScreenState extends State<ReportsScreen> {
                                                     ),
                                                     overflow: TextOverflow.ellipsis,
                                                   ),
+                                                ),
+                                              ],
+                                            ),
+                                          ],
+
+                                          if (report != null && report.notes.trim().isNotEmpty) ...[
+                                            const SizedBox(height: 8),
+                                            Text(
+                                              report.notes,
+                                              style: TextStyle(
+                                                color: Colors.grey.shade700,
+                                                fontSize: 13,
+                                              ),
+                                              maxLines: 2,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ],
+
+                                          if (report != null && report.activities != null && report.activities!.trim().isNotEmpty) ...[
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              'Activities: ${report.activities}',
+                                              style: TextStyle(
+                                                color: Colors.grey.shade600,
+                                                fontSize: 12,
+                                              ),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ],
+
+                                          if (report != null) ...[
+                                            const SizedBox(height: 10),
+                                            Row(
+                                              children: [
+                                                Expanded(
+                                                  child: Text(
+                                                    'Photos: ${report.photoUrls.length}',
+                                                    style: TextStyle(
+                                                      color: Colors.grey.shade600,
+                                                      fontSize: 12,
+                                                    ),
+                                                  ),
+                                                ),
+                                                TextButton.icon(
+                                                  onPressed: () => _downloadVisitReport(visit),
+                                                  icon: const Icon(Icons.picture_as_pdf, size: 18),
+                                                  label: const Text('Download Report'),
                                                 ),
                                               ],
                                             ),

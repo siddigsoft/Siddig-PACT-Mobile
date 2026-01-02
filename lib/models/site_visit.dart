@@ -110,6 +110,26 @@ class SiteVisit {
   factory SiteVisit.fromJson(Map<String, dynamic> json) {
     // Handle mmp_site_entries schema
     if (json.containsKey('mmp_file_id')) {
+      // Build additional_data with hub_office and other direct columns
+      Map<String, dynamic> additionalData = json['additional_data'] ?? {};
+      
+      // Add direct columns to additional_data for easy access
+      if (json['hub_office'] != null) {
+        additionalData['hub_office'] = json['hub_office'];
+      }
+      if (json['monitoring_by'] != null) {
+        additionalData['monitoring_by'] = json['monitoring_by'];
+      }
+      if (json['survey_tool'] != null) {
+        additionalData['survey_tool'] = json['survey_tool'];
+      }
+      if (json['cp_name'] != null) {
+        additionalData['cp_name'] = json['cp_name'];
+      }
+      if (json['visit_type'] != null) {
+        additionalData['visit_type'] = json['visit_type'];
+      }
+      
       return SiteVisit(
         id: json['id']?.toString() ?? '',
         userId: json['accepted_by'],
@@ -128,7 +148,7 @@ class SiteVisit {
           'enumerator_fee': json['enumerator_fee'],
           'transport_fee': json['transport_fee'],
         },
-        visitData: json['additional_data'],
+        visitData: additionalData,
         assignedTo: json['accepted_by'] ?? '',
         assignedBy: json['dispatched_by'],
         assignedAt: json['dispatched_at'] != null ? DateTime.tryParse(json['dispatched_at']) : null,
@@ -226,33 +246,17 @@ class SiteVisit {
   Map<String, dynamic> toJson() {
     return {
       'id': id,
-      'user_id': userId,
+      // Map to mmp_site_entries columns
       'site_name': siteName,
       'site_code': siteCode,
       'status': status,
       'locality': locality,
       'state': state,
-      'activity': activity,
-      'priority': priority,
-      'due_date': dueDate?.toIso8601String(),
-      'notes': notes,
+      'activity_at_site': activity, // Map 'activity' to 'activity_at_site'
       'main_activity': mainActivity,
-      'location': location,
-      'fees': fees,
-      'visit_data': visitData,
-      'assigned_to': assignedTo,
-      'assigned_by': assignedBy,
-      'assigned_at': assignedAt?.toIso8601String(),
-      'attachments': attachments,
-      'completed_at': completedAt?.toIso8601String(),
-      'rating': rating,
-      'mmp_id': mmpId,
+      'comments': notes, // Map 'notes' to 'comments'
+      'mmp_file_id': mmpId,
       'created_at': createdAt.toIso8601String(),
-      'arrival_latitude': arrivalLatitude,
-      'arrival_longitude': arrivalLongitude,
-      'arrival_timestamp': arrivalTimestamp?.toIso8601String(),
-      'journey_path': journeyPath,
-      'arrival_recorded': arrivalRecorded,
       // Tracking columns
       'claimed_by': claimedBy,
       'claimed_at': claimedAt?.toIso8601String(),
@@ -263,12 +267,14 @@ class SiteVisit {
       'visit_completed_by': visitCompletedBy,
       'visit_completed_at': visitCompletedAt?.toIso8601String(),
       'updated_at': updatedAt?.toIso8601String(),
+      'dispatched_by': assignedBy,
+      'dispatched_at': assignedAt?.toIso8601String(),
       // Fees
       'enumerator_fee': enumeratorFee,
       'transport_fee': transportFee,
       'cost': cost,
-      // Additional data
-      'additional_data': additionalData,
+      // Additional data (JSONB column)
+      'additional_data': additionalData ?? {},
     };
   }
 

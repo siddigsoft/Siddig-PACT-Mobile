@@ -402,14 +402,78 @@ class _VisitDetailsSheetState extends State<VisitDetailsSheet> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // Site Code & Location
+                  _buildInfoSection(
+                    icon: Icons.qr_code,
+                    iconColor: Colors.purple.shade400,
+                    title: 'Site Code',
+                    content: _visit.siteCode.isNotEmpty ? _visit.siteCode : 'N/A',
+                  ),
+                  const Divider(),
+
                   // Address section
                   _buildInfoSection(
                     icon: Icons.location_on,
                     iconColor: Colors.red.shade400,
                     title: 'Location',
-                    content: _visit.locationString,
+                    content: _visit.locationString.isNotEmpty 
+                        ? _visit.locationString
+                        : '${_visit.locality}, ${_visit.state}',
                   ),
+                  
+                  // GPS Coordinates (if available)
+                  if (_visit.latitude != null && _visit.longitude != null)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 44, top: 4, bottom: 8),
+                      child: Row(
+                        children: [
+                          Icon(Icons.gps_fixed, size: 14, color: Colors.grey.shade600),
+                          const SizedBox(width: 4),
+                          Text(
+                            'GPS: ${_visit.latitude!.toStringAsFixed(6)}, ${_visit.longitude!.toStringAsFixed(6)}',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey.shade600,
+                              fontStyle: FontStyle.italic,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   const Divider(),
+
+                  // Hub Office
+                  if (_visit.additionalData?['hub_office'] != null) ...[
+                    _buildInfoSection(
+                      icon: Icons.business,
+                      iconColor: Colors.teal.shade400,
+                      title: 'Hub Office',
+                      content: _visit.additionalData!['hub_office'].toString(),
+                    ),
+                    const Divider(),
+                  ],
+
+                  // Main Activity
+                  if (_visit.mainActivity.isNotEmpty) ...[
+                    _buildInfoSection(
+                      icon: Icons.work,
+                      iconColor: Colors.orange.shade400,
+                      title: 'Main Activity',
+                      content: _visit.mainActivity,
+                    ),
+                    const Divider(),
+                  ],
+
+                  // Activity at Site
+                  if (_visit.activity.isNotEmpty) ...[
+                    _buildInfoSection(
+                      icon: Icons.task_alt,
+                      iconColor: Colors.green.shade400,
+                      title: 'Activity at Site',
+                      content: _visit.activity,
+                    ),
+                    const Divider(),
+                  ],
 
                   // Date/time section
                   _buildInfoSection(
@@ -417,29 +481,97 @@ class _VisitDetailsSheetState extends State<VisitDetailsSheet> {
                     iconColor: Colors.blue.shade400,
                     title: 'Scheduled Date',
                     content: _visit.dueDate != null
-                        ? _visit.dueDate!.toLocal().toString().split('.')[0]
+                        ? '${_visit.dueDate!.day}/${_visit.dueDate!.month}/${_visit.dueDate!.year}'
                         : 'Flexible Timing',
                   ),
                   const Divider(),
 
-                  // Client info section
-                  _buildInfoSection(
-                    icon: Icons.person,
-                    iconColor: Colors.purple.shade400,
-                    title: 'Client Information',
-                    content: _visit.visitData?['client_info'] ??
-                        'No client information provided',
-                  ),
-                  const Divider(),
+                  // Monitoring Information
+                  if (_visit.additionalData?['monitoring_by'] != null) ...[
+                    _buildInfoSection(
+                      icon: Icons.visibility,
+                      iconColor: Colors.indigo.shade400,
+                      title: 'Monitoring By',
+                      content: _visit.additionalData!['monitoring_by'].toString(),
+                    ),
+                    const Divider(),
+                  ],
+
+                  // Survey Tool
+                  if (_visit.additionalData?['survey_tool'] != null) ...[
+                    _buildInfoSection(
+                      icon: Icons.analytics,
+                      iconColor: Colors.cyan.shade400,
+                      title: 'Survey Tool',
+                      content: _visit.additionalData!['survey_tool'].toString(),
+                    ),
+                    const Divider(),
+                  ],
+
+                  // CP Name (Cooperation Partner)
+                  if (_visit.additionalData?['cp_name'] != null) ...[
+                    _buildInfoSection(
+                      icon: Icons.person_outline,
+                      iconColor: Colors.brown.shade400,
+                      title: 'Cooperation Partner',
+                      content: _visit.additionalData!['cp_name'].toString(),
+                    ),
+                    const Divider(),
+                  ],
+
+                  // Fee Breakdown
+                  if (_visit.enumeratorFee != null || _visit.transportFee != null) ...[
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.shade50,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.blue.shade200),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(Icons.attach_money, color: Colors.blue.shade700, size: 20),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Fee Breakdown',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.blue.shade700,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          if (_visit.enumeratorFee != null)
+                            _buildFeeRow('Enumerator Fee', _visit.enumeratorFee!),
+                          if (_visit.transportFee != null)
+                            _buildFeeRow('Transport Fee', _visit.transportFee!),
+                          const Divider(),
+                          _buildFeeRow(
+                            'Total',
+                            (_visit.enumeratorFee ?? 0) + (_visit.transportFee ?? 0),
+                            isBold: true,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
 
                   // Notes section
-                  _buildInfoSection(
-                    icon: Icons.notes,
-                    iconColor: Colors.amber.shade700,
-                    title: 'Notes',
-                    content: _visit.notes ?? 'No notes available',
-                  ),
-                  const Divider(),
+                  if (_visit.notes.isNotEmpty) ...[
+                    _buildInfoSection(
+                      icon: Icons.notes,
+                      iconColor: Colors.amber.shade700,
+                      title: 'Notes',
+                      content: _visit.notes,
+                    ),
+                    const Divider(),
+                  ],
 
                   // Action buttons based on current status
                   _buildActionButtons(),
@@ -561,6 +693,60 @@ class _VisitDetailsSheetState extends State<VisitDetailsSheet> {
     );
   }
 
+  Widget _buildFeeRow(String label, double amount, {bool isBold = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: isBold ? 16 : 14,
+              fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
+              color: Colors.grey.shade700,
+            ),
+          ),
+          Text(
+            amount.toStringAsFixed(2),
+            style: TextStyle(
+              fontSize: isBold ? 16 : 14,
+              fontWeight: isBold ? FontWeight.bold : FontWeight.w500,
+              color: isBold ? Colors.blue.shade700 : Colors.grey.shade800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _getTimeRemainingText(DateTime claimedAt) {
+    final deadline = claimedAt.add(const Duration(days: 2));
+    final now = DateTime.now();
+    final remaining = deadline.difference(now);
+
+    if (remaining.isNegative) {
+      return 'Deadline passed - site may be auto-released';
+    }
+
+    if (remaining.inHours < 24) {
+      return 'Confirm within ${remaining.inHours} hours or site will be released';
+    }
+
+    final days = remaining.inDays;
+    final hours = remaining.inHours % 24;
+    return 'Confirm within $days day(s) $hours hour(s) to keep this assignment';
+  }
+
+  String _formatDateTime(DateTime dateTime) {
+    final day = dateTime.day.toString().padLeft(2, '0');
+    final month = dateTime.month.toString().padLeft(2, '0');
+    final year = dateTime.year;
+    final hour = dateTime.hour.toString().padLeft(2, '0');
+    final minute = dateTime.minute.toString().padLeft(2, '0');
+    return '$day/$month/$year at $hour:$minute';
+  }
+
   Widget _buildButton({
     required String label,
     required IconData icon,
@@ -599,12 +785,13 @@ class _VisitDetailsSheetState extends State<VisitDetailsSheet> {
   }
 
   Widget _buildActionButtons() {
-    // Show "Arrived" button if tracking and near destination
-    if (widget.isTrackingJourney &&
-        widget.isNearDestination &&
-        widget.onArrived != null) {
-      return Column(
-        children: [
+    // IMPORTANT: Journey tracking must not hide the workflow buttons.
+    // We show tracking-related UI as a prefix, then always show status actions.
+    final prefixWidgets = <Widget>[];
+
+    if (widget.isTrackingJourney) {
+      if (widget.isNearDestination && widget.onArrived != null) {
+        prefixWidgets.addAll([
           _buildButton(
             label: 'Arrived at Destination',
             icon: Icons.location_on,
@@ -622,22 +809,9 @@ class _VisitDetailsSheetState extends State<VisitDetailsSheet> {
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 16),
-          if (widget.onGetDirections != null)
-            _buildButton(
-              label: 'Get Directions',
-              icon: Icons.directions,
-              color: Colors.blue,
-              onPressed: widget.onGetDirections!,
-              filled: false,
-            ),
-        ],
-      );
-    }
-
-    // Show tracking indicator if journey is active
-    if (widget.isTrackingJourney) {
-      return Column(
-        children: [
+        ]);
+      } else {
+        prefixWidgets.addAll([
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -665,7 +839,7 @@ class _VisitDetailsSheetState extends State<VisitDetailsSheet> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Your route is being tracked. Click "Arrived" when you reach the destination.',
+                        'Your route is being tracked. Keep going and complete the workflow below.',
                         style: TextStyle(
                           fontSize: 12,
                           color: Colors.grey.shade600,
@@ -678,20 +852,12 @@ class _VisitDetailsSheetState extends State<VisitDetailsSheet> {
             ),
           ),
           const SizedBox(height: 16),
-          if (widget.onGetDirections != null)
-            _buildButton(
-              label: 'Get Directions',
-              icon: Icons.directions,
-              color: Colors.blue,
-              onPressed: widget.onGetDirections!,
-              filled: false,
-            ),
-        ],
-      );
+        ]);
+      }
     }
 
     // Default button if status doesn't match any case
-    Widget defaultButton = _buildButton(
+    final defaultButton = _buildButton(
       label: 'View Details',
       icon: Icons.info_outline,
       color: Colors.grey,
@@ -700,109 +866,328 @@ class _VisitDetailsSheetState extends State<VisitDetailsSheet> {
     );
 
     // Different buttons based on current status
-    switch (_visit.status.toLowerCase()) {
+    final visitStatus = (_visit.status ?? '').toString().trim().toLowerCase();
+    final currentUserId = Supabase.instance.client.auth.currentUser?.id;
+    final isAccepted = _visit.acceptedBy != null && _visit.acceptedBy == currentUserId;
+    final isCompleted = visitStatus == 'completed';
+    final isInProgress = visitStatus == 'in_progress';
+    
+    debugPrint('🔍 Visit Details - Status: $visitStatus, claimedBy: ${_visit.claimedBy}, acceptedBy: ${_visit.acceptedBy}, isAccepted: $isAccepted, isCompleted: $isCompleted, currentUser: $currentUserId');
+    
+    final actionWidgets = <Widget>[];
+
+    // If completed, show completed state - no action buttons needed
+    if (isCompleted) {
+      debugPrint('✅ Visit is completed - showing completion message');
+      actionWidgets.add(
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: AppColors.success.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.success.withOpacity(0.3)),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.check_circle, color: AppColors.success, size: 28),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Visit Completed',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.success,
+                      ),
+                    ),
+                    if (_visit.visitCompletedAt != null)
+                      Text(
+                        'Completed on ${_formatDateTime(_visit.visitCompletedAt!)}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    // If in progress, show the timer overlay message (actual timer is in ActiveVisitOverlay)
+    else if (isInProgress) {
+      debugPrint('✅ Visit is in progress - showing in-progress message');
+      actionWidgets.add(
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: AppColors.primaryOrange.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.primaryOrange.withOpacity(0.3)),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.timer, color: AppColors.primaryOrange, size: 28),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Visit in progress - use the timer overlay to complete',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: AppColors.primaryOrange,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    // If accepted but not started or completed, show Start Visit button
+    else if (isAccepted) {
+      debugPrint('✅ Showing Start Visit button (already accepted)');
+      actionWidgets.add(
+        StartVisitButton(
+          visit: _visit,
+          onStartSuccess: () {
+            setState(() {
+              _visit = _visit.copyWith(status: 'in_progress');
+            });
+            widget.onStatusChanged('in_progress');
+          },
+          onStartError: () {
+            // Error handling is done in the button
+          },
+        ),
+      );
+    } else {
+      switch (visitStatus) {
       case 'dispatched':
-      case 'available': // Keep for backward compatibility
-        return Row(
-          children: [
-            Expanded(
-              child: _buildButton(
+      case 'available':
+      case 'pending': // Add more status variants
+        final isClaimedByCurrentUser = _visit.claimedBy == currentUserId && currentUserId != null;
+        
+        // If already claimed by current user, show Accept button
+        // Otherwise show Claim button
+        if (isClaimedByCurrentUser) {
+          // PHASE 2: Accept assignment with cost acknowledgment
+          debugPrint('✅ Showing Accept button (site already claimed by user)');
+          actionWidgets.addAll([
+              // Time limit warning for claimed sites
+              if (_visit.claimedAt != null)
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  margin: const EdgeInsets.only(bottom: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.orange.shade300),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.access_time, color: Colors.orange.shade700, size: 20),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Confirmation Required',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.orange.shade900,
+                                fontSize: 13,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              _getTimeRemainingText(_visit.claimedAt!),
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.orange.shade800,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              AcceptAssignmentButton(
+                siteEntryId: _visit.id,
+                siteName: _visit.siteName,
+                onAcceptSuccess: () async {
+                  setState(() {
+                    _visit = _visit.copyWith(
+                      acceptedBy: Supabase.instance.client.auth.currentUser?.id,
+                      acceptedAt: DateTime.now(),
+                      status: 'Accepted',
+                    );
+                  });
+                  await Future.delayed(const Duration(milliseconds: 300));
+                  await widget.onStatusChanged('Accepted');
+                },
+                onAcceptError: () {
+                  // Error handling is done in the button
+                },
+              ),
+              const SizedBox(height: 12),
+              _buildButton(
                 label: 'Reject',
                 icon: Icons.close,
                 color: Colors.red,
                 onPressed: _showRejectionDialog,
                 filled: false,
               ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: ClaimSiteButton(
+            ]);
+        } else {
+          // PHASE 1: Claim the site first (or Accept directly if no claim required)
+          debugPrint('✅ Showing Claim/Accept buttons');
+          actionWidgets.addAll([
+              // For now, show BOTH Claim and Accept buttons to ensure user can proceed
+              ClaimSiteButton(
                 siteEntryId: _visit.id,
                 siteName: _visit.siteName,
                 onClaimSuccess: () {
                   setState(() {
-                    _visit = _visit.copyWith(status: 'claimed');
+                    _visit = _visit.copyWith(
+                      claimedBy: Supabase.instance.client.auth.currentUser?.id,
+                      claimedAt: DateTime.now(),
+                      status: 'Assigned',
+                    );
                   });
-                  widget.onStatusChanged('claimed');
+                  widget.onStatusChanged('Assigned');
                 },
                 onClaimError: () {
                   // Error handling is done in the button
                 },
               ),
-            ),
-          ],
-        );
-      case 'accept':
-      case 'accepted':
-      case 'assigned':
-      case 'claimed':
-        // Check if assignment has been accepted
-        final isAccepted = _visit.acceptedBy != null && _visit.acceptedAt != null;
-        
-        if (!isAccepted) {
-          // Show Accept Assignment button
-          return Column(
-            children: [
+              const SizedBox(height: 8),
+              // Also show Accept button as backup
               AcceptAssignmentButton(
                 siteEntryId: _visit.id,
                 siteName: _visit.siteName,
-                onAcceptSuccess: () {
+                onAcceptSuccess: () async {
                   setState(() {
                     _visit = _visit.copyWith(
                       acceptedBy: Supabase.instance.client.auth.currentUser?.id,
                       acceptedAt: DateTime.now(),
-                      status: 'accepted',
+                      status: 'Accepted',
                     );
                   });
-                  widget.onStatusChanged('accepted');
+                  // Trigger reload and close sheet after short delay
+                  await Future.delayed(const Duration(milliseconds: 300));
+                  await widget.onStatusChanged('Accepted');
                 },
                 onAcceptError: () {
                   // Error handling is done in the button
                 },
               ),
-              const SizedBox(height: 16),
-              if (widget.onGetDirections != null)
-                _buildButton(
-                  label: 'Get Directions',
-                  icon: Icons.directions,
-                  color: Colors.blue,
-                  onPressed: widget.onGetDirections!,
-                  filled: false,
-                ),
-            ],
-          );
-        } else {
-          // Assignment accepted, show Start Visit button
-          return Column(
-            children: [
-              StartVisitButton(
-                visit: _visit,
-                onStartSuccess: () {
-                  setState(() {
-                    _visit = _visit.copyWith(status: 'in_progress');
-                  });
-                  widget.onStatusChanged('in_progress');
-                },
-                onStartError: () {
-                  // Error handling is done in the button
-                },
+              const SizedBox(height: 12),
+              _buildButton(
+                label: 'Reject',
+                icon: Icons.close,
+                color: Colors.red,
+                onPressed: _showRejectionDialog,
+                filled: false,
               ),
-              const SizedBox(height: 16),
-              if (widget.onGetDirections != null)
-                _buildButton(
-                  label: 'Get Directions',
-                  icon: Icons.directions,
-                  color: Colors.blue,
-                  onPressed: widget.onGetDirections!,
-                  filled: false,
-                ),
-            ],
-          );
+            ]);
         }
+        break;
+      case 'assigned':
+      case 'claimed':
+        // PHASE 2: Accept assignment with cost acknowledgment
+        // Site has been claimed, now show Accept Assignment button
+        actionWidgets.addAll([
+            // Time limit warning for claimed sites
+            if (_visit.claimedAt != null)
+              Container(
+                padding: const EdgeInsets.all(12),
+                margin: const EdgeInsets.only(bottom: 12),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.orange.shade300),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.access_time, color: Colors.orange.shade700, size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Confirmation Required',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.orange.shade900,
+                              fontSize: 13,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            _getTimeRemainingText(_visit.claimedAt!),
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.orange.shade800,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            AcceptAssignmentButton(
+              siteEntryId: _visit.id,
+              siteName: _visit.siteName,
+              onAcceptSuccess: () async {
+                setState(() {
+                  _visit = _visit.copyWith(
+                    acceptedBy: Supabase.instance.client.auth.currentUser?.id,
+                    acceptedAt: DateTime.now(),
+                    status: 'Accepted',
+                  );
+                });
+                await Future.delayed(const Duration(milliseconds: 300));
+                await widget.onStatusChanged('Accepted');
+              },
+              onAcceptError: () {
+                // Error handling is done in the button
+              },
+            ),
+          ]);
+        break;
+
+      case 'accept':
+      case 'accepted':
+        // PHASE 3: Start the visit
+        // Assignment accepted, show Start Visit button
+        actionWidgets.addAll([
+            StartVisitButton(
+              visit: _visit,
+              onStartSuccess: () {
+                setState(() {
+                  _visit = _visit.copyWith(status: 'in_progress');
+                });
+                widget.onStatusChanged('in_progress');
+              },
+              onStartError: () {
+                // Error handling is done in the button
+              },
+            ),
+          ]);
+        break;
       case 'ongoing':
       case 'in_progress':
-        return Column(
-          children: [
+        actionWidgets.addAll([
             CompleteVisitButton(
               visit: _visit,
               onCompleteSuccess: () {
@@ -815,20 +1200,12 @@ class _VisitDetailsSheetState extends State<VisitDetailsSheet> {
                 // Error handling is done in the button
               },
             ),
-            const SizedBox(height: 16),
-            if (widget.onGetDirections != null)
-              _buildButton(
-                label: 'Get Directions',
-                icon: Icons.directions,
-                color: Colors.blue,
-                onPressed: widget.onGetDirections!,
-                filled: false,
-              ),
-          ],
-        );
+          ]);
+        break;
       case 'completed':
       case 'complete':
-        return _buildButton(
+        actionWidgets.add(
+          _buildButton(
           label: _hasReport ? 'View Report' : 'Submit Report',
           icon: _hasReport ? Icons.description : Icons.assignment,
           color: _hasReport ? Colors.grey : Colors.green,
@@ -843,10 +1220,37 @@ class _VisitDetailsSheetState extends State<VisitDetailsSheet> {
             }
           },
           filled: !_hasReport,
+          ),
         );
+        break;
       default:
-        return defaultButton;
+        actionWidgets.add(defaultButton);
+        break;
+      }
     }
+
+    // Always append Get Directions at the bottom (if provided)
+    if (widget.onGetDirections != null) {
+      if (actionWidgets.isNotEmpty) {
+        actionWidgets.add(const SizedBox(height: 16));
+      }
+      actionWidgets.add(
+        _buildButton(
+          label: 'Get Directions',
+          icon: Icons.directions,
+          color: Colors.blue,
+          onPressed: widget.onGetDirections!,
+          filled: false,
+        ),
+      );
+    }
+
+    return Column(
+      children: [
+        ...prefixWidgets,
+        ...actionWidgets,
+      ],
+    );
   }
 
   Future<void> _showRejectionDialog() async {

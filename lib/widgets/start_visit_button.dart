@@ -34,36 +34,35 @@ class _StartVisitButtonState extends ConsumerState<StartVisitButton> {
     final hasActiveVisit = ref.watch(hasActiveVisitProvider);
     final currentVisit = ref.watch(currentActiveVisitProvider);
 
-    // Don't show if another visit is active
-    if (hasActiveVisit && currentVisit?.id != widget.visit.id) {
-      return const SizedBox.shrink();
-    }
-
+    // Always show the button so the workflow can continue.
+    // If another visit is active, starting this one will switch the active visit.
     final isCurrentVisit = currentVisit?.id == widget.visit.id;
 
-    return ElevatedButton.icon(
-      onPressed: _isLoading ? null : _startVisit,
-      icon: _isLoading
-          ? const SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-              ),
-            )
-          : Icon(isCurrentVisit ? Icons.play_arrow : Icons.play_circle_fill),
-      label: Text(_getButtonText(isCurrentVisit)),
-      style: ElevatedButton.styleFrom(
-        backgroundColor: isCurrentVisit ? AppColors.success : AppColors.primary,
-        foregroundColor: Colors.white,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
+    return SizedBox(
+      width: double.infinity,
+      height: 50,
+      child: ElevatedButton.icon(
+        onPressed: _isLoading ? null : _startVisit,
+        icon: _isLoading
+            ? const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              )
+            : Icon(isCurrentVisit ? Icons.play_arrow : Icons.play_circle_fill),
+        label: Text(_getButtonText(isCurrentVisit)),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: isCurrentVisit ? AppColors.success : AppColors.primaryOrange,
+          foregroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
         ),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       ),
-    ).animate(target: isCurrentVisit ? 1 : 0)
-     .scale(duration: const Duration(milliseconds: 300));
+    );
   }
 
   String _getButtonText(bool isCurrentVisit) {

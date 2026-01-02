@@ -472,10 +472,9 @@ class OfflineDataService {
         final visitId = payload['visit_id'] as String;
         final status = payload['status'] as String;
 
-        await _supabase.from('site_visits').update({
+        await _supabase.from('mmp_site_entries').update({
           'status': status,
-          'user_id': _supabase.auth.currentUser?.id,
-          'last_modified': DateTime.now().toIso8601String(),
+          'updated_at': DateTime.now().toIso8601String(),
         }).eq('id', visitId);
 
         queueItem['synced'] = true;

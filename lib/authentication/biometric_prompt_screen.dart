@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_colors.dart';
 import '../services/biometric_auth_service.dart';
+import '../services/auth_service.dart';
 import '../services/realtime_notification_service.dart';
 import '../services/user_notification_service.dart';
 import 'login_screen.dart';
@@ -19,6 +20,7 @@ class BiometricPromptScreen extends StatefulWidget {
 class _BiometricPromptScreenState extends State<BiometricPromptScreen>
     with SingleTickerProviderStateMixin {
   final BiometricAuthService _biometricService = BiometricAuthService();
+  final AuthService _authService = AuthService();
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
   bool _isAuthenticating = false;
@@ -104,14 +106,57 @@ class _BiometricPromptScreenState extends State<BiometricPromptScreen>
         return;
       }
 
-      // Initialize services
-      await RealtimeNotificationService().initialize();
-      await UserNotificationService().initialize();
+      // Attempt login with Supabase using stored credentials
+      debugPrint('🔑 Attempting Supabase login with stored credentials...');
+      try {
+        final response = await _authService.signIn(email: email, password: password);
 
-      // Navigate to main screen
-      if (mounted) {
-        HapticFeedback.mediumImpact();
-        Navigator.pushReplacementNamed(context, '/main');
+        if (response.user == null) {
+          // Login failed, disable biometric and go to login
+          debugPrint('❌ Supabase login failed with stored credentials');
+          await _biometricService.disableBiometric();
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Login failed. Please login with email and password.'),
+                backgroundColor: Colors.red,
+              ),
+            );
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => const LoginScreen()),
+            );
+          }
+          return;
+        }
+
+        debugPrint('✅ Biometric login successful');
+
+        // Initialize services
+        await RealtimeNotificationService().initialize();
+        await UserNotificationService().initialize();
+
+        // Navigate to main screen
+        if (mounted) {
+          HapticFeedback.mediumImpact();
+          Navigator.pushReplacementNamed(context, '/main');
+        }
+      } catch (e) {
+        debugPrint('❌ Error during Supabase login: $e');
+        // Login failed, disable biometric and go to login
+        await _biometricService.disableBiometric();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Login error: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => const LoginScreen()),
+          );
+        }
       }
     } catch (e) {
       debugPrint('Biometric authentication error: $e');

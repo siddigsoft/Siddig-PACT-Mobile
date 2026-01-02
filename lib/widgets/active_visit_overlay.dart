@@ -1,265 +1,338 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:image_picker/image_picker.dart';
-import 'dart:io';
 import '../theme/app_colors.dart';
 import '../theme/app_design_system.dart';
 import '../widgets/app_widgets.dart';
 import '../providers/active_visit_provider.dart';
-import '../services/storage_service.dart';
+import '../screens/complete_visit_screen.dart';
 
-class ActiveVisitOverlay extends ConsumerStatefulWidget {
+/// Provider to track if the overlay is expanded or minimized (persists across navigation)
+final overlayExpandedProvider = StateProvider<bool>((ref) => true);
+
+class ActiveVisitOverlay extends ConsumerWidget {
   const ActiveVisitOverlay({super.key});
 
   @override
-  ConsumerState<ActiveVisitOverlay> createState() => _ActiveVisitOverlayState();
-}
-
-class _ActiveVisitOverlayState extends ConsumerState<ActiveVisitOverlay>
-    with SingleTickerProviderStateMixin {
-  final ImagePicker _imagePicker = ImagePicker();
-  bool _isExpanded = false;
-  late AnimationController _animationController;
-  late Animation<double> _scaleAnimation;
-
-  @override
-  void initState() {
-    super.initState();
-    _animationController = AnimationController(
-      duration: const Duration(milliseconds: 300),
-      vsync: this,
-    );
-    _scaleAnimation = Tween<double>(begin: 1.0, end: 1.05).animate(
-      CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
-    );
-  }
-
-  @override
-  void dispose() {
-    _animationController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final activeVisitState = ref.watch(activeVisitProvider);
     final hasActiveVisit = activeVisitState.hasActiveVisit;
 
     if (!hasActiveVisit) return const SizedBox.shrink();
 
+    final isExpanded = ref.watch(overlayExpandedProvider);
+
     return Positioned(
-          bottom: 100,
-          left: 16,
-          right: 16,
-          child: AnimatedBuilder(
-            animation: _scaleAnimation,
-            builder: (context, child) {
-              return Transform.scale(
-                scale: _scaleAnimation.value,
-                child: child,
-              );
-            },
-            child: _buildOverlay(activeVisitState),
+      bottom: 100,
+      left: 16,
+      right: 16,
+      child: GestureDetector(
+        onTap: () {
+          ref.read(overlayExpandedProvider.notifier).state = !isExpanded;
+        },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOut,
+          padding: EdgeInsets.all(isExpanded ? 16 : 12),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.shadow.withOpacity(0.3),
+                blurRadius: 20,
+                offset: const Offset(0, 10),
+              ),
+            ],
+            border: Border.all(
+              color: AppColors.primaryOrange.withOpacity(0.3),
+              width: 2,
+            ),
           ),
-        )
-        .animate()
-        .slideY(
-          begin: 1.0,
-          end: 0.0,
-          duration: const Duration(milliseconds: 400),
-        )
-        .fadeIn(duration: const Duration(milliseconds: 300));
-  }
-
-  Widget _buildOverlay(ActiveVisitState state) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.shadow.withOpacity(0.3),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
-          ),
-        ],
-        border: Border.all(color: AppColors.primary.withOpacity(0.2), width: 1),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Header with site info and timer
-          _buildHeader(state),
-
-          // Expanded content
-          if (_isExpanded) ...[
-            const SizedBox(height: 16),
-            _buildExpandedContent(state),
-          ],
-
-          // Action buttons
-          const SizedBox(height: 16),
-          _buildActionButtons(state),
-        ],
+          child: isExpanded
+              ? _ExpandedOverlay(state: activeVisitState)
+              : _MinimizedOverlay(state: activeVisitState),
+        ),
       ),
     );
   }
+}
 
-  Widget _buildHeader(ActiveVisitState state) {
+/// Minimized view - just shows timer and site name
+class _MinimizedOverlay extends StatelessWidget {
+  final ActiveVisitState state;
+
+  const _MinimizedOverlay({required this.state});
+
+  @override
+  Widget build(BuildContext context) {
     return Row(
       children: [
-        // Site info
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                state.visit!.siteName,
-                style: AppTextStyles.bodyLarge.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              Text(
-                state.visit!.siteCode,
-                style: AppTextStyles.bodySmall.copyWith(
-                  color: AppColors.textSecondary,
-                ),
+        // Pulsing indicator
+        Container(
+          width: 12,
+          height: 12,
+          decoration: BoxDecoration(
+            color: AppColors.success,
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.success.withOpacity(0.5),
+                blurRadius: 8,
+                spreadRadius: 2,
               ),
             ],
           ),
         ),
-
+        const SizedBox(width: 12),
+        
+        // Site name (truncated)
+        Expanded(
+          child: Text(
+            state.visit?.siteName ?? 'Active Visit',
+            style: AppTextStyles.bodyMedium.copyWith(
+              fontWeight: FontWeight.w600,
+              color: AppColors.textPrimary,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        
         // Timer
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           decoration: BoxDecoration(
-            color: AppColors.primary.withOpacity(0.1),
+            color: AppColors.primaryOrange.withOpacity(0.1),
             borderRadius: BorderRadius.circular(20),
           ),
           child: Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.timer, size: 16, color: AppColors.primary),
+              Icon(Icons.timer, size: 16, color: AppColors.primaryOrange),
               const SizedBox(width: 4),
               Text(
                 state.formattedElapsedTime,
                 style: AppTextStyles.bodyMedium.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.primary,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.primaryOrange,
+                  fontFamily: 'monospace',
                 ),
               ),
             ],
           ),
         ),
-
-        // Expand/collapse button
-        IconButton(
-          onPressed: () {
-            setState(() {
-              _isExpanded = !_isExpanded;
-            });
-            if (_isExpanded) {
-              _animationController.forward();
-            } else {
-              _animationController.reverse();
-            }
-          },
-          icon: Icon(
-            _isExpanded ? Icons.expand_less : Icons.expand_more,
-            color: AppColors.textSecondary,
-          ),
-        ),
+        
+        // Expand icon
+        const SizedBox(width: 8),
+        Icon(Icons.expand_less, color: AppColors.textSecondary, size: 20),
       ],
     );
   }
+}
 
-  Widget _buildExpandedContent(ActiveVisitState state) {
+/// Expanded view - shows full site details and actions
+class _ExpandedOverlay extends ConsumerWidget {
+  final ActiveVisitState state;
+
+  const _ExpandedOverlay({required this.state});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final visit = state.visit;
+    if (visit == null) return const SizedBox.shrink();
+
     return Column(
+      mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Location info
-        if (state.currentLocation != null) ...[
-          Row(
-            children: [
-              Icon(Icons.location_on, size: 16, color: AppColors.success),
-              const SizedBox(width: 8),
-              Text(
-                'Tracking location',
-                style: AppTextStyles.bodySmall.copyWith(
-                  color: AppColors.success,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-        ],
-
-        // Photos count
+        // Header with timer and collapse button
         Row(
           children: [
-            Icon(Icons.photo_camera, size: 16, color: AppColors.textSecondary),
+            // Pulsing indicator
+            Container(
+              width: 12,
+              height: 12,
+              decoration: BoxDecoration(
+                color: AppColors.success,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.success.withOpacity(0.5),
+                    blurRadius: 8,
+                    spreadRadius: 2,
+                  ),
+                ],
+              ),
+            ),
             const SizedBox(width: 8),
             Text(
-              '${state.photos.length} photos taken',
-              style: AppTextStyles.bodySmall.copyWith(
-                color: AppColors.textSecondary,
+              'VISIT IN PROGRESS',
+              style: AppTextStyles.labelSmall.copyWith(
+                color: AppColors.success,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 1,
               ),
             ),
+            const Spacer(),
+            // Timer
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: AppColors.primaryOrange.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.timer, size: 18, color: AppColors.primaryOrange),
+                  const SizedBox(width: 6),
+                  Text(
+                    state.formattedElapsedTime,
+                    style: AppTextStyles.titleMedium.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.primaryOrange,
+                      fontFamily: 'monospace',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Icon(Icons.expand_more, color: AppColors.textSecondary),
           ],
         ),
-
-        // Notes preview
-        if (state.notes?.isNotEmpty == true) ...[
+        
+        const SizedBox(height: 16),
+        const Divider(height: 1),
+        const SizedBox(height: 16),
+        
+        // Site name
+        Text(
+          visit.siteName,
+          style: AppTextStyles.headlineSmall.copyWith(
+            fontWeight: FontWeight.bold,
+            color: AppColors.textPrimary,
+          ),
+        ),
+        
+        const SizedBox(height: 8),
+        
+        // Site code
+        if (visit.siteCode.isNotEmpty)
+          _buildInfoRow(Icons.qr_code, 'Code', visit.siteCode),
+        
+        // Location
+        _buildInfoRow(
+          Icons.location_on,
+          'Location',
+          '${visit.state}${visit.locality.isNotEmpty ? ', ${visit.locality}' : ''}',
+        ),
+        
+        // Activity
+        if (visit.activity.isNotEmpty)
+          _buildInfoRow(Icons.work, 'Activity', visit.activity),
+        
+        // Due date
+        if (visit.dueDate != null)
+          _buildInfoRow(
+            Icons.calendar_today,
+            'Scheduled',
+            _formatDate(visit.dueDate!),
+          ),
+        
+        // GPS Status
+        if (state.currentLocation != null) ...[
           const SizedBox(height: 8),
-          Text(
-            'Notes: ${state.notes}',
-            style: AppTextStyles.bodySmall.copyWith(
-              color: AppColors.textTertiary,
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: AppColors.success.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppColors.success.withOpacity(0.3)),
             ),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
+            child: Row(
+              children: [
+                Icon(Icons.gps_fixed, size: 16, color: AppColors.success),
+                const SizedBox(width: 8),
+                Text(
+                  'GPS Tracking Active',
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: AppColors.success,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  'Accuracy: ${state.currentLocation!.accuracy.toStringAsFixed(0)}m',
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: AppColors.success,
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
-      ],
-    );
-  }
-
-  Widget _buildActionButtons(ActiveVisitState state) {
-    return Row(
-      children: [
-        // Camera button
-        Expanded(
-          child: ElevatedButton.icon(
-            onPressed: _takePhoto,
-            icon: const Icon(Icons.camera_alt),
-            label: const Text('Photo'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.secondary,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
+        
+        // Cost info if available
+        if (visit.cost != null && visit.cost! > 0) ...[
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.blue.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.payments, size: 16, color: Colors.blue),
+                const SizedBox(width: 8),
+                Text(
+                  'Total Payout:',
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: Colors.blue,
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  '${visit.cost!.toStringAsFixed(0)} SDG',
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: Colors.blue,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
             ),
           ),
+        ],
+        
+        const SizedBox(height: 16),
+        
+        // Hint text
+        Text(
+          'Tap anywhere to minimize • Photos & notes added at completion',
+          style: AppTextStyles.bodySmall.copyWith(
+            color: AppColors.textTertiary,
+            fontStyle: FontStyle.italic,
+          ),
+          textAlign: TextAlign.center,
         ),
-
-        const SizedBox(width: 12),
-
-        // Complete button
-        Expanded(
+        
+        const SizedBox(height: 16),
+        
+        // Complete button - opens photo/notes form
+        SizedBox(
+          width: double.infinity,
+          height: 50,
           child: ElevatedButton.icon(
-            onPressed: () => _showCompleteDialog(state),
+            onPressed: () => _navigateToCompleteScreen(context, ref, visit),
             icon: const Icon(Icons.check_circle),
-            label: const Text('Complete'),
+            label: const Text('Complete Visit'),
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.success,
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(12),
               ),
             ),
           ),
@@ -268,102 +341,58 @@ class _ActiveVisitOverlayState extends ConsumerState<ActiveVisitOverlay>
     );
   }
 
-  Future<void> _takePhoto() async {
-    try {
-      final XFile? image = await _imagePicker.pickImage(
-        source: ImageSource.camera,
-        imageQuality: 80,
-      );
-
-      if (image != null && mounted) {
-        // Upload photo to storage
-        final storage = StorageService();
-        final fileName = 'visit_${DateTime.now().millisecondsSinceEpoch}.jpg';
-        final bytes = await image.readAsBytes();
-
-        final photoUrl = await storage.uploadProfilePhotoBytes(
-          'temp', // Temporary user ID for visit photos
-          bytes,
-          fileName,
-        );
-
-        // Add to active visit
-        ref.read(activeVisitProvider.notifier).addPhoto(photoUrl);
-
-        AppSnackBar.show(
-          context,
-          message: 'Photo added to visit',
-          type: SnackBarType.success,
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        AppSnackBar.show(
-          context,
-          message: 'Failed to take photo',
-          type: SnackBarType.error,
-        );
-      }
-    }
-  }
-
-  Future<void> _showCompleteDialog(ActiveVisitState state) async {
-    final notesController = TextEditingController(text: state.notes);
-
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Complete Visit', style: AppTextStyles.headlineSmall),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              'Are you sure you want to complete this visit?',
-              style: AppTextStyles.bodyMedium,
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: notesController,
-              decoration: const InputDecoration(
-                labelText: 'Notes (optional)',
-                border: OutlineInputBorder(),
-              ),
-              maxLines: 3,
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: Text(
-              'Cancel',
-              style: TextStyle(color: AppColors.textSecondary),
+  Widget _buildInfoRow(IconData icon, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 16, color: AppColors.textSecondary),
+          const SizedBox(width: 8),
+          Text(
+            '$label: ',
+            style: AppTextStyles.bodySmall.copyWith(
+              color: AppColors.textSecondary,
             ),
           ),
-          ElevatedButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.success,
-              foregroundColor: Colors.white,
+          Expanded(
+            child: Text(
+              value,
+              style: AppTextStyles.bodySmall.copyWith(
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.w500,
+              ),
             ),
-            child: const Text('Complete'),
           ),
         ],
       ),
     );
+  }
 
-    if (result == true && mounted) {
-      await ref
-          .read(activeVisitProvider.notifier)
-          .completeVisit(
-            notes: notesController.text.isNotEmpty
-                ? notesController.text
-                : null,
-          );
+  String _formatDate(DateTime date) {
+    return '${date.day}/${date.month}/${date.year}';
+  }
 
+  Future<void> _navigateToCompleteScreen(
+    BuildContext context,
+    WidgetRef ref,
+    dynamic visit,
+  ) async {
+    final result = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (context) => CompleteVisitScreen(
+          visit: visit,
+          onCompleteSuccess: () {
+            // Overlay will hide automatically when visit is completed
+          },
+        ),
+      ),
+    );
+
+    if (result == true && context.mounted) {
       AppSnackBar.show(
         context,
-        message: 'Visit completed successfully',
+        message: 'Visit completed successfully!',
         type: SnackBarType.success,
       );
     }

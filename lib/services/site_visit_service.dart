@@ -52,12 +52,11 @@ class SiteVisitService {
         await _updateCachedVisitStatus(visitId, status);
         return;
       }
-      await _supabase.from('site_visits').update({
+      await _supabase.from('mmp_site_entries').update({
         'status': status,
-        'user_id': _supabase.auth.currentUser?.id,
-        'last_modified': DateTime.now().toIso8601String(),
+        'updated_at': DateTime.now().toIso8601String(),
       }).eq('id', visitId);
-      print('✅ Visit status updated in Supabase');
+      print('✅ Visit status updated in mmp_site_entries');
       await _updateCachedVisitStatus(visitId, status);
     } catch (e) {
       print('❌ Failed to update visit status: $e');
@@ -77,8 +76,8 @@ class SiteVisitService {
         return;
       }
       final visitData = visit.toJson();
-      await _supabase.from('site_visits').update(visitData).eq('id', visit.id);
-      print('✅ Visit updated in Supabase');
+      await _supabase.from('mmp_site_entries').update(visitData).eq('id', visit.id);
+      print('✅ Visit updated in mmp_site_entries');
       await _updateLocalCacheWithVisit(visit);
     } catch (e) {
       print('❌ Failed to update visit: $e');
@@ -93,6 +92,17 @@ class SiteVisitService {
         .from('mmp_site_entries')
         .select()
         .eq('status', 'Dispatched')
+        .order('created_at', ascending: false);
+
+    return response.map((json) => SiteVisit.fromJson(json)).toList();
+  }
+
+  Future<List<SiteVisit>> getClaimedSiteVisits(String userId) async {
+    final response = await _supabase
+        .from('mmp_site_entries')
+        .select()
+        .eq('claimed_by', userId)
+        .inFilter('status', ['Assigned', 'Claimed']) // Sites claimed but not yet accepted
         .order('created_at', ascending: false);
 
     return response.map((json) => SiteVisit.fromJson(json)).toList();
@@ -122,11 +132,13 @@ class SiteVisitService {
 
   Future<List<SiteVisit>> getCompletedSiteVisits(String userId) async {
     final response = await _supabase
-        .from('mmp_site_entries')
-        .select()
-        .eq('accepted_by', userId)
-        .inFilter('status', ['Completed', 'Complete'])
-        .order('updated_at', ascending: false);
+      .from('mmp_site_entries')
+      .select()
+      // Some environments store status values in lowercase.
+      .inFilter('status', ['Completed', 'Complete', 'completed', 'complete'])
+      // Completed visits should be visible to the user who accepted them OR completed them.
+      .or('accepted_by.eq.$userId,visit_completed_by.eq.$userId')
+      .order('updated_at', ascending: false);
 
     return response.map((json) => SiteVisit.fromJson(json)).toList();
   }
@@ -182,10 +194,12 @@ class SiteVisitService {
     return _supabase
         .from('mmp_site_entries')
         .stream(primaryKey: ['id'])
-        .eq('accepted_by', userId)
+      // Supabase stream filters don't support `.or(...)`.
+      // Reports screen relies on getCompletedSiteVisits() (non-stream) for the full query.
+      .eq('accepted_by', userId)
         .order('updated_at', ascending: false)
         .map((data) => data
-            .where((item) => ['Completed', 'Complete'].contains(item['status']))
+        .where((item) => ['Completed', 'Complete', 'completed', 'complete'].contains(item['status']))
             .map((json) => SiteVisit.fromJson(json))
             .toList());
   }
@@ -196,19 +210,13 @@ class SiteVisitService {
       // First check whether the visit exists in mmp_site_entries
       final existing = await _supabase
           .from('mmp_site_entries')
-          .select('id, status')
+          .select('id, status, additional_data')
           .eq('id', visitId)
           .maybeSingle();
 
       if (existing == null) {
-        // The record doesn't exist in mmp_site_entries — don't silently operate on other tables
-        print('Visit $visitId not found in mmp_site_entries; updating legacy site_visits');
-        await _supabase.from('site_visits').update({
-          'status': 'assigned', // site_visits uses 'assigned' usually
-          'assigned_to': userId,
-          'assigned_at': DateTime.now().toIso8601String(),
-        }).eq('id', visitId);
-        return;
+        // The record doesn't exist in mmp_site_entries
+        throw Exception('Visit $visitId not found in mmp_site_entries');
       }
 
       // Attempt an update on the canonical table
@@ -234,30 +242,55 @@ class SiteVisitService {
       }
       print('Successfully accepted visit: $visitId in mmp_site_entries');
 
-      // Capture and store user location to location_logs table
+      // Capture and store acceptance location in additional_data
       try {
         print('📍 Capturing location for visit acceptance...');
-        final position = await Geolocator.getCurrentPosition(
-          timeLimit: const Duration(seconds: 10),
-        );
+
+        // Try high accuracy first, then low accuracy. On web we do NOT call getLastKnownPosition.
+        Position? position;
+        try {
+          position = await Geolocator.getCurrentPosition(
+            desiredAccuracy: LocationAccuracy.high,
+            timeLimit: const Duration(seconds: 5),
+          );
+        } catch (e) {
+          print('⚠️ High accuracy location failed: $e');
+          try {
+            print('⏱️ Trying low accuracy...');
+            position = await Geolocator.getCurrentPosition(
+              desiredAccuracy: LocationAccuracy.low,
+              timeLimit: const Duration(seconds: 3),
+            );
+          } catch (e2) {
+            print('⚠️ Low accuracy location failed: $e2');
+            position = null;
+          }
+        }
         
-        print('✓ Location captured: ${position.latitude}, ${position.longitude}');
-        
-        // Insert location into location_logs table
-        await _supabase.from('location_logs').insert({
-          'visit_id': visitId,
-          'user_id': userId,
-          'latitude': position.latitude,
-          'longitude': position.longitude,
-          'accuracy': position.accuracy,
-          'altitude': position.altitude,
-          'speed': position.speed,
-          'heading': position.heading,
-          'timestamp': DateTime.now().toIso8601String(),
-          'location_type': 'acceptance', // Mark as acceptance location
-        });
-        
-        print('✅ Location logged to location_logs table');
+        if (position != null) {
+          print('✓ Location captured: ${position.latitude}, ${position.longitude} (accuracy: ${position.accuracy}m)');
+
+          // Merge into existing additional_data (do not overwrite)
+          final existingData = (existing['additional_data'] as Map<String, dynamic>?) ?? {};
+          final merged = {
+            ...existingData,
+            'acceptance_location': {
+              'lat': position.latitude,
+              'lng': position.longitude,
+              'accuracy': position.accuracy,
+              'timestamp': DateTime.now().toIso8601String(),
+            }
+          };
+
+          await _supabase.from('mmp_site_entries').update({
+            'additional_data': merged,
+            'updated_at': DateTime.now().toIso8601String(),
+          }).eq('id', visitId);
+          
+          print('✅ Acceptance location saved to additional_data');
+        } else {
+          print('⚠️ No position available (current or last known)');
+        }
       } catch (locError) {
         // Log location error but don't fail the accept operation
         print('⚠️ Warning: Could not capture location during acceptance: $locError');
@@ -284,57 +317,76 @@ class SiteVisitService {
       // Verify whether this visit exists in mmp_site_entries
       final existing = await _supabase
           .from('mmp_site_entries')
-          .select('id, status')
+          .select('id, status, additional_data')
           .eq('id', visitId)
           .maybeSingle();
 
       if (existing == null) {
-        // Not an mmp_site_entries row — update legacy table instead
-        print('Visit $visitId not found in mmp_site_entries; updating site_visits');
-        await _supabase.from('site_visits').update({
-          'status': 'in_progress',
-          'updated_at': DateTime.now().toIso8601String(),
-        }).eq('id', visitId);
-      } else {
-        final response = await _supabase
-            .from('mmp_site_entries')
-            .update({
-              'status': 'Ongoing',
-              'updated_at': DateTime.now().toIso8601String(),
-            })
-            .eq('id', visitId)
-            .select();
-
-        if (response.isEmpty) {
-          final msg =
-              'Unable to update visit to Ongoing in mmp_site_entries. This may be caused by row-level-security (RLS) or insufficient permissions.';
-          print(msg);
-          throw Exception(msg);
-        }
+        throw Exception('Visit $visitId not found in mmp_site_entries');
       }
 
-      // Capture location
+      // Capture start location first
+      Map<String, dynamic> startLocationData = {};
       try {
-        final position = await Geolocator.getCurrentPosition();
-        await _supabase.from('site_locations').insert({
-          'site_id': visitId,
-          'user_id': _supabase.auth.currentUser?.id,
-          'latitude': position.latitude,
-          'longitude': position.longitude,
-          'accuracy': position.accuracy,
-          'recorded_at': DateTime.now().toIso8601String(),
-        });
-      } catch (e) {
-        // If this is an RLS error (Postgrest 42501) give a clearer message
-        final msg = e.toString();
-        if (msg.contains('row-level') || msg.contains('42501') || msg.toLowerCase().contains('policy') || msg.toLowerCase().contains('permission')) {
-          final friendly = 'Failed to save start location due to database permissions (RLS). Contact admin to grant insert permission for site_locations.';
-          print('Error capturing start location: $msg');
-          throw Exception(friendly);
+        print('📍 Capturing start location...');
+        Position? position;
+        try {
+          position = await Geolocator.getCurrentPosition(
+            desiredAccuracy: LocationAccuracy.high,
+            timeLimit: const Duration(seconds: 5),
+          );
+        } catch (e) {
+          print('⚠️ High accuracy start location failed: $e');
+          try {
+            position = await Geolocator.getCurrentPosition(
+              desiredAccuracy: LocationAccuracy.low,
+              timeLimit: const Duration(seconds: 3),
+            );
+          } catch (e2) {
+            print('⚠️ Low accuracy start location failed: $e2');
+            position = null;
+          }
         }
-        print('Error capturing start location: $e');
-        rethrow;
+        
+        if (position != null) {
+          startLocationData = {
+            'start_location': {
+              'lat': position.latitude,
+              'lng': position.longitude,
+              'accuracy': position.accuracy,
+              'timestamp': DateTime.now().toIso8601String(),
+            }
+          };
+          print('✓ Start location captured: ${position.latitude}, ${position.longitude}');
+        }
+      } catch (e) {
+        print('⚠️ Could not capture start location: $e');
       }
+
+      final response = await _supabase
+          .from('mmp_site_entries')
+          .update({
+            'status': 'Ongoing',
+            'visit_started_by': _supabase.auth.currentUser?.id,
+            'visit_started_at': DateTime.now().toIso8601String(),
+            'updated_at': DateTime.now().toIso8601String(),
+            if (startLocationData.isNotEmpty)
+              'additional_data': {
+                ...((existing['additional_data'] as Map<String, dynamic>?) ?? {}),
+                ...startLocationData,
+              },
+          })
+          .eq('id', visitId)
+          .select();
+
+      if (response.isEmpty) {
+        final msg =
+            'Unable to update visit to Ongoing in mmp_site_entries. This may be caused by row-level-security (RLS) or insufficient permissions.';
+        print(msg);
+        throw Exception(msg);
+      }
+
+      print('✅ Visit started successfully with location data');
     } catch (e) {
       print('Error starting visit: $e');
       rethrow;
@@ -344,27 +396,69 @@ class SiteVisitService {
   Future<void> completeVisit(String visitId) async {
     print('Completing visit: $visitId');
     try {
-      // Ensure the row is in mmp_site_entries
+      // Ensure the row is in mmp_site_entries and get registry_site_id
       final existing = await _supabase
           .from('mmp_site_entries')
-          .select('id, status')
+          .select('id, status, registry_site_id, additional_data')
           .eq('id', visitId)
           .maybeSingle();
 
       if (existing == null) {
-        print('Visit $visitId not found in mmp_site_entries; updating legacy site_visits');
-        await _supabase.from('site_visits').update({
-          'status': 'completed',
-          'completed_at': DateTime.now().toIso8601String(),
-        }).eq('id', visitId);
-        return;
+        throw Exception('Visit $visitId not found in mmp_site_entries');
+      }
+
+      // Capture end location
+      Map<String, dynamic> endLocationData = {};
+      Position? completionPosition;
+      try {
+        print('📍 Capturing completion location...');
+        try {
+          completionPosition = await Geolocator.getCurrentPosition(
+            desiredAccuracy: LocationAccuracy.high,
+            timeLimit: const Duration(seconds: 5),
+          );
+        } catch (e) {
+          print('⚠️ High accuracy completion location failed: $e');
+          try {
+            completionPosition = await Geolocator.getCurrentPosition(
+              desiredAccuracy: LocationAccuracy.low,
+              timeLimit: const Duration(seconds: 3),
+            );
+          } catch (e2) {
+            print('⚠️ Low accuracy completion location failed: $e2');
+            completionPosition = null;
+          }
+        }
+        
+        if (completionPosition != null) {
+          // Merge with existing additional_data
+          final existingData = existing['additional_data'] as Map<String, dynamic>? ?? {};
+          endLocationData = {
+            ...existingData,
+            'end_location': {
+              'latitude': completionPosition.latitude,
+              'longitude': completionPosition.longitude,
+              'accuracy': completionPosition.accuracy,
+              'timestamp': DateTime.now().toIso8601String(),
+            }
+          };
+          print('✓ End location captured: ${completionPosition.latitude}, ${completionPosition.longitude} (accuracy: ${completionPosition.accuracy}m)');
+        } else {
+          endLocationData = existing['additional_data'] as Map<String, dynamic>? ?? {};
+        }
+      } catch (e) {
+        print('⚠️ Could not capture end location: $e');
+        endLocationData = existing['additional_data'] as Map<String, dynamic>? ?? {};
       }
 
       final response = await _supabase
           .from('mmp_site_entries')
           .update({
             'status': 'Completed',
+            'visit_completed_by': _supabase.auth.currentUser?.id,
+            'visit_completed_at': DateTime.now().toIso8601String(),
             'updated_at': DateTime.now().toIso8601String(),
+            'additional_data': endLocationData,
           })
           .eq('id', visitId)
           .select();
@@ -374,6 +468,31 @@ class SiteVisitService {
             'Unable to update visit to Completed in mmp_site_entries. This may be caused by row-level-security (RLS) or insufficient permissions.';
         print(msg);
         throw Exception(msg);
+      }
+      
+      print('✅ Visit completed successfully');
+      
+      // Update sites_registry with GPS coordinates for future visits
+      if (completionPosition != null && 
+          completionPosition.accuracy <= 30 && // Only save high-quality GPS (< 30m)
+          existing['registry_site_id'] != null) {
+        try {
+          print('📍 Updating sites_registry with GPS coordinates...');
+          await _supabase.from('sites_registry').update({
+            'gps_latitude': completionPosition.latitude,
+            'gps_longitude': completionPosition.longitude,
+            'gps_accuracy': completionPosition.accuracy,
+            'gps_captured_at': DateTime.now().toIso8601String(),
+            'gps_captured_by': _supabase.auth.currentUser?.id,
+            'last_verified_at': DateTime.now().toIso8601String(),
+          }).eq('id', existing['registry_site_id']);
+          print('✅ Sites registry updated with GPS data');
+        } catch (e) {
+          print('⚠️ Could not update sites_registry: $e');
+          // Don't fail the completion if registry update fails
+        }
+      } else if (completionPosition != null && completionPosition.accuracy > 30) {
+        print('⚠️ GPS accuracy (${completionPosition.accuracy}m) too low to update registry (requires <30m)');
       }
     } catch (e) {
       print('Error completing visit: $e');
@@ -394,7 +513,7 @@ class SiteVisitService {
 
   Future<SiteVisit?> getSiteVisitById(String id) async {
     final response =
-        await _supabase.from('site_visits').select().eq('id', id).single();
+        await _supabase.from('mmp_site_entries').select().eq('id', id).single();
 
     return SiteVisit.fromJson(response);
   }
@@ -402,10 +521,11 @@ class SiteVisitService {
   Future<void> markTaskDeclined(String taskId, String userId) async {
     // This could be implemented as a separate table for declined tasks
     // For now, we'll just log it locally or update a declined status
-    await _supabase.from('site_visits').update({
-      'status': 'declined',
-      'declined_by': userId,
-      'declined_at': DateTime.now().toIso8601String(),
+    await _supabase.from('mmp_site_entries').update({
+      'status': 'Declined',
+      'rejected_by': userId,
+      'rejected_at': DateTime.now().toIso8601String(),
+      'updated_at': DateTime.now().toIso8601String(),
     }).eq('id', taskId);
   }
 
@@ -736,10 +856,13 @@ class SiteVisitService {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('arrival_$visitId', gpsData.toString());
 
-      await _supabase.from('site_visits').update({
-        'status': 'arrived',
-        'arrival_recorded': true,
-        'arrival_timestamp': DateTime.now().toIso8601String(),
+      await _supabase.from('mmp_site_entries').update({
+        'status': 'Arrived',
+        'additional_data': {
+          'arrival_recorded': true,
+          'arrival_timestamp': DateTime.now().toIso8601String(),
+        },
+        'updated_at': DateTime.now().toIso8601String(),
       }).eq('id', visitId);
       return;
     }
@@ -750,12 +873,15 @@ class SiteVisitService {
       );
 
       // Update visit with arrival data
-      await _supabase.from('site_visits').update({
-        'status': 'arrived',
-        'arrival_recorded': true,
-        'arrival_latitude': position.latitude,
-        'arrival_longitude': position.longitude,
-        'arrival_timestamp': DateTime.now().toIso8601String(),
+      await _supabase.from('mmp_site_entries').update({
+        'status': 'Arrived',
+        'additional_data': {
+          'arrival_recorded': true,
+          'arrival_latitude': position.latitude,
+          'arrival_longitude': position.longitude,
+          'arrival_timestamp': DateTime.now().toIso8601String(),
+        },
+        'updated_at': DateTime.now().toIso8601String(),
       }).eq('id', visitId);
       // Store locally for backup
       final prefs = await SharedPreferences.getInstance();

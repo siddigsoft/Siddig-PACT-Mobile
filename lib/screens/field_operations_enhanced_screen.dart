@@ -104,6 +104,7 @@ class _FieldOperationsEnhancedScreenState
   List<SiteVisit> _availableVisits = [];
   List<SiteVisit> _myVisits = [];
   List<SiteVisit> _assignedVisits = []; // For displaying assigned/accepted visits
+  int _completedVisitsCount = 0; // Track completed visits count
 
   // Task data
   List<SiteVisitWithDistance> _nearbyTasks = [];
@@ -268,26 +269,6 @@ class _FieldOperationsEnhancedScreenState
   // Get current location
   Future<void> _getCurrentLocation() async {
     try {
-      // Try to get the last known position for instant feedback (not supported on web)
-      if (!kIsWeb) {
-        Position? lastKnown;
-        try {
-          lastKnown = await Geolocator.getLastKnownPosition();
-          if (lastKnown != null && mounted) {
-            setState(() {
-              _currentLocation =
-                  latlong.LatLng(lastKnown!.latitude, lastKnown.longitude);
-            });
-            // Don't call _updateMapCamera here - map not ready yet
-            _updateMarkers();
-            debugPrint(
-                'Using last known location: ${lastKnown.latitude}, ${lastKnown.longitude}');
-          }
-        } catch (e) {
-          debugPrint('No last known position: $e');
-        }
-      }
-
       // Now get fresh, accurate position with retry for better accuracy
       Position position;
       int retryCount = 0;
@@ -631,17 +612,27 @@ class _FieldOperationsEnhancedScreenState
         throw Exception('User not authenticated');
       }
 
-      // Fetch from new service methods
-      final available = await _siteVisitService.getAvailableSiteVisits();
-      final accepted = await _siteVisitService.getAcceptedSiteVisits(userId);
-      final ongoing = await _siteVisitService.getOngoingSiteVisits(userId);
-      final completed = await _siteVisitService.getCompletedSiteVisits(userId);
+      // Fetch from service methods - following complete workflow
+      final available = await _siteVisitService.getAvailableSiteVisits(); // Dispatched
+      final claimed = await _siteVisitService.getClaimedSiteVisits(userId); // Assigned/Claimed
+      final accepted = await _siteVisitService.getAcceptedSiteVisits(userId); // Accepted
+      final ongoing = await _siteVisitService.getOngoingSiteVisits(userId); // In Progress
+      final completed = await _siteVisitService.getCompletedSiteVisits(userId); // Completed
+      
+      // Store completed visits count for stats
+      _completedVisitsCount = completed.length;
 
       if (mounted) {
         setState(() {
+          // Available: Dispatched visits that can be claimed
           _availableVisits = available;
-          // Include available (dispatched) visits in My Visits list
-          _myVisits = [...available, ...accepted, ...ongoing, ...completed];
+          
+          // My Visits: Include all stages - available (dispatched), claimed, accepted, and ongoing
+          _myVisits = [...available, ...claimed, ...accepted, ...ongoing];
+          
+          // Assigned Visits: For display in the horizontal scroll
+          _assignedVisits = [...available, ...claimed, ...accepted, ...ongoing];
+          
           _isLoading = false;
         });
       }
@@ -788,13 +779,16 @@ class _FieldOperationsEnhancedScreenState
       final userId = _authService.currentUser?.id;
       if (userId == null) return;
 
-      if (newStatus == 'Accepted' || newStatus == 'Accept') {
+      if (newStatus.toLowerCase() == 'assigned' || newStatus.toLowerCase() == 'claimed') {
+        // Site has been claimed - just reload visits to show updated state
+        await _loadVisits();
+      } else if (newStatus.toLowerCase() == 'accepted' || newStatus.toLowerCase() == 'accept') {
         await _siteVisitService.acceptVisit(visit.id, userId);
         // Start tracking location upon acceptance
         await _locationTrackingService.startTracking(visit.id);
         // Reload visits and update UI
         await _loadVisits();
-      } else if (newStatus == 'Ongoing') {
+      } else if (newStatus.toLowerCase() == 'ongoing' || newStatus.toLowerCase() == 'in_progress') {
         await _siteVisitService.startVisit(visit.id);
         // Reload visits and update UI
         await _loadVisits();
@@ -1399,15 +1393,19 @@ class _FieldOperationsEnhancedScreenState
       };
 
       // Update visit in Supabase with arrival data
-      await _siteVisitService.supabase.from('site_visits').update({
-        'arrival_latitude': _currentLocation.latitude,
-        'arrival_longitude': _currentLocation.longitude,
-        'arrival_timestamp': DateTime.now().toUtc(),
-        'journey_path': _journeyPath
-            .map((point) => {'lat': point.latitude, 'lng': point.longitude})
-            .toList(),
-        'arrival_recorded': true,
-        'status': 'in_progress',
+      await _siteVisitService.supabase.from('mmp_site_entries').update({
+        'additional_data': {
+          ...(_currentTrackedTask!.additionalData ?? {}),
+          'arrival_latitude': _currentLocation.latitude,
+          'arrival_longitude': _currentLocation.longitude,
+          'arrival_timestamp': DateTime.now().toUtc().toIso8601String(),
+          'journey_path': _journeyPath
+              .map((point) => {'lat': point.latitude, 'lng': point.longitude})
+              .toList(),
+          'arrival_recorded': true,
+        },
+        'status': 'Ongoing',
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
       }).eq('id', _currentTrackedTask!.id);
 
       // Also update local visitData for consistency
@@ -1739,10 +1737,10 @@ class _FieldOperationsEnhancedScreenState
 
               const Spacer(),
 
-              // Bottom panel with visits
+              // My Visits Panel (includes available sites)
               ConstrainedBox(
                 constraints: const BoxConstraints(
-                  maxHeight: 200, // Reduced from 220 to fit content
+                  maxHeight: 220, // Increased for better tile visibility
                 ),
                 child: _buildVisitsPanel(),
               ),
@@ -1965,14 +1963,12 @@ class _FieldOperationsEnhancedScreenState
               ),
               _buildStatCounter(
                 'My Visits',
-                _myVisits.length,
+                _myVisits.where((v) => v.acceptedBy == _authService.currentUser?.id).length,
                 AppColors.primaryOrange,
               ),
               _buildStatCounter(
                 'Completed',
-                _myVisits
-                    .where((v) => v.status == VisitStatus.completed)
-                    .length,
+                _completedVisitsCount,
                 AppColors.accentGreen,
               ),
             ],
@@ -2057,11 +2053,11 @@ class _FieldOperationsEnhancedScreenState
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 160),
+              constraints: const BoxConstraints(maxHeight: 180),
               child: _myVisits.isEmpty
                   ? Center(
                       child: Text(
-                        'No assigned visits yet',
+                        'No visits available',
                         style: GoogleFonts.poppins(
                           color: Colors.grey,
                           fontSize: 14,
@@ -2075,7 +2071,7 @@ class _FieldOperationsEnhancedScreenState
                           const SizedBox(width: 12),
                       itemBuilder: (context, index) {
                         final visit = _assignedVisits[index];
-                        return _buildVisitCard(visit, showCost: false);
+                        return _buildVisitCard(visit, showCost: true);
                       },
                     ),
             ),
@@ -2119,65 +2115,168 @@ class _FieldOperationsEnhancedScreenState
         statusIcon = Icons.help_outline;
     }
 
+    // Calculate total fee
+    final totalFee = (visit.enumeratorFee ?? 0) + (visit.transportFee ?? 0);
+    final hasFeesInfo = visit.enumeratorFee != null || visit.transportFee != null;
+
     return AppCard(
       onTap: () => _selectVisit(visit),
       shadows: AppDesignSystem.shadowMD,
       child: Container(
-        width: showCost ? 190 : 170,
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Status icon
-            Container(
-              width: 24,
-              height: 24,
-              margin: const EdgeInsets.only(bottom: 2),
-              decoration: BoxDecoration(
-                color: statusColor.withOpacity(0.1),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                statusIcon,
-                color: statusColor,
-                size: 14,
-              ),
-            ),
-            Text(
-              visit.siteName ?? 'Unnamed Site',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: AppDesignSystem.titleMedium.copyWith(fontSize: 11),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              visit.locationString.isNotEmpty
-                  ? visit.locationString
-                  : 'No location',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: AppDesignSystem.bodySmall.copyWith(
-                color: Colors.grey.shade600,
-                fontSize: 9,
-              ),
-            ),
-            const SizedBox(height: 2),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Flexible(
-                  child: StatusBadge(
-                    text: _getStatusLabel(visit.status),
-                    type: statusType,
-                    compact: true,
+        width: 240,
+        constraints: const BoxConstraints(maxHeight: 150),
+        padding: const EdgeInsets.all(10),
+        child: SingleChildScrollView(
+          physics: const NeverScrollableScrollPhysics(),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Header with status icon and site code
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Container(
+                    width: 20,
+                    height: 20,
+                    decoration: BoxDecoration(
+                      color: statusColor.withOpacity(0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      statusIcon,
+                      color: statusColor,
+                      size: 12,
+                    ),
                   ),
+                  if (visit.siteCode.isNotEmpty)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade200,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        visit.siteCode,
+                        style: AppDesignSystem.bodySmall.copyWith(
+                          fontSize: 7,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.grey.shade700,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              // Site name
+              Text(
+                visit.siteName ?? 'Unnamed Site',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: AppDesignSystem.titleMedium.copyWith(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  height: 1.2,
                 ),
-                const SizedBox(width: 4),
-                Icon(Icons.chevron_right, size: 12, color: statusColor),
-              ],
-            ),
-          ],
+              ),
+              const SizedBox(height: 3),
+              // Location
+              Row(
+                children: [
+                  Icon(Icons.location_on, size: 9, color: Colors.grey.shade600),
+                  const SizedBox(width: 2),
+                  Expanded(
+                    child: Text(
+                      visit.locationString.isNotEmpty
+                          ? visit.locationString
+                          : '${visit.locality}, ${visit.state}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppDesignSystem.bodySmall.copyWith(
+                        color: Colors.grey.shade600,
+                        fontSize: 8,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 2),
+              // Main activity (only if not empty and space permits)
+              if (visit.mainActivity.isNotEmpty)
+                Row(
+                  children: [
+                    Icon(Icons.task_alt, size: 9, color: Colors.grey.shade600),
+                    const SizedBox(width: 2),
+                    Expanded(
+                      child: Text(
+                        visit.mainActivity,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppDesignSystem.bodySmall.copyWith(
+                          color: Colors.grey.shade600,
+                          fontSize: 8,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              if (visit.mainActivity.isNotEmpty) const SizedBox(height: 2),
+              // Visit date OR fees (not both to save space)
+              if (showCost && hasFeesInfo)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryBlue.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.attach_money, size: 10, color: AppColors.primaryBlue),
+                      const SizedBox(width: 1),
+                      Text(
+                        totalFee.toStringAsFixed(0),
+                        style: AppDesignSystem.bodySmall.copyWith(
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.primaryBlue,
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else if (visit.dueDate != null)
+                Row(
+                  children: [
+                    Icon(Icons.calendar_today, size: 9, color: Colors.grey.shade600),
+                    const SizedBox(width: 2),
+                    Text(
+                      '${visit.dueDate!.day}/${visit.dueDate!.month}/${visit.dueDate!.year}',
+                      style: AppDesignSystem.bodySmall.copyWith(
+                        color: Colors.grey.shade600,
+                        fontSize: 8,
+                      ),
+                    ),
+                  ],
+                ),
+              const SizedBox(height: 4),
+              // Status badge
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Flexible(
+                    child: StatusBadge(
+                      text: _getStatusLabel(visit.status),
+                      type: statusType,
+                      compact: true,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Icon(Icons.chevron_right, size: 10, color: statusColor),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     ).animate().fadeIn(duration: 400.ms).slideX(begin: 0.1, end: 0);

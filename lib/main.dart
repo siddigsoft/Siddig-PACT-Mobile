@@ -201,24 +201,32 @@ void main() async {
   final currentUser = Supabase.instance.client.auth.currentUser;
   String initialRoute = '/login';
 
-  if (currentUser != null) {
-    // User is logged in, check if biometrics are enabled
-    try {
-      final biometricService = BiometricAuthService();
-      final isBiometricEnabled = await biometricService.isBiometricEnabled();
-      final isBiometricAvailable = await biometricService.isBiometricAvailable();
+  // First check if biometrics are enabled and available (independent of Supabase login)
+  try {
+    final biometricService = BiometricAuthService();
+    final isBiometricEnabled = await biometricService.isBiometricEnabled();
+    final isBiometricAvailable = await biometricService.isBiometricAvailable();
 
-      if (isBiometricEnabled && isBiometricAvailable) {
-        // Show biometric prompt screen
-        initialRoute = '/biometric-prompt';
-      } else {
-        // User logged in but no biometrics, go to main
-        initialRoute = '/main';
-      }
-    } catch (e) {
-      debugPrint('Error checking biometric status: $e');
-      // Fallback to main screen if biometric check fails
+    if (isBiometricEnabled && isBiometricAvailable) {
+      // Show biometric prompt screen for authentication
+      initialRoute = '/biometric-prompt';
+      debugPrint('🔐 Biometric authentication enabled, showing biometric prompt');
+    } else if (currentUser != null) {
+      // User is logged in but no biometrics, go to main
       initialRoute = '/main';
+      debugPrint('✅ User logged in, no biometrics, going to main screen');
+    } else {
+      // No biometrics and not logged in, go to login
+      initialRoute = '/login';
+      debugPrint('🔑 No biometrics enabled and user not logged in, showing login screen');
+    }
+  } catch (e) {
+    debugPrint('❌ Error checking biometric status: $e');
+    // Fallback: check Supabase auth if biometric check fails
+    if (currentUser != null) {
+      initialRoute = '/main';
+    } else {
+      initialRoute = '/login';
     }
   }
 
