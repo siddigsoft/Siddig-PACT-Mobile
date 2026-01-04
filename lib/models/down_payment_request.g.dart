@@ -10,59 +10,59 @@ _$DownPaymentRequestImpl _$$DownPaymentRequestImplFromJson(
   Map<String, dynamic> json,
 ) => _$DownPaymentRequestImpl(
   id: json['id'] as String,
-  siteVisitId: json['siteVisitId'] as String,
-  mmpSiteEntryId: json['mmpSiteEntryId'] as String? ?? '',
-  siteName: json['siteName'] as String? ?? '',
-  requestedBy: json['requestedBy'] as String,
-  requestedAt: DateTime.parse(json['requestedAt'] as String),
-  requesterRole: json['requesterRole'] as String,
-  hubId: json['hubId'] as String?,
-  hubName: json['hubName'] as String?,
+  siteVisitId: json['site_visit_id'] as String,
+  mmpSiteEntryId: json['mmp_site_entry_id'] as String? ?? '',
+  siteName: json['site_name'] as String? ?? '',
+  requestedBy: json['requested_by'] as String,
+  requestedAt: DateTime.parse(json['requested_at'] as String),
+  requesterRole: json['requester_role'] as String? ?? 'dataCollector',
+  hubId: json['hub_id'] as String?,
+  hubName: json['hub_name'] as String?,
   totalTransportationBudget:
-      (json['totalTransportationBudget'] as num?)?.toDouble() ?? 0.0,
-  requestedAmount: (json['requestedAmount'] as num?)?.toDouble() ?? 0.0,
-  paymentType: json['paymentType'] as String? ?? 'full_advance',
+      (json['total_transportation_budget'] as num?)?.toDouble() ?? 0.0,
+  requestedAmount: (json['requested_amount'] as num?)?.toDouble() ?? 0.0,
+  paymentType: json['payment_type'] as String? ?? 'full_advance',
   installmentPlan:
-      (json['installmentPlan'] as List<dynamic>?)
+      (json['installment_plan'] as List<dynamic>?)
           ?.map((e) => InstallmentPlan.fromJson(e as Map<String, dynamic>))
           .toList() ??
       const [],
   paidInstallments:
-      (json['paidInstallments'] as List<dynamic>?)
+      (json['paid_installments'] as List<dynamic>?)
           ?.map((e) => PaidInstallment.fromJson(e as Map<String, dynamic>))
           .toList() ??
       const [],
   justification: json['justification'] as String? ?? '',
   supportingDocuments:
-      (json['supportingDocuments'] as List<dynamic>?)
+      (json['supporting_documents'] as List<dynamic>?)
           ?.map((e) => e as String)
           .toList() ??
       const [],
-  supervisorId: json['supervisorId'] as String?,
-  supervisorStatus: json['supervisorStatus'] as String?,
-  supervisorApprovedBy: json['supervisorApprovedBy'] as String?,
-  supervisorApprovedAt: json['supervisorApprovedAt'] == null
+  supervisorId: json['supervisor_id'] as String?,
+  supervisorStatus: json['supervisor_status'] as String?,
+  supervisorApprovedBy: json['supervisor_approved_by'] as String?,
+  supervisorApprovedAt: json['supervisor_approved_at'] == null
       ? null
-      : DateTime.parse(json['supervisorApprovedAt'] as String),
-  supervisorNotes: json['supervisorNotes'] as String?,
-  supervisorRejectionReason: json['supervisorRejectionReason'] as String?,
-  adminStatus: json['adminStatus'] as String?,
-  adminProcessedBy: json['adminProcessedBy'] as String?,
-  adminProcessedAt: json['adminProcessedAt'] == null
+      : DateTime.parse(json['supervisor_approved_at'] as String),
+  supervisorNotes: json['supervisor_notes'] as String?,
+  supervisorRejectionReason: json['supervisor_rejection_reason'] as String?,
+  adminStatus: json['admin_status'] as String?,
+  adminProcessedBy: json['admin_processed_by'] as String?,
+  adminProcessedAt: json['admin_processed_at'] == null
       ? null
-      : DateTime.parse(json['adminProcessedAt'] as String),
-  adminNotes: json['adminNotes'] as String?,
-  adminRejectionReason: json['adminRejectionReason'] as String?,
+      : DateTime.parse(json['admin_processed_at'] as String),
+  adminNotes: json['admin_notes'] as String?,
+  adminRejectionReason: json['admin_rejection_reason'] as String?,
   status: json['status'] as String? ?? 'pending_supervisor',
-  totalPaidAmount: (json['totalPaidAmount'] as num?)?.toDouble() ?? 0.0,
-  remainingAmount: (json['remainingAmount'] as num?)?.toDouble(),
+  totalPaidAmount: (json['total_paid_amount'] as num?)?.toDouble() ?? 0.0,
+  remainingAmount: (json['remaining_amount'] as num?)?.toDouble(),
   walletTransactionIds:
-      (json['walletTransactionIds'] as List<dynamic>?)
+      (json['wallet_transaction_ids'] as List<dynamic>?)
           ?.map((e) => e as String)
           .toList() ??
       const <String>[],
-  createdAt: DateTime.parse(json['createdAt'] as String),
-  updatedAt: DateTime.parse(json['updatedAt'] as String),
+  createdAt: DateTime.parse(json['created_at'] as String),
+  updatedAt: DateTime.parse(json['updated_at'] as String),
   metadata:
       json['metadata'] as Map<String, dynamic>? ?? const <String, dynamic>{},
 );
@@ -71,38 +71,38 @@ Map<String, dynamic> _$$DownPaymentRequestImplToJson(
   _$DownPaymentRequestImpl instance,
 ) => <String, dynamic>{
   'id': instance.id,
-  'siteVisitId': instance.siteVisitId,
-  'mmpSiteEntryId': instance.mmpSiteEntryId,
-  'siteName': instance.siteName,
-  'requestedBy': instance.requestedBy,
-  'requestedAt': instance.requestedAt.toIso8601String(),
-  'requesterRole': instance.requesterRole,
-  'hubId': instance.hubId,
-  'hubName': instance.hubName,
-  'totalTransportationBudget': instance.totalTransportationBudget,
-  'requestedAmount': instance.requestedAmount,
-  'paymentType': instance.paymentType,
-  'installmentPlan': instance.installmentPlan,
-  'paidInstallments': instance.paidInstallments,
+  'site_visit_id': instance.siteVisitId,
+  'mmp_site_entry_id': instance.mmpSiteEntryId,
+  'site_name': instance.siteName,
+  'requested_by': instance.requestedBy,
+  'requested_at': instance.requestedAt.toIso8601String(),
+  'requester_role': instance.requesterRole,
+  'hub_id': instance.hubId,
+  'hub_name': instance.hubName,
+  'total_transportation_budget': instance.totalTransportationBudget,
+  'requested_amount': instance.requestedAmount,
+  'payment_type': instance.paymentType,
+  'installment_plan': instance.installmentPlan,
+  'paid_installments': instance.paidInstallments,
   'justification': instance.justification,
-  'supportingDocuments': instance.supportingDocuments,
-  'supervisorId': instance.supervisorId,
-  'supervisorStatus': instance.supervisorStatus,
-  'supervisorApprovedBy': instance.supervisorApprovedBy,
-  'supervisorApprovedAt': instance.supervisorApprovedAt?.toIso8601String(),
-  'supervisorNotes': instance.supervisorNotes,
-  'supervisorRejectionReason': instance.supervisorRejectionReason,
-  'adminStatus': instance.adminStatus,
-  'adminProcessedBy': instance.adminProcessedBy,
-  'adminProcessedAt': instance.adminProcessedAt?.toIso8601String(),
-  'adminNotes': instance.adminNotes,
-  'adminRejectionReason': instance.adminRejectionReason,
+  'supporting_documents': instance.supportingDocuments,
+  'supervisor_id': instance.supervisorId,
+  'supervisor_status': instance.supervisorStatus,
+  'supervisor_approved_by': instance.supervisorApprovedBy,
+  'supervisor_approved_at': instance.supervisorApprovedAt?.toIso8601String(),
+  'supervisor_notes': instance.supervisorNotes,
+  'supervisor_rejection_reason': instance.supervisorRejectionReason,
+  'admin_status': instance.adminStatus,
+  'admin_processed_by': instance.adminProcessedBy,
+  'admin_processed_at': instance.adminProcessedAt?.toIso8601String(),
+  'admin_notes': instance.adminNotes,
+  'admin_rejection_reason': instance.adminRejectionReason,
   'status': instance.status,
-  'totalPaidAmount': instance.totalPaidAmount,
-  'remainingAmount': instance.remainingAmount,
-  'walletTransactionIds': instance.walletTransactionIds,
-  'createdAt': instance.createdAt.toIso8601String(),
-  'updatedAt': instance.updatedAt.toIso8601String(),
+  'total_paid_amount': instance.totalPaidAmount,
+  'remaining_amount': instance.remainingAmount,
+  'wallet_transaction_ids': instance.walletTransactionIds,
+  'created_at': instance.createdAt.toIso8601String(),
+  'updated_at': instance.updatedAt.toIso8601String(),
   'metadata': instance.metadata,
 };
 

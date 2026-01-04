@@ -3,9 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../models/wallet_models.dart';
 import '../models/payment_method_models.dart';
+import '../models/down_payment_request.dart';
 import '../providers/wallet_provider.dart';
 import '../providers/payment_method_provider.dart';
 import '../providers/profile_provider.dart';
+import '../providers/down_payment_provider.dart';
 import '../services/wallet_service.dart';
 import '../widgets/down_payment_request_dialog.dart';
 import 'cost_submission_history_screen.dart';
@@ -497,7 +499,42 @@ class _WalletScreenState extends ConsumerState<WalletScreen> with SingleTickerPr
 
   Widget _buildTransactionsTab(WalletService service) {
     final transactionsAsync = ref.watch(walletTransactionsProvider(100));
+    final profile = ref.watch(currentUserProfileProvider);
+    final userId = profile?.id ?? '';
 
+    return DefaultTabController(
+      length: 2,
+      child: Column(
+        children: [
+          // Sub-tabs for Transactions and Down Payments
+          Container(
+            color: Colors.white,
+            child: const TabBar(
+              labelColor: Color(0xFF1976D2),
+              unselectedLabelColor: Colors.grey,
+              indicatorColor: Color(0xFF1976D2),
+              tabs: [
+                Tab(text: 'Transactions'),
+                Tab(text: 'Down Payments'),
+              ],
+            ),
+          ),
+          Expanded(
+            child: TabBarView(
+              children: [
+                // Transactions List
+                _buildTransactionsList(transactionsAsync, service),
+                // Down Payments History
+                _buildDownPaymentsHistory(userId, service),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTransactionsList(AsyncValue<List<WalletTransaction>> transactionsAsync, WalletService service) {
     return transactionsAsync.when(
       data: (transactions) {
         if (transactions.isEmpty) {
@@ -536,6 +573,390 @@ class _WalletScreenState extends ConsumerState<WalletScreen> with SingleTickerPr
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (error, stack) => Center(child: Text('Error: $error')),
     );
+  }
+
+  Widget _buildDownPaymentsHistory(String userId, WalletService service) {
+    if (userId.isEmpty) {
+      return const Center(child: Text('Please log in to view down payments'));
+    }
+
+    final downPaymentsAsync = ref.watch(userDownPaymentStreamProvider(userId));
+
+    return downPaymentsAsync.when(
+      data: (requests) {
+        if (requests.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.account_balance_wallet_outlined,
+                  size: 80,
+                  color: Colors.grey.shade300,
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'No down payment requests yet',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.grey,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Request a down payment for your\naccepted site visits',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                ElevatedButton.icon(
+                  onPressed: () => _showDownPaymentDialog(),
+                  icon: const Icon(Icons.add),
+                  label: const Text('Request Down Payment'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF4CAF50),
+                    foregroundColor: Colors.white,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return Column(
+          children: [
+            // Request button at top
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () => _showDownPaymentDialog(),
+                  icon: const Icon(Icons.add),
+                  label: const Text('New Down Payment Request'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF4CAF50),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            // Requests list
+            Expanded(
+              child: ListView.builder(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                itemCount: requests.length,
+                itemBuilder: (context, index) {
+                  final request = requests[index];
+                  return _buildDownPaymentItem(request, service);
+                },
+              ),
+            ),
+          ],
+        );
+      },
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (error, stack) => Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.error_outline, size: 48, color: Colors.red),
+            const SizedBox(height: 16),
+            Text('Error: $error'),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: () => ref.invalidate(userDownPaymentStreamProvider(userId)),
+              child: const Text('Retry'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDownPaymentItem(DownPaymentRequest request, WalletService service) {
+    final statusColor = _getDownPaymentStatusColor(request.status);
+    final statusLabel = _getDownPaymentStatusLabel(request.status);
+    final statusIcon = _getDownPaymentStatusIcon(request.status);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.shade200,
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header row with site name and status
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: statusColor.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(statusIcon, color: statusColor, size: 24),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      request.siteName.isNotEmpty ? request.siteName : 'Site Visit',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 16,
+                        color: Color(0xFF263238),
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Requested ${_formatDate(request.requestedAt)}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: const Color(0xFF263238).withOpacity(0.5),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: statusColor.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  statusLabel,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: statusColor,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          const Divider(height: 1),
+          const SizedBox(height: 12),
+          // Amount details
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Requested Amount',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: const Color(0xFF263238).withOpacity(0.6),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    service.formatCurrency(request.requestedAmount),
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF1976D2),
+                    ),
+                  ),
+                ],
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    'Budget',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: const Color(0xFF263238).withOpacity(0.6),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    service.formatCurrency(request.totalTransportationBudget),
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: const Color(0xFF263238).withOpacity(0.7),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          // Payment type badge
+          if (request.paymentType.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Icon(
+                  request.paymentType == 'full_advance' 
+                      ? Icons.payments 
+                      : Icons.schedule,
+                  size: 16,
+                  color: Colors.grey,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  request.paymentType == 'full_advance' 
+                      ? 'Full Advance' 
+                      : 'Installments',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: Colors.grey,
+                  ),
+                ),
+              ],
+            ),
+          ],
+          // Paid amount if any
+          if (request.totalPaidAmount > 0) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                const Icon(Icons.check_circle, size: 16, color: Color(0xFF4CAF50)),
+                const SizedBox(width: 6),
+                Text(
+                  'Paid: ${service.formatCurrency(request.totalPaidAmount)}',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: Color(0xFF4CAF50),
+                  ),
+                ),
+              ],
+            ),
+          ],
+          // Rejection reason if rejected
+          if (request.status == 'rejected' && 
+              (request.supervisorRejectionReason != null || request.adminRejectionReason != null)) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.red.shade50,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.info_outline, size: 16, color: Colors.red),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      request.supervisorRejectionReason ?? request.adminRejectionReason ?? '',
+                      style: const TextStyle(fontSize: 12, color: Colors.red),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  String _formatDate(DateTime date) {
+    final now = DateTime.now();
+    final difference = now.difference(date);
+    
+    if (difference.inDays == 0) {
+      return 'Today';
+    } else if (difference.inDays == 1) {
+      return 'Yesterday';
+    } else if (difference.inDays < 7) {
+      return '${difference.inDays} days ago';
+    } else {
+      return DateFormat('MMM d, y').format(date);
+    }
+  }
+
+  Color _getDownPaymentStatusColor(String status) {
+    switch (status) {
+      case 'pending_supervisor':
+        return const Color(0xFFFF9800); // Orange
+      case 'pending_admin':
+        return const Color(0xFF2196F3); // Blue
+      case 'approved':
+        return const Color(0xFF4CAF50); // Green
+      case 'rejected':
+        return const Color(0xFFF44336); // Red
+      case 'partially_paid':
+        return const Color(0xFF9C27B0); // Purple
+      case 'fully_paid':
+        return const Color(0xFF4CAF50); // Green
+      case 'cancelled':
+        return Colors.grey;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  String _getDownPaymentStatusLabel(String status) {
+    switch (status) {
+      case 'pending_supervisor':
+        return 'Pending Approval';
+      case 'pending_admin':
+        return 'With Finance';
+      case 'approved':
+        return 'Approved';
+      case 'rejected':
+        return 'Rejected';
+      case 'partially_paid':
+        return 'Partially Paid';
+      case 'fully_paid':
+        return 'Fully Paid';
+      case 'cancelled':
+        return 'Cancelled';
+      default:
+        return status;
+    }
+  }
+
+  IconData _getDownPaymentStatusIcon(String status) {
+    switch (status) {
+      case 'pending_supervisor':
+        return Icons.hourglass_empty;
+      case 'pending_admin':
+        return Icons.account_balance;
+      case 'approved':
+        return Icons.check_circle;
+      case 'rejected':
+        return Icons.cancel;
+      case 'partially_paid':
+        return Icons.pie_chart;
+      case 'fully_paid':
+        return Icons.verified;
+      case 'cancelled':
+        return Icons.block;
+      default:
+        return Icons.help_outline;
+    }
   }
 
   Widget _buildTransactionItem(WalletTransaction transaction, WalletService service) {
@@ -679,13 +1100,47 @@ class _WalletScreenState extends ConsumerState<WalletScreen> with SingleTickerPr
           );
         }
 
-        return ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: withdrawals.length,
-          itemBuilder: (context, index) {
-            final withdrawal = withdrawals[index];
-            return _buildWithdrawalItem(withdrawal, service);
-          },
+        return Column(
+          children: [
+            // Request Withdrawal Button - always visible
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const WithdrawalRequestScreen(),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.add),
+                  label: const Text('New Withdrawal Request'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFFF9800),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            // Withdrawals list
+            Expanded(
+              child: ListView.builder(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                itemCount: withdrawals.length,
+                itemBuilder: (context, index) {
+                  final withdrawal = withdrawals[index];
+                  return _buildWithdrawalItem(withdrawal, service);
+                },
+              ),
+            ),
+          ],
         );
       },
       loading: () => const Center(child: CircularProgressIndicator()),

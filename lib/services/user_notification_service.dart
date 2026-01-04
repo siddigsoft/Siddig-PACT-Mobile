@@ -115,12 +115,16 @@ class UserNotificationService {
 
   Future<void> _fetchLatest(String userId) async {
     try {
+      // Query notifications where user_id OR recipient_id matches
+      // Using or filter to catch both columns
       final response = await _supabase
           .from('notifications')
           .select()
-          .eq('user_id', userId)
+          .or('user_id.eq.$userId,recipient_id.eq.$userId')
           .order('created_at', ascending: false)
           .limit(_maxCachedNotifications);
+
+      debugPrint('UserNotificationService: Fetched ${response.length} notifications for user $userId');
 
       if (response is List) {
         for (final item in response) {
@@ -167,6 +171,8 @@ class UserNotificationService {
     _realtimeChannel?.unsubscribe();
     _realtimeChannel = _supabase.channel('user_notifications_$userId');
 
+    debugPrint('UserNotificationService: Subscribing to realtime for user $userId');
+
     _realtimeChannel
       ?..onPostgresChanges(
         event: PostgresChangeEvent.insert,
@@ -174,10 +180,15 @@ class UserNotificationService {
         table: 'notifications',
         callback: (payload) {
           final data = payload.newRecord;
+          debugPrint('UserNotificationService: Received INSERT event: ${data?.keys.toList()}');
           if (data == null) {
             return;
           }
-          if (data['user_id'] != userId) {
+          // Check both user_id and recipient_id columns
+          final notifUserId = data['user_id'];
+          final notifRecipientId = data['recipient_id'];
+          if (notifUserId != userId && notifRecipientId != userId) {
+            debugPrint('UserNotificationService: Notification not for this user (user_id: $notifUserId, recipient_id: $notifRecipientId)');
             return;
           }
           try {
@@ -196,10 +207,14 @@ class UserNotificationService {
         table: 'notifications',
         callback: (payload) {
           final data = payload.newRecord;
+          debugPrint('UserNotificationService: Received UPDATE event');
           if (data == null) {
             return;
           }
-          if (data['user_id'] != userId) {
+          // Check both user_id and recipient_id columns
+          final notifUserId = data['user_id'];
+          final notifRecipientId = data['recipient_id'];
+          if (notifUserId != userId && notifRecipientId != userId) {
             return;
           }
           try {
@@ -212,7 +227,9 @@ class UserNotificationService {
           }
         },
       )
-      ..subscribe();
+      ..subscribe((status, error) {
+        debugPrint('UserNotificationService: Realtime subscription status: $status, error: $error');
+      });
   }
 
   void _handleInsert(UserNotification notification) {

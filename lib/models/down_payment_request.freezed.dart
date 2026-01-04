@@ -22,39 +22,69 @@ DownPaymentRequest _$DownPaymentRequestFromJson(Map<String, dynamic> json) {
 /// @nodoc
 mixin _$DownPaymentRequest {
   String get id => throw _privateConstructorUsedError;
+  @JsonKey(name: 'site_visit_id')
   String get siteVisitId => throw _privateConstructorUsedError;
+  @JsonKey(name: 'mmp_site_entry_id')
   String get mmpSiteEntryId => throw _privateConstructorUsedError;
+  @JsonKey(name: 'site_name')
   String get siteName => throw _privateConstructorUsedError;
+  @JsonKey(name: 'requested_by')
   String get requestedBy => throw _privateConstructorUsedError;
+  @JsonKey(name: 'requested_at')
   DateTime get requestedAt => throw _privateConstructorUsedError;
+  @JsonKey(name: 'requester_role')
   String get requesterRole => throw _privateConstructorUsedError;
+  @JsonKey(name: 'hub_id')
   String? get hubId => throw _privateConstructorUsedError;
+  @JsonKey(name: 'hub_name')
   String? get hubName => throw _privateConstructorUsedError;
+  @JsonKey(name: 'total_transportation_budget')
   double get totalTransportationBudget => throw _privateConstructorUsedError;
+  @JsonKey(name: 'requested_amount')
   double get requestedAmount => throw _privateConstructorUsedError;
+  @JsonKey(name: 'payment_type')
   String get paymentType => throw _privateConstructorUsedError;
+  @JsonKey(name: 'installment_plan')
   List<InstallmentPlan> get installmentPlan =>
       throw _privateConstructorUsedError;
+  @JsonKey(name: 'paid_installments')
   List<PaidInstallment> get paidInstallments =>
       throw _privateConstructorUsedError;
   String get justification => throw _privateConstructorUsedError;
+  @JsonKey(name: 'supporting_documents')
   List<String> get supportingDocuments => throw _privateConstructorUsedError;
+  @JsonKey(name: 'supervisor_id')
   String? get supervisorId => throw _privateConstructorUsedError;
+  @JsonKey(name: 'supervisor_status')
   String? get supervisorStatus => throw _privateConstructorUsedError;
+  @JsonKey(name: 'supervisor_approved_by')
   String? get supervisorApprovedBy => throw _privateConstructorUsedError;
+  @JsonKey(name: 'supervisor_approved_at')
   DateTime? get supervisorApprovedAt => throw _privateConstructorUsedError;
+  @JsonKey(name: 'supervisor_notes')
   String? get supervisorNotes => throw _privateConstructorUsedError;
+  @JsonKey(name: 'supervisor_rejection_reason')
   String? get supervisorRejectionReason => throw _privateConstructorUsedError;
+  @JsonKey(name: 'admin_status')
   String? get adminStatus => throw _privateConstructorUsedError;
+  @JsonKey(name: 'admin_processed_by')
   String? get adminProcessedBy => throw _privateConstructorUsedError;
+  @JsonKey(name: 'admin_processed_at')
   DateTime? get adminProcessedAt => throw _privateConstructorUsedError;
+  @JsonKey(name: 'admin_notes')
   String? get adminNotes => throw _privateConstructorUsedError;
+  @JsonKey(name: 'admin_rejection_reason')
   String? get adminRejectionReason => throw _privateConstructorUsedError;
   String get status => throw _privateConstructorUsedError;
+  @JsonKey(name: 'total_paid_amount')
   double get totalPaidAmount => throw _privateConstructorUsedError;
+  @JsonKey(name: 'remaining_amount')
   double? get remainingAmount => throw _privateConstructorUsedError;
+  @JsonKey(name: 'wallet_transaction_ids')
   List<String> get walletTransactionIds => throw _privateConstructorUsedError;
+  @JsonKey(name: 'created_at')
   DateTime get createdAt => throw _privateConstructorUsedError;
+  @JsonKey(name: 'updated_at')
   DateTime get updatedAt => throw _privateConstructorUsedError;
   Map<String, dynamic> get metadata => throw _privateConstructorUsedError;
 
@@ -77,38 +107,40 @@ abstract class $DownPaymentRequestCopyWith<$Res> {
   @useResult
   $Res call({
     String id,
-    String siteVisitId,
-    String mmpSiteEntryId,
-    String siteName,
-    String requestedBy,
-    DateTime requestedAt,
-    String requesterRole,
-    String? hubId,
-    String? hubName,
+    @JsonKey(name: 'site_visit_id') String siteVisitId,
+    @JsonKey(name: 'mmp_site_entry_id') String mmpSiteEntryId,
+    @JsonKey(name: 'site_name') String siteName,
+    @JsonKey(name: 'requested_by') String requestedBy,
+    @JsonKey(name: 'requested_at') DateTime requestedAt,
+    @JsonKey(name: 'requester_role') String requesterRole,
+    @JsonKey(name: 'hub_id') String? hubId,
+    @JsonKey(name: 'hub_name') String? hubName,
+    @JsonKey(name: 'total_transportation_budget')
     double totalTransportationBudget,
-    double requestedAmount,
-    String paymentType,
-    List<InstallmentPlan> installmentPlan,
-    List<PaidInstallment> paidInstallments,
+    @JsonKey(name: 'requested_amount') double requestedAmount,
+    @JsonKey(name: 'payment_type') String paymentType,
+    @JsonKey(name: 'installment_plan') List<InstallmentPlan> installmentPlan,
+    @JsonKey(name: 'paid_installments') List<PaidInstallment> paidInstallments,
     String justification,
-    List<String> supportingDocuments,
-    String? supervisorId,
-    String? supervisorStatus,
-    String? supervisorApprovedBy,
-    DateTime? supervisorApprovedAt,
-    String? supervisorNotes,
+    @JsonKey(name: 'supporting_documents') List<String> supportingDocuments,
+    @JsonKey(name: 'supervisor_id') String? supervisorId,
+    @JsonKey(name: 'supervisor_status') String? supervisorStatus,
+    @JsonKey(name: 'supervisor_approved_by') String? supervisorApprovedBy,
+    @JsonKey(name: 'supervisor_approved_at') DateTime? supervisorApprovedAt,
+    @JsonKey(name: 'supervisor_notes') String? supervisorNotes,
+    @JsonKey(name: 'supervisor_rejection_reason')
     String? supervisorRejectionReason,
-    String? adminStatus,
-    String? adminProcessedBy,
-    DateTime? adminProcessedAt,
-    String? adminNotes,
-    String? adminRejectionReason,
+    @JsonKey(name: 'admin_status') String? adminStatus,
+    @JsonKey(name: 'admin_processed_by') String? adminProcessedBy,
+    @JsonKey(name: 'admin_processed_at') DateTime? adminProcessedAt,
+    @JsonKey(name: 'admin_notes') String? adminNotes,
+    @JsonKey(name: 'admin_rejection_reason') String? adminRejectionReason,
     String status,
-    double totalPaidAmount,
-    double? remainingAmount,
-    List<String> walletTransactionIds,
-    DateTime createdAt,
-    DateTime updatedAt,
+    @JsonKey(name: 'total_paid_amount') double totalPaidAmount,
+    @JsonKey(name: 'remaining_amount') double? remainingAmount,
+    @JsonKey(name: 'wallet_transaction_ids') List<String> walletTransactionIds,
+    @JsonKey(name: 'created_at') DateTime createdAt,
+    @JsonKey(name: 'updated_at') DateTime updatedAt,
     Map<String, dynamic> metadata,
   });
 }
@@ -318,38 +350,40 @@ abstract class _$$DownPaymentRequestImplCopyWith<$Res>
   @useResult
   $Res call({
     String id,
-    String siteVisitId,
-    String mmpSiteEntryId,
-    String siteName,
-    String requestedBy,
-    DateTime requestedAt,
-    String requesterRole,
-    String? hubId,
-    String? hubName,
+    @JsonKey(name: 'site_visit_id') String siteVisitId,
+    @JsonKey(name: 'mmp_site_entry_id') String mmpSiteEntryId,
+    @JsonKey(name: 'site_name') String siteName,
+    @JsonKey(name: 'requested_by') String requestedBy,
+    @JsonKey(name: 'requested_at') DateTime requestedAt,
+    @JsonKey(name: 'requester_role') String requesterRole,
+    @JsonKey(name: 'hub_id') String? hubId,
+    @JsonKey(name: 'hub_name') String? hubName,
+    @JsonKey(name: 'total_transportation_budget')
     double totalTransportationBudget,
-    double requestedAmount,
-    String paymentType,
-    List<InstallmentPlan> installmentPlan,
-    List<PaidInstallment> paidInstallments,
+    @JsonKey(name: 'requested_amount') double requestedAmount,
+    @JsonKey(name: 'payment_type') String paymentType,
+    @JsonKey(name: 'installment_plan') List<InstallmentPlan> installmentPlan,
+    @JsonKey(name: 'paid_installments') List<PaidInstallment> paidInstallments,
     String justification,
-    List<String> supportingDocuments,
-    String? supervisorId,
-    String? supervisorStatus,
-    String? supervisorApprovedBy,
-    DateTime? supervisorApprovedAt,
-    String? supervisorNotes,
+    @JsonKey(name: 'supporting_documents') List<String> supportingDocuments,
+    @JsonKey(name: 'supervisor_id') String? supervisorId,
+    @JsonKey(name: 'supervisor_status') String? supervisorStatus,
+    @JsonKey(name: 'supervisor_approved_by') String? supervisorApprovedBy,
+    @JsonKey(name: 'supervisor_approved_at') DateTime? supervisorApprovedAt,
+    @JsonKey(name: 'supervisor_notes') String? supervisorNotes,
+    @JsonKey(name: 'supervisor_rejection_reason')
     String? supervisorRejectionReason,
-    String? adminStatus,
-    String? adminProcessedBy,
-    DateTime? adminProcessedAt,
-    String? adminNotes,
-    String? adminRejectionReason,
+    @JsonKey(name: 'admin_status') String? adminStatus,
+    @JsonKey(name: 'admin_processed_by') String? adminProcessedBy,
+    @JsonKey(name: 'admin_processed_at') DateTime? adminProcessedAt,
+    @JsonKey(name: 'admin_notes') String? adminNotes,
+    @JsonKey(name: 'admin_rejection_reason') String? adminRejectionReason,
     String status,
-    double totalPaidAmount,
-    double? remainingAmount,
-    List<String> walletTransactionIds,
-    DateTime createdAt,
-    DateTime updatedAt,
+    @JsonKey(name: 'total_paid_amount') double totalPaidAmount,
+    @JsonKey(name: 'remaining_amount') double? remainingAmount,
+    @JsonKey(name: 'wallet_transaction_ids') List<String> walletTransactionIds,
+    @JsonKey(name: 'created_at') DateTime createdAt,
+    @JsonKey(name: 'updated_at') DateTime updatedAt,
     Map<String, dynamic> metadata,
   });
 }
@@ -551,38 +585,44 @@ class __$$DownPaymentRequestImplCopyWithImpl<$Res>
 class _$DownPaymentRequestImpl implements _DownPaymentRequest {
   const _$DownPaymentRequestImpl({
     required this.id,
-    required this.siteVisitId,
-    this.mmpSiteEntryId = '',
-    this.siteName = '',
-    required this.requestedBy,
-    required this.requestedAt,
-    required this.requesterRole,
-    this.hubId,
-    this.hubName,
+    @JsonKey(name: 'site_visit_id') required this.siteVisitId,
+    @JsonKey(name: 'mmp_site_entry_id') this.mmpSiteEntryId = '',
+    @JsonKey(name: 'site_name') this.siteName = '',
+    @JsonKey(name: 'requested_by') required this.requestedBy,
+    @JsonKey(name: 'requested_at') required this.requestedAt,
+    @JsonKey(name: 'requester_role') this.requesterRole = 'dataCollector',
+    @JsonKey(name: 'hub_id') this.hubId,
+    @JsonKey(name: 'hub_name') this.hubName,
+    @JsonKey(name: 'total_transportation_budget')
     this.totalTransportationBudget = 0.0,
-    this.requestedAmount = 0.0,
-    this.paymentType = 'full_advance',
+    @JsonKey(name: 'requested_amount') this.requestedAmount = 0.0,
+    @JsonKey(name: 'payment_type') this.paymentType = 'full_advance',
+    @JsonKey(name: 'installment_plan')
     final List<InstallmentPlan> installmentPlan = const [],
+    @JsonKey(name: 'paid_installments')
     final List<PaidInstallment> paidInstallments = const [],
     this.justification = '',
+    @JsonKey(name: 'supporting_documents')
     final List<String> supportingDocuments = const [],
-    this.supervisorId,
-    this.supervisorStatus,
-    this.supervisorApprovedBy,
-    this.supervisorApprovedAt,
-    this.supervisorNotes,
+    @JsonKey(name: 'supervisor_id') this.supervisorId,
+    @JsonKey(name: 'supervisor_status') this.supervisorStatus,
+    @JsonKey(name: 'supervisor_approved_by') this.supervisorApprovedBy,
+    @JsonKey(name: 'supervisor_approved_at') this.supervisorApprovedAt,
+    @JsonKey(name: 'supervisor_notes') this.supervisorNotes,
+    @JsonKey(name: 'supervisor_rejection_reason')
     this.supervisorRejectionReason,
-    this.adminStatus,
-    this.adminProcessedBy,
-    this.adminProcessedAt,
-    this.adminNotes,
-    this.adminRejectionReason,
+    @JsonKey(name: 'admin_status') this.adminStatus,
+    @JsonKey(name: 'admin_processed_by') this.adminProcessedBy,
+    @JsonKey(name: 'admin_processed_at') this.adminProcessedAt,
+    @JsonKey(name: 'admin_notes') this.adminNotes,
+    @JsonKey(name: 'admin_rejection_reason') this.adminRejectionReason,
     this.status = 'pending_supervisor',
-    this.totalPaidAmount = 0.0,
-    this.remainingAmount,
+    @JsonKey(name: 'total_paid_amount') this.totalPaidAmount = 0.0,
+    @JsonKey(name: 'remaining_amount') this.remainingAmount,
+    @JsonKey(name: 'wallet_transaction_ids')
     final List<String> walletTransactionIds = const <String>[],
-    required this.createdAt,
-    required this.updatedAt,
+    @JsonKey(name: 'created_at') required this.createdAt,
+    @JsonKey(name: 'updated_at') required this.updatedAt,
     final Map<String, dynamic> metadata = const <String, dynamic>{},
   }) : _installmentPlan = installmentPlan,
        _paidInstallments = paidInstallments,
@@ -596,35 +636,41 @@ class _$DownPaymentRequestImpl implements _DownPaymentRequest {
   @override
   final String id;
   @override
+  @JsonKey(name: 'site_visit_id')
   final String siteVisitId;
   @override
-  @JsonKey()
+  @JsonKey(name: 'mmp_site_entry_id')
   final String mmpSiteEntryId;
   @override
-  @JsonKey()
+  @JsonKey(name: 'site_name')
   final String siteName;
   @override
+  @JsonKey(name: 'requested_by')
   final String requestedBy;
   @override
+  @JsonKey(name: 'requested_at')
   final DateTime requestedAt;
   @override
+  @JsonKey(name: 'requester_role')
   final String requesterRole;
   @override
+  @JsonKey(name: 'hub_id')
   final String? hubId;
   @override
+  @JsonKey(name: 'hub_name')
   final String? hubName;
   @override
-  @JsonKey()
+  @JsonKey(name: 'total_transportation_budget')
   final double totalTransportationBudget;
   @override
-  @JsonKey()
+  @JsonKey(name: 'requested_amount')
   final double requestedAmount;
   @override
-  @JsonKey()
+  @JsonKey(name: 'payment_type')
   final String paymentType;
   final List<InstallmentPlan> _installmentPlan;
   @override
-  @JsonKey()
+  @JsonKey(name: 'installment_plan')
   List<InstallmentPlan> get installmentPlan {
     if (_installmentPlan is EqualUnmodifiableListView) return _installmentPlan;
     // ignore: implicit_dynamic_type
@@ -633,7 +679,7 @@ class _$DownPaymentRequestImpl implements _DownPaymentRequest {
 
   final List<PaidInstallment> _paidInstallments;
   @override
-  @JsonKey()
+  @JsonKey(name: 'paid_installments')
   List<PaidInstallment> get paidInstallments {
     if (_paidInstallments is EqualUnmodifiableListView)
       return _paidInstallments;
@@ -646,7 +692,7 @@ class _$DownPaymentRequestImpl implements _DownPaymentRequest {
   final String justification;
   final List<String> _supportingDocuments;
   @override
-  @JsonKey()
+  @JsonKey(name: 'supporting_documents')
   List<String> get supportingDocuments {
     if (_supportingDocuments is EqualUnmodifiableListView)
       return _supportingDocuments;
@@ -655,38 +701,50 @@ class _$DownPaymentRequestImpl implements _DownPaymentRequest {
   }
 
   @override
+  @JsonKey(name: 'supervisor_id')
   final String? supervisorId;
   @override
+  @JsonKey(name: 'supervisor_status')
   final String? supervisorStatus;
   @override
+  @JsonKey(name: 'supervisor_approved_by')
   final String? supervisorApprovedBy;
   @override
+  @JsonKey(name: 'supervisor_approved_at')
   final DateTime? supervisorApprovedAt;
   @override
+  @JsonKey(name: 'supervisor_notes')
   final String? supervisorNotes;
   @override
+  @JsonKey(name: 'supervisor_rejection_reason')
   final String? supervisorRejectionReason;
   @override
+  @JsonKey(name: 'admin_status')
   final String? adminStatus;
   @override
+  @JsonKey(name: 'admin_processed_by')
   final String? adminProcessedBy;
   @override
+  @JsonKey(name: 'admin_processed_at')
   final DateTime? adminProcessedAt;
   @override
+  @JsonKey(name: 'admin_notes')
   final String? adminNotes;
   @override
+  @JsonKey(name: 'admin_rejection_reason')
   final String? adminRejectionReason;
   @override
   @JsonKey()
   final String status;
   @override
-  @JsonKey()
+  @JsonKey(name: 'total_paid_amount')
   final double totalPaidAmount;
   @override
+  @JsonKey(name: 'remaining_amount')
   final double? remainingAmount;
   final List<String> _walletTransactionIds;
   @override
-  @JsonKey()
+  @JsonKey(name: 'wallet_transaction_ids')
   List<String> get walletTransactionIds {
     if (_walletTransactionIds is EqualUnmodifiableListView)
       return _walletTransactionIds;
@@ -695,8 +753,10 @@ class _$DownPaymentRequestImpl implements _DownPaymentRequest {
   }
 
   @override
+  @JsonKey(name: 'created_at')
   final DateTime createdAt;
   @override
+  @JsonKey(name: 'updated_at')
   final DateTime updatedAt;
   final Map<String, dynamic> _metadata;
   @override
@@ -856,38 +916,45 @@ class _$DownPaymentRequestImpl implements _DownPaymentRequest {
 abstract class _DownPaymentRequest implements DownPaymentRequest {
   const factory _DownPaymentRequest({
     required final String id,
-    required final String siteVisitId,
-    final String mmpSiteEntryId,
-    final String siteName,
-    required final String requestedBy,
-    required final DateTime requestedAt,
-    required final String requesterRole,
-    final String? hubId,
-    final String? hubName,
+    @JsonKey(name: 'site_visit_id') required final String siteVisitId,
+    @JsonKey(name: 'mmp_site_entry_id') final String mmpSiteEntryId,
+    @JsonKey(name: 'site_name') final String siteName,
+    @JsonKey(name: 'requested_by') required final String requestedBy,
+    @JsonKey(name: 'requested_at') required final DateTime requestedAt,
+    @JsonKey(name: 'requester_role') final String requesterRole,
+    @JsonKey(name: 'hub_id') final String? hubId,
+    @JsonKey(name: 'hub_name') final String? hubName,
+    @JsonKey(name: 'total_transportation_budget')
     final double totalTransportationBudget,
-    final double requestedAmount,
-    final String paymentType,
+    @JsonKey(name: 'requested_amount') final double requestedAmount,
+    @JsonKey(name: 'payment_type') final String paymentType,
+    @JsonKey(name: 'installment_plan')
     final List<InstallmentPlan> installmentPlan,
+    @JsonKey(name: 'paid_installments')
     final List<PaidInstallment> paidInstallments,
     final String justification,
+    @JsonKey(name: 'supporting_documents')
     final List<String> supportingDocuments,
-    final String? supervisorId,
-    final String? supervisorStatus,
-    final String? supervisorApprovedBy,
+    @JsonKey(name: 'supervisor_id') final String? supervisorId,
+    @JsonKey(name: 'supervisor_status') final String? supervisorStatus,
+    @JsonKey(name: 'supervisor_approved_by') final String? supervisorApprovedBy,
+    @JsonKey(name: 'supervisor_approved_at')
     final DateTime? supervisorApprovedAt,
-    final String? supervisorNotes,
+    @JsonKey(name: 'supervisor_notes') final String? supervisorNotes,
+    @JsonKey(name: 'supervisor_rejection_reason')
     final String? supervisorRejectionReason,
-    final String? adminStatus,
-    final String? adminProcessedBy,
-    final DateTime? adminProcessedAt,
-    final String? adminNotes,
-    final String? adminRejectionReason,
+    @JsonKey(name: 'admin_status') final String? adminStatus,
+    @JsonKey(name: 'admin_processed_by') final String? adminProcessedBy,
+    @JsonKey(name: 'admin_processed_at') final DateTime? adminProcessedAt,
+    @JsonKey(name: 'admin_notes') final String? adminNotes,
+    @JsonKey(name: 'admin_rejection_reason') final String? adminRejectionReason,
     final String status,
-    final double totalPaidAmount,
-    final double? remainingAmount,
+    @JsonKey(name: 'total_paid_amount') final double totalPaidAmount,
+    @JsonKey(name: 'remaining_amount') final double? remainingAmount,
+    @JsonKey(name: 'wallet_transaction_ids')
     final List<String> walletTransactionIds,
-    required final DateTime createdAt,
-    required final DateTime updatedAt,
+    @JsonKey(name: 'created_at') required final DateTime createdAt,
+    @JsonKey(name: 'updated_at') required final DateTime updatedAt,
     final Map<String, dynamic> metadata,
   }) = _$DownPaymentRequestImpl;
 
@@ -897,68 +964,98 @@ abstract class _DownPaymentRequest implements DownPaymentRequest {
   @override
   String get id;
   @override
+  @JsonKey(name: 'site_visit_id')
   String get siteVisitId;
   @override
+  @JsonKey(name: 'mmp_site_entry_id')
   String get mmpSiteEntryId;
   @override
+  @JsonKey(name: 'site_name')
   String get siteName;
   @override
+  @JsonKey(name: 'requested_by')
   String get requestedBy;
   @override
+  @JsonKey(name: 'requested_at')
   DateTime get requestedAt;
   @override
+  @JsonKey(name: 'requester_role')
   String get requesterRole;
   @override
+  @JsonKey(name: 'hub_id')
   String? get hubId;
   @override
+  @JsonKey(name: 'hub_name')
   String? get hubName;
   @override
+  @JsonKey(name: 'total_transportation_budget')
   double get totalTransportationBudget;
   @override
+  @JsonKey(name: 'requested_amount')
   double get requestedAmount;
   @override
+  @JsonKey(name: 'payment_type')
   String get paymentType;
   @override
+  @JsonKey(name: 'installment_plan')
   List<InstallmentPlan> get installmentPlan;
   @override
+  @JsonKey(name: 'paid_installments')
   List<PaidInstallment> get paidInstallments;
   @override
   String get justification;
   @override
+  @JsonKey(name: 'supporting_documents')
   List<String> get supportingDocuments;
   @override
+  @JsonKey(name: 'supervisor_id')
   String? get supervisorId;
   @override
+  @JsonKey(name: 'supervisor_status')
   String? get supervisorStatus;
   @override
+  @JsonKey(name: 'supervisor_approved_by')
   String? get supervisorApprovedBy;
   @override
+  @JsonKey(name: 'supervisor_approved_at')
   DateTime? get supervisorApprovedAt;
   @override
+  @JsonKey(name: 'supervisor_notes')
   String? get supervisorNotes;
   @override
+  @JsonKey(name: 'supervisor_rejection_reason')
   String? get supervisorRejectionReason;
   @override
+  @JsonKey(name: 'admin_status')
   String? get adminStatus;
   @override
+  @JsonKey(name: 'admin_processed_by')
   String? get adminProcessedBy;
   @override
+  @JsonKey(name: 'admin_processed_at')
   DateTime? get adminProcessedAt;
   @override
+  @JsonKey(name: 'admin_notes')
   String? get adminNotes;
   @override
+  @JsonKey(name: 'admin_rejection_reason')
   String? get adminRejectionReason;
   @override
   String get status;
   @override
+  @JsonKey(name: 'total_paid_amount')
   double get totalPaidAmount;
   @override
+  @JsonKey(name: 'remaining_amount')
   double? get remainingAmount;
   @override
+  @JsonKey(name: 'wallet_transaction_ids')
   List<String> get walletTransactionIds;
   @override
+  @JsonKey(name: 'created_at')
   DateTime get createdAt;
   @override
+  @JsonKey(name: 'updated_at')
   DateTime get updatedAt;
   @override
   Map<String, dynamic> get metadata;

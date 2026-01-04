@@ -24,17 +24,34 @@ class UserNotification {
   });
 
   factory UserNotification.fromJson(Map<String, dynamic> json) {
+    // Handle both user_id and recipient_id columns
+    // The table has both, so we need to check which one is populated
+    final userId = (json['user_id'] as String?) ?? 
+                   (json['recipient_id'] as String?) ?? 
+                   '';
+    
+    // Handle title - check both 'title' and 'title_en' columns
+    final title = (json['title'] as String?)?.trim() ?? 
+                  (json['title_en'] as String?)?.trim() ?? 
+                  '';
+    
+    // Handle message - check both 'message' and 'message_en' columns
+    final message = (json['message'] as String?)?.trim() ?? 
+                    (json['message_en'] as String?)?.trim() ?? 
+                    '';
+    
     return UserNotification(
       id: json['id'] as String,
-      userId: json['user_id'] as String,
-      title: (json['title'] as String?)?.trim() ?? '',
-      message: (json['message'] as String?)?.trim() ?? '',
+      userId: userId,
+      title: title,
+      message: message,
       type: (json['type'] as String?)?.trim() ?? 'info',
       isRead: json['is_read'] == true,
       createdAt: DateTime.parse(json['created_at'] as String),
-      link: (json['link'] as String?)?.trim(),
+      link: (json['link'] as String?)?.trim() ?? (json['action_url'] as String?)?.trim(),
       relatedEntityId: json['related_entity_id']?.toString(),
-      relatedEntityType: (json['related_entity_type'] as String?)?.trim(),
+      relatedEntityType: (json['related_entity_type'] as String?)?.trim() ?? 
+                         (json['entity_type'] as String?)?.trim(),
     );
   }
 

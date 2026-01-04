@@ -68,6 +68,7 @@ class _DownPaymentRequestDialogState extends ConsumerState<DownPaymentRequestDia
 
                 return DropdownButtonFormField<SiteVisit>(
                   value: _selectedSiteVisit,
+                  isExpanded: true,
                   decoration: const InputDecoration(
                     labelText: 'Select Site Visit',
                     border: OutlineInputBorder(),
@@ -77,7 +78,7 @@ class _DownPaymentRequestDialogState extends ConsumerState<DownPaymentRequestDia
                       value: visit,
                       child: Text(
                         '${visit.siteName} - ${formatCurrency((visit.transportFee ?? 0) * 100)} budget',
-                        maxLines: 2,
+                        maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
                     );

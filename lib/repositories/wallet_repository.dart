@@ -540,17 +540,19 @@ class WalletRepository {
       }
 
       // Validate that the site visit exists and is accepted
+      // Note: mmp_site_entries uses 'accepted_by' column, not 'user_id'
       final siteVisit = await _supabase
           .from('mmp_site_entries')
-          .select('status, user_id')
+          .select('status, accepted_by')
           .eq('id', siteVisitId)
           .single();
 
-      if (siteVisit['status'] != 'accepted') {
+      final status = (siteVisit['status'] as String?)?.toLowerCase() ?? '';
+      if (!status.startsWith('accept')) {
         throw WalletException('Can only request down payment for accepted site visits');
       }
 
-      if (siteVisit['user_id'] != userId) {
+      if (siteVisit['accepted_by'] != userId) {
         throw WalletException('Can only request down payment for sites assigned to you');
       }
 
