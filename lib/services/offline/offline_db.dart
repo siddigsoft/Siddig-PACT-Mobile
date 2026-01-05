@@ -151,12 +151,38 @@ class OfflineDb {
     return _siteVisits.get(id);
   }
 
+  /// Get unsynced site visits that are ready to sync (excludes drafts)
   List<OfflineSiteVisit> getUnsyncedSiteVisits() {
-    return _siteVisits.values.where((v) => !v.synced).toList();
+    return _siteVisits.values.where(
+      (v) => !v.synced && v.status != 'draft'
+    ).toList();
   }
 
   List<OfflineSiteVisit> getAllSiteVisits() {
     return _siteVisits.values.toList();
+  }
+
+  /// Get all draft site visits (not yet completed, saved for later)
+  List<OfflineSiteVisit> getDraftSiteVisits() {
+    return _siteVisits.values.where((v) => v.status == 'draft').toList();
+  }
+
+  /// Get draft for a specific site entry
+  OfflineSiteVisit? getDraftForSite(String siteEntryId) {
+    try {
+      return _siteVisits.values.firstWhere(
+        (v) => v.siteEntryId == siteEntryId && v.status == 'draft',
+      );
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /// Get completed but unsynced visits (ready to sync when online)
+  List<OfflineSiteVisit> getCompletedUnsyncedVisits() {
+    return _siteVisits.values.where(
+      (v) => v.status == 'completed' && !v.synced
+    ).toList();
   }
 
   Future<void> updateSiteVisitOffline(String id, {

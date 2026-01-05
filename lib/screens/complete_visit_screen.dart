@@ -39,8 +39,11 @@ class _CompleteVisitScreenState extends ConsumerState<CompleteVisitScreen> {
   final List<XFile> _photos = [];
   final ImagePicker _picker = ImagePicker();
   bool _isSubmitting = false;
+  bool _isSavingDraft = false;
   Position? _currentLocation;
   String? _locationError;
+  bool _isOnline = true;
+  late Stream<List<ConnectivityResult>> _connectivityStream;
 
   // Storage bucket configured in Supabase migrations:
   // supabase/migrations/20250127_add_site_visit_photos_bucket.sql
@@ -50,6 +53,8 @@ class _CompleteVisitScreenState extends ConsumerState<CompleteVisitScreen> {
   void initState() {
     super.initState();
     _getCurrentLocation();
+    _checkConnectivity();
+    _loadDraftData();
   }
 
   @override
@@ -57,6 +62,54 @@ class _CompleteVisitScreenState extends ConsumerState<CompleteVisitScreen> {
     _notesController.dispose();
     _activitiesController.dispose();
     super.dispose();
+  }
+
+  /// Check initial connectivity and listen for changes
+  Future<void> _checkConnectivity() async {
+    final connectivity = await Connectivity().checkConnectivity();
+    setState(() {
+      _isOnline = connectivity.first != ConnectivityResult.none;
+    });
+    
+    // Listen for connectivity changes
+    _connectivityStream = Connectivity().onConnectivityChanged;
+    _connectivityStream.listen((results) {
+      if (mounted) {
+        setState(() {
+          _isOnline = results.isNotEmpty && results.first != ConnectivityResult.none;
+        });
+      }
+    });
+  }
+
+  /// Load any existing draft data for this visit
+  Future<void> _loadDraftData() async {
+    try {
+      final db = ref.read(offlineDbProvider);
+      final drafts = db.getAllSiteVisits().where(
+        (v) => v.siteEntryId == widget.visit.id && v.status == 'draft'
+      ).toList();
+      
+      if (drafts.isNotEmpty) {
+        final draft = drafts.first;
+        setState(() {
+          if (draft.notes != null && draft.notes!.isNotEmpty) {
+            _notesController.text = draft.notes!;
+          }
+          // Photos will be restored from draft.photos if needed
+        });
+        
+        if (mounted) {
+          AppSnackBar.show(
+            context,
+            message: 'Draft loaded. Continue where you left off!',
+            type: SnackBarType.info,
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('Error loading draft: $e');
+    }
   }
 
   Future<void> _getCurrentLocation() async {
@@ -509,6 +562,121 @@ class _CompleteVisitScreenState extends ConsumerState<CompleteVisitScreen> {
     }
   }
 
+  /// Save visit as draft - stores all data locally without completing
+  /// User can return later to continue and complete the visit
+  Future<void> _saveDraft() async {
+    if (_isSavingDraft) return;
+
+    setState(() {
+      _isSavingDraft = true;
+    });
+
+    try {
+      final db = ref.read(offlineDbProvider);
+      final uuid = const Uuid();
+      final now = DateTime.now();
+      final userId = Supabase.instance.client.auth.currentUser?.id;
+
+      if (userId == null) {
+        throw Exception('User not authenticated');
+      }
+
+      // Get or create draft ID - reuse existing draft if present
+      String draftId;
+      final existingDrafts = db.getAllSiteVisits().where(
+        (v) => v.siteEntryId == widget.visit.id && v.status == 'draft'
+      ).toList();
+      
+      if (existingDrafts.isNotEmpty) {
+        draftId = existingDrafts.first.id;
+      } else {
+        draftId = uuid.v4();
+      }
+
+      // Convert photos to base64 for local storage
+      final List<String> photoDataList = [];
+      for (final photo in _photos) {
+        try {
+          final bytes = kIsWeb 
+              ? await photo.readAsBytes()
+              : await File(photo.path).readAsBytes();
+          final base64Data = base64Encode(bytes);
+          photoDataList.add('data:image/jpeg;base64,$base64Data');
+        } catch (e) {
+          debugPrint('Error encoding photo: $e');
+          // Store file path as fallback for mobile
+          if (!kIsWeb) {
+            photoDataList.add(photo.path);
+          }
+        }
+      }
+
+      // Get location info from active visit
+      final activeVisitState = ref.read(activeVisitProvider);
+      final startTime = activeVisitState.startedAt;
+      final startLocation = activeVisitState.locationHistory.isNotEmpty 
+          ? activeVisitState.locationHistory.first 
+          : null;
+
+      // Create draft record
+      final draftVisit = OfflineSiteVisit(
+        id: draftId,
+        siteEntryId: widget.visit.id,
+        siteName: widget.visit.siteName,
+        siteCode: widget.visit.siteCode,
+        state: widget.visit.state,
+        locality: widget.visit.locality,
+        status: 'draft', // Draft status - not complete, not synced
+        startedAt: startTime ?? now,
+        completedAt: null, // Not completed yet
+        startLocation: startLocation != null
+            ? {
+                'lat': startLocation.latitude,
+                'lng': startLocation.longitude,
+                'accuracy': startLocation.accuracy,
+              }
+            : null,
+        endLocation: _currentLocation != null
+            ? {
+                'lat': _currentLocation!.latitude,
+                'lng': _currentLocation!.longitude,
+                'accuracy': _currentLocation!.accuracy,
+              }
+            : null,
+        photos: photoDataList,
+        notes: _notesController.text.trim(),
+        synced: false,
+      );
+
+      await db.saveSiteVisitOffline(draftVisit);
+
+      if (mounted) {
+        AppSnackBar.show(
+          context,
+          message: 'Draft saved! You can continue later.',
+          type: SnackBarType.success,
+          duration: const Duration(seconds: 3),
+        );
+        Navigator.of(context).pop(false); // false = not completed, just drafted
+      }
+    } catch (e) {
+      debugPrint('Error saving draft: $e');
+      if (mounted) {
+        AppSnackBar.show(
+          context,
+          message: 'Failed to save draft: $e',
+          type: SnackBarType.error,
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSavingDraft = false;
+        });
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -745,12 +913,69 @@ class _CompleteVisitScreenState extends ConsumerState<CompleteVisitScreen> {
             
             const SizedBox(height: 32),
 
-            // Submit button
+            // Offline indicator
+            if (!_isOnline) ...[
+              Container(
+                padding: const EdgeInsets.all(12),
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.orange.shade300),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.wifi_off, color: Colors.orange.shade700),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'You are offline. Save as Draft to continue later, or Complete to sync when back online.',
+                        style: TextStyle(
+                          color: Colors.orange.shade800,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+
+            // Draft button (only shown when offline)
+            if (!_isOnline) ...[
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: OutlinedButton.icon(
+                  onPressed: (_isSavingDraft || _isSubmitting) ? null : _saveDraft,
+                  icon: _isSavingDraft
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : const Icon(Icons.save_outlined),
+                  label: Text(_isSavingDraft ? 'Saving Draft...' : 'Save as Draft'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.primaryBlue,
+                    side: BorderSide(color: AppColors.primaryBlue, width: 2),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
+
+            // Submit/Complete button
             SizedBox(
               width: double.infinity,
               height: 50,
               child: ElevatedButton.icon(
-                onPressed: _isSubmitting ? null : _submitReport,
+                onPressed: (_isSubmitting || _isSavingDraft) ? null : _submitReport,
                 icon: _isSubmitting
                     ? const SizedBox(
                         width: 20,
@@ -761,7 +986,11 @@ class _CompleteVisitScreenState extends ConsumerState<CompleteVisitScreen> {
                         ),
                       )
                     : const Icon(Icons.check_circle),
-                label: Text(_isSubmitting ? 'Submitting...' : 'Submit Report'),
+                label: Text(
+                  _isSubmitting 
+                      ? 'Submitting...' 
+                      : (_isOnline ? 'Submit Report' : 'Complete (Sync Later)'),
+                ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.success,
                   foregroundColor: Colors.white,

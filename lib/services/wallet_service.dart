@@ -655,10 +655,22 @@ class WalletService {
       final currentBalance = wallet.currentBalance;
       final totalTransactions = transactions.length;
       
-      final completedSiteVisits = transactions
-          .where((t) => t.type == TRANSACTION_TYPE_SITE_VISIT_FEE || 
-                       (t.type == TRANSACTION_TYPE_EARNING && t.siteVisitId != null))
-          .length;
+      // Get actual completed site visits count from mmp_site_entries
+      int completedSiteVisits = 0;
+      try {
+        final completedResponse = await supabase
+            .from('mmp_site_entries')
+            .select('id')
+            .eq('status', 'completed')
+            .or('accepted_by.eq.$userId,visit_completed_by.eq.$userId');
+        completedSiteVisits = (completedResponse as List).length;
+      } catch (e) {
+        // Fallback to transaction-based count
+        completedSiteVisits = transactions
+            .where((t) => t.type == TRANSACTION_TYPE_SITE_VISIT_FEE || 
+                         (t.type == TRANSACTION_TYPE_EARNING && t.siteVisitId != null))
+            .length;
+      }
 
       final pendingWithdrawals = withdrawalRequests
           .where((r) => r.status == WITHDRAWAL_STATUS_PENDING)

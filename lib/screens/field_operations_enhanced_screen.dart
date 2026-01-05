@@ -106,6 +106,7 @@ class _FieldOperationsEnhancedScreenState
   List<SiteVisit> _assignedVisits = []; // For displaying assigned/accepted visits
   int _completedVisitsCount = 0; // Track completed visits count
   Set<String> _pendingSyncVisitIds = {}; // Track visits with pending offline changes
+  Set<String> _draftVisitIds = {}; // Track visits with saved drafts
 
   // Task data
   List<SiteVisitWithDistance> _nearbyTasks = [];
@@ -794,6 +795,9 @@ class _FieldOperationsEnhancedScreenState
     
     // Get pending sync visit IDs
     final pendingIds = await offlineService.getPendingVisitIds();
+    
+    // Get draft visit IDs (saved but not completed)
+    final draftIds = await offlineService.getDraftVisitIds();
 
     if (mounted) {
       setState(() {
@@ -801,6 +805,7 @@ class _FieldOperationsEnhancedScreenState
         _myVisits = [...available, ...claimed, ...accepted, ...ongoing];
         _assignedVisits = [...available, ...claimed, ...accepted, ...ongoing];
         _pendingSyncVisitIds = pendingIds;
+        _draftVisitIds = draftIds;
         _isLoading = false;
       });
     }
@@ -2338,6 +2343,26 @@ class _FieldOperationsEnhancedScreenState
                             child: const Icon(
                               Icons.cloud_upload_outlined,
                               color: Colors.orange,
+                              size: 10,
+                            ),
+                          ),
+                        ),
+                      ],
+                      // Draft indicator
+                      if (_draftVisitIds.contains(visit.id)) ...[
+                        const SizedBox(width: 4),
+                        Tooltip(
+                          message: 'Draft saved - tap to continue',
+                          child: Container(
+                            width: 18,
+                            height: 18,
+                            decoration: BoxDecoration(
+                              color: Colors.blue.withOpacity(0.15),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.edit_note,
+                              color: Colors.blue,
                               size: 10,
                             ),
                           ),

@@ -73,7 +73,7 @@ class OfflineSiteVisit extends HiveObject {
   late String locality;
 
   @HiveField(6)
-  late String status; // 'started', 'completed'
+  late String status; // 'started', 'draft', 'completed'
 
   @HiveField(7)
   late DateTime startedAt;

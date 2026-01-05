@@ -275,7 +275,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get quickAccess => 'وصول سريع';
 
   @override
-  String get safetyChecklist => 'المراقبة الشاملة';
+  String get safetyChecklist => 'قائمة السلامة';
 
   @override
   String get incidentReport => 'تقرير الحادث';
@@ -330,4 +330,463 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get typeAMessage => 'اكتب رسالة...';
+
+  @override
+  String get wallet => 'المحفظة';
+
+  @override
+  String get helpAndSupport => 'المساعدة والدعم';
+
+  @override
+  String get sendFeedback => 'إرسال ملاحظات';
+
+  @override
+  String get aboutPact => 'عن باكت';
+
+  @override
+  String get syncData => 'مزامنة البيانات';
+
+  @override
+  String get signOut => 'تسجيل الخروج';
+
+  @override
+  String get draft => 'مسودة';
+
+  @override
+  String get complete => 'إكمال';
+
+  @override
+  String get saveAsDraft => 'حفظ كمسودة';
+
+  @override
+  String get submitNow => 'إرسال الآن';
+
+  @override
+  String get pendingSync => 'في انتظار المزامنة';
+
+  @override
+  String get synced => 'تمت المزامنة';
+
+  @override
+  String get offline => 'غير متصل';
+
+  @override
+  String get online => 'متصل';
+
+  @override
+  String get offlineMode => 'وضع عدم الاتصال';
+
+  @override
+  String get siteVisit => 'زيارة الموقع';
+
+  @override
+  String get siteVisitHub => 'مركز زيارة المواقع';
+
+  @override
+  String get completedSites => 'المواقع المكتملة';
+
+  @override
+  String get pendingPayments => 'المدفوعات المعلقة';
+
+  @override
+  String get totalEarnings => 'إجمالي الأرباح';
+
+  @override
+  String get paymentMethods => 'طرق الدفع';
+
+  @override
+  String get costSubmissions => 'تقديم التكاليف';
+
+  @override
+  String get transactions => 'المعاملات';
+
+  @override
+  String get havingTroubleSigningIn => 'هل تواجه مشكلة في تسجيل الدخول؟';
+
+  @override
+  String get loginTroubleshooting => 'حل مشاكل تسجيل الدخول';
+
+  @override
+  String get contactSupport => 'اتصل بالدعم';
+
+  @override
+  String get reportBug => 'الإبلاغ عن خطأ';
+
+  @override
+  String get commonErrors => 'الأخطاء الشائعة';
+
+  @override
+  String get searchHelp => 'البحث في المساعدة...';
+
+  @override
+  String get noResultsFound => 'لم يتم العثور على نتائج';
+
+  @override
+  String get getHelpAndFindAnswers => 'احصل على المساعدة وإجابات';
+
+  @override
+  String get shareYourThoughts => 'شاركنا رأيك';
+
+  @override
+  String get learnMoreAboutUs => 'تعرف علينا أكثر';
+
+  @override
+  String get updateLocalData => 'تحديث البيانات المحلية';
+
+  @override
+  String get pactDashboard => 'لوحة تحكم باكت';
+
+  @override
+  String get viewOnWeb => 'عرض على الويب';
+
+  @override
+  String get version => 'الإصدار';
+
+  @override
+  String get build => 'البناء';
+
+  @override
+  String get voiceCall => 'مكالمة صوتية';
+
+  @override
+  String get videoCall => 'مكالمة فيديو';
+
+  @override
+  String get endCall => 'إنهاء المكالمة';
+
+  @override
+  String get incomingCall => 'مكالمة واردة';
+
+  @override
+  String get calling => 'جاري الاتصال...';
+
+  @override
+  String get ringing => 'جاري الرنين...';
+
+  @override
+  String get connected => 'متصل';
+
+  @override
+  String get callEnded => 'انتهت المكالمة';
+
+  @override
+  String get mute => 'كتم';
+
+  @override
+  String get unmute => 'إلغاء الكتم';
+
+  @override
+  String get speaker => 'مكبر الصوت';
+
+  @override
+  String get camera => 'الكاميرا';
+
+  @override
+  String get notifications => 'الإشعارات';
+
+  @override
+  String get markAllAsRead => 'تحديد الكل كمقروء';
+
+  @override
+  String get noNotifications => 'لا توجد إشعارات';
+
+  @override
+  String get today => 'اليوم';
+
+  @override
+  String get yesterday => 'أمس';
+
+  @override
+  String get earlier => 'سابقاً';
+
+  @override
+  String get reports => 'التقارير';
+
+  @override
+  String get visitReports => 'تقارير الزيارات';
+
+  @override
+  String get filterByDate => 'تصفية حسب التاريخ';
+
+  @override
+  String get filterByMonth => 'تصفية حسب الشهر';
+
+  @override
+  String get filterByYear => 'تصفية حسب السنة';
+
+  @override
+  String get date => 'التاريخ';
+
+  @override
+  String get month => 'الشهر';
+
+  @override
+  String get year => 'السنة';
+
+  @override
+  String get noReportsFound => 'لم يتم العثور على تقارير';
+
+  @override
+  String get downloadReport => 'تنزيل التقرير';
+
+  @override
+  String get shareReport => 'مشاركة التقرير';
+
+  @override
+  String get duration => 'المدة';
+
+  @override
+  String get minutes => 'دقائق';
+
+  @override
+  String get finalLocation => 'الموقع النهائي';
+
+  @override
+  String get coordinates => 'الإحداثيات';
+
+  @override
+  String get accuracy => 'الدقة';
+
+  @override
+  String get notes => 'ملاحظات';
+
+  @override
+  String get noNotes => 'لا توجد ملاحظات';
+
+  @override
+  String get activities => 'الأنشطة';
+
+  @override
+  String get photos => 'الصور';
+
+  @override
+  String get generatedByPact => 'تم إنشاؤه بواسطة PACT Mobile';
+
+  @override
+  String get errorLoadingVisits => 'خطأ في تحميل الزيارات';
+
+  @override
+  String get errorDownloadingReport => 'خطأ في تنزيل التقرير';
+
+  @override
+  String get visitsThisMonth => 'الزيارات هذا الشهر';
+
+  @override
+  String get visitsThisYear => 'الزيارات هذه السنة';
+
+  @override
+  String get totalVisits => 'إجمالي الزيارات';
+
+  @override
+  String get viewDetails => 'عرض التفاصيل';
+
+  @override
+  String get completed => 'مكتمل';
+
+  @override
+  String get pending => 'قيد الانتظار';
+
+  @override
+  String get approved => 'موافق عليه';
+
+  @override
+  String get rejected => 'مرفوض';
+
+  @override
+  String get cancelled => 'ملغى';
+
+  @override
+  String get underReview => 'قيد المراجعة';
+
+  @override
+  String get paid => 'مدفوع';
+
+  @override
+  String get balance => 'الرصيد';
+
+  @override
+  String get earnings => 'الأرباح';
+
+  @override
+  String get withdrawals => 'السحوبات';
+
+  @override
+  String get withdrawFunds => 'سحب الأموال';
+
+  @override
+  String get requestWithdrawal => 'طلب سحب';
+
+  @override
+  String get amount => 'المبلغ';
+
+  @override
+  String get enterAmount => 'أدخل المبلغ';
+
+  @override
+  String get reason => 'السبب';
+
+  @override
+  String get enterReason => 'أدخل السبب';
+
+  @override
+  String get selectPaymentMethod => 'اختر طريقة الدفع';
+
+  @override
+  String get addPaymentMethod => 'إضافة طريقة دفع';
+
+  @override
+  String get noPaymentMethods => 'لا توجد طرق دفع';
+
+  @override
+  String get bankAccount => 'حساب بنكي';
+
+  @override
+  String get mobileMoney => 'المال المحمول';
+
+  @override
+  String get debitCard => 'بطاقة الخصم/الائتمان';
+
+  @override
+  String get accountNumber => 'رقم الحساب';
+
+  @override
+  String get bankName => 'اسم البنك';
+
+  @override
+  String get phoneNumberForMoney => 'رقم الهاتف';
+
+  @override
+  String get providerName => 'اسم المزود';
+
+  @override
+  String get cardholderName => 'اسم حامل البطاقة';
+
+  @override
+  String get cardNumber => 'رقم البطاقة';
+
+  @override
+  String get setAsDefault => 'تعيين كافتراضي';
+
+  @override
+  String get defaultPayment => 'افتراضي';
+
+  @override
+  String get remove => 'إزالة';
+
+  @override
+  String get unknown => 'غير معروف';
+
+  @override
+  String get confirmDelete => 'تأكيد الحذف';
+
+  @override
+  String get areYouSure => 'هل أنت متأكد؟';
+
+  @override
+  String get delete => 'حذف';
+
+  @override
+  String get save => 'حفظ';
+
+  @override
+  String get edit => 'تعديل';
+
+  @override
+  String get search => 'بحث';
+
+  @override
+  String get filter => 'تصفية';
+
+  @override
+  String get sort => 'ترتيب';
+
+  @override
+  String get loading => 'جاري التحميل...';
+
+  @override
+  String get retry => 'إعادة المحاولة';
+
+  @override
+  String get error => 'خطأ';
+
+  @override
+  String get success => 'نجاح';
+
+  @override
+  String get warning => 'تحذير';
+
+  @override
+  String get info => 'معلومات';
+
+  @override
+  String get ok => 'حسناً';
+
+  @override
+  String get yes => 'نعم';
+
+  @override
+  String get no => 'لا';
+
+  @override
+  String get confirm => 'تأكيد';
+
+  @override
+  String get back => 'رجوع';
+
+  @override
+  String get done => 'تم';
+
+  @override
+  String get continueText => 'متابعة';
+
+  @override
+  String get skip => 'تخطي';
+
+  @override
+  String get siteCode => 'رمز الموقع';
+
+  @override
+  String get siteName => 'اسم الموقع';
+
+  @override
+  String get village => 'القرية';
+
+  @override
+  String get district => 'المنطقة';
+
+  @override
+  String get region => 'الإقليم';
+
+  @override
+  String get household => 'الأسرة';
+
+  @override
+  String get mmpCode => 'رمز MMP';
+
+  @override
+  String get startVisit => 'بدء الزيارة';
+
+  @override
+  String get continueVisit => 'متابعة الزيارة';
+
+  @override
+  String get endVisit => 'إنهاء الزيارة';
+
+  @override
+  String get gpsAccuracy => 'دقة GPS';
+
+  @override
+  String get meters => 'أمتار';
+
+  @override
+  String get requiredField => 'هذا الحقل مطلوب';
+
+  @override
+  String get invalidEmail => 'عنوان بريد إلكتروني غير صالح';
+
+  @override
+  String get passwordTooShort => 'يجب أن تكون كلمة المرور 8 أحرف على الأقل';
+
+  @override
+  String get passwordsDoNotMatch => 'كلمات المرور غير متطابقة';
 }

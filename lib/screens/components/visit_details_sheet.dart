@@ -546,13 +546,8 @@ class _VisitDetailsSheetState extends State<VisitDetailsSheet> {
                             ],
                           ),
                           const SizedBox(height: 8),
-                          if (_visit.enumeratorFee != null)
-                            _buildFeeRow('Enumerator Fee', _visit.enumeratorFee!),
-                          if (_visit.transportFee != null)
-                            _buildFeeRow('Transport Fee', _visit.transportFee!),
-                          const Divider(),
                           _buildFeeRow(
-                            'Total',
+                            'Total Payment',
                             (_visit.enumeratorFee ?? 0) + (_visit.transportFee ?? 0),
                             isBold: true,
                           ),

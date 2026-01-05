@@ -20,8 +20,11 @@ class CustomBottomNavigationBar extends StatelessWidget {
   Widget build(BuildContext context) {
     // Get screen width to calculate positions
     final screenWidth = MediaQuery.of(context).size.width;
+    // Get bottom padding for system navigation (Samsung and other Android devices)
+    final bottomPadding = MediaQuery.of(context).viewPadding.bottom;
 
     return Container(
+      padding: EdgeInsets.only(bottom: bottomPadding),
       decoration: BoxDecoration(
         color: Colors.white,
         boxShadow: [

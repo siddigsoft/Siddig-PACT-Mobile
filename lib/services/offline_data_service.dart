@@ -6,6 +6,7 @@ import 'storage_service.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/foundation.dart';
+import 'offline/offline_db.dart';
 
 /// Service for managing offline data storage and synchronization
 class OfflineDataService {
@@ -902,5 +903,17 @@ class OfflineDataService {
     }
 
     return ids;
+  }
+
+  /// Get all draft visit IDs (saved but not completed)
+  Future<Set<String>> getDraftVisitIds() async {
+    try {
+      final db = OfflineDb();
+      final drafts = db.getDraftSiteVisits();
+      return drafts.map((d) => d.siteEntryId).toSet();
+    } catch (e) {
+      debugPrint('Error getting draft visit IDs: $e');
+      return {};
+    }
   }
 }

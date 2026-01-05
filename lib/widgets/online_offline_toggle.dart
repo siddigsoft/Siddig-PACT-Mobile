@@ -93,7 +93,10 @@ class _OnlineOfflineToggleState extends ConsumerState<OnlineOfflineToggle> {
   Widget build(BuildContext context) {
     final profile = ref.watch(currentUserProfileProvider);
 
-    if (profile == null) return const SizedBox.shrink();
+    // Show loading indicator while profile loads instead of hiding
+    if (profile == null) {
+      return _buildLoadingPlaceholder();
+    }
 
     // Only show for data collectors and coordinators
     final role = (profile.role ?? '').toLowerCase();
@@ -117,6 +120,47 @@ class _OnlineOfflineToggleState extends ConsumerState<OnlineOfflineToggle> {
       case ToggleVariant.minimal:
         return _buildMinimalVariant(isOnline);
     }
+  }
+
+  /// Build a loading placeholder that matches the toggle size
+  Widget _buildLoadingPlaceholder() {
+    return Container(
+      margin: widget.mobileBottomOffset
+          ? const EdgeInsets.only(bottom: 16)
+          : EdgeInsets.zero,
+      child: Material(
+        elevation: 8,
+        borderRadius: BorderRadius.circular(28),
+        child: Container(
+          height: 56,
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(28),
+            border: Border.all(color: Colors.grey[300]!, width: 2),
+            color: Colors.grey[100],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                'Loading...',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.grey[600],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _buildUberVariant(bool isOnline) {

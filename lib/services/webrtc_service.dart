@@ -39,6 +39,10 @@ class WebRTCService {
   // Audio player for call sounds
   final AudioPlayer _audioPlayer = AudioPlayer();
 
+  // Call timeout timer (for unanswered calls)
+  Timer? _callTimeoutTimer;
+  static const Duration _callTimeoutDuration = Duration(seconds: 30);
+
   // Stream controllers for state updates
   final _callStateController = StreamController<CallState>.broadcast();
   Stream<CallState> get callStateStream => _callStateController.stream;
@@ -175,6 +179,9 @@ class WebRTCService {
         callToken: callToken,
         isAudioOnly: isAudioOnly,
       ));
+
+      // Start call timeout timer - end call if not answered within timeout
+      _startCallTimeoutTimer();
 
       return true;
     } catch (e) {
@@ -538,6 +545,13 @@ class WebRTCService {
     _callState = _callState.copyWith(status: status);
     _callStateController.add(_callState);
 
+    // Cancel call timeout timer when call is answered or ends
+    if (status == CallStatus.connected || status == CallStatus.idle || 
+        status == CallStatus.ended || status == CallStatus.rejected ||
+        status == CallStatus.busy) {
+      _cancelCallTimeoutTimer();
+    }
+
     // Handle call sounds
     if (status == CallStatus.calling && previousStatus != CallStatus.calling) {
       _playRingingSound();
@@ -549,8 +563,26 @@ class WebRTCService {
     }
   }
 
+  /// Start call timeout timer
+  void _startCallTimeoutTimer() {
+    _cancelCallTimeoutTimer();
+    _callTimeoutTimer = Timer(_callTimeoutDuration, () {
+      // If still calling/ringing after timeout, mark as unavailable and end call
+      if (_callState.status == CallStatus.calling || _callState.status == CallStatus.ringing) {
+        endCall();
+      }
+    });
+  }
+
+  /// Cancel call timeout timer
+  void _cancelCallTimeoutTimer() {
+    _callTimeoutTimer?.cancel();
+    _callTimeoutTimer = null;
+  }
+
   /// Cleanup resources
   Future<void> _cleanup() async {
+    _cancelCallTimeoutTimer();
     await _peerConnection?.close();
     _peerConnection = null;
 

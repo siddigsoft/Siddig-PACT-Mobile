@@ -880,6 +880,26 @@ class _LoginScreenState extends State<LoginScreen>
                               ],
                             ),
                           ).animate().fadeIn(duration: 600.ms, delay: 1100.ms),
+
+                          const SizedBox(height: 16),
+
+                          // Trouble Signing In Link
+                          TextButton.icon(
+                            onPressed: () => _showLoginHelpDialog(),
+                            icon: Icon(
+                              Icons.help_outline,
+                              color: Colors.grey.shade600,
+                              size: 18,
+                            ),
+                            label: Text(
+                              'Having trouble signing in?',
+                              style: GoogleFonts.poppins(
+                                color: Colors.grey.shade600,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ).animate().fadeIn(duration: 600.ms, delay: 1200.ms),
                         ],
                       ),
                     ),
@@ -890,6 +910,116 @@ class _LoginScreenState extends State<LoginScreen>
           ),
         ),
       ),
+    );
+  }
+
+  void _showLoginHelpDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.help_outline, color: AppColors.primaryOrange),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Text(
+                'Login Troubleshooting',
+                style: TextStyle(fontSize: 18),
+              ),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildHelpItem(
+                'Cannot login with correct credentials',
+                '• Check your internet connection\n'
+                '• Ensure email is typed correctly\n'
+                '• Password is case-sensitive\n'
+                '• Try resetting your password',
+              ),
+              const Divider(height: 24),
+              _buildHelpItem(
+                'Account not found',
+                '• Verify you\'re using the right email\n'
+                '• Contact your supervisor to ensure your account was created\n'
+                '• Check if you registered with a different email',
+              ),
+              const Divider(height: 24),
+              _buildHelpItem(
+                'Biometric login not working',
+                '• Ensure biometrics are enabled in phone settings\n'
+                '• Try adding fingerprint/face again\n'
+                '• Use password login as fallback',
+              ),
+              const Divider(height: 24),
+              _buildHelpItem(
+                'App keeps crashing',
+                '• Update the app to latest version\n'
+                '• Clear app cache in phone settings\n'
+                '• Restart your device',
+              ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.primaryOrange.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.email_outlined, color: AppColors.primaryOrange),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Still need help? Contact:\nkazibwe@pactorg.org',
+                        style: GoogleFonts.poppins(
+                          fontSize: 13,
+                          color: AppColors.textDark,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHelpItem(String title, String content) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: GoogleFonts.poppins(
+            fontWeight: FontWeight.w600,
+            fontSize: 14,
+            color: AppColors.textDark,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          content,
+          style: GoogleFonts.poppins(
+            fontSize: 13,
+            color: Colors.grey.shade700,
+            height: 1.4,
+          ),
+        ),
+      ],
     );
   }
 }

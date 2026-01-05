@@ -294,8 +294,8 @@ class _HelpScreenState extends State<HelpScreen> {
             _buildContactOption(
               icon: Icons.email,
               title: 'Email Support',
-              subtitle: 'support@pact-platform.com',
-              onTap: () => _launchEmail('support@pact-platform.com'),
+              subtitle: 'kazibwe@pactorg.org',
+              onTap: () => _launchEmail('kazibwe@pactorg.org'),
             ),
             const Divider(height: 24),
             _buildContactOption(
@@ -308,8 +308,8 @@ class _HelpScreenState extends State<HelpScreen> {
             _buildContactOption(
               icon: Icons.language,
               title: 'Visit Website',
-              subtitle: 'www.pact-platform.com',
-              onTap: () => _launchWebsite('https://www.pact-platform.com'),
+              subtitle: 'www.pactorg.org',
+              onTap: () => _launchWebsite('https://www.pactorg.org'),
             ),
           ],
         ),
@@ -469,7 +469,7 @@ class _HelpScreenState extends State<HelpScreen> {
     );
   }
 
-  void _submitBugReport(String steps, String errorMessage) {
+  void _submitBugReport(String steps, String errorMessage) async {
     final bugReport = BugReport(
       stepsToReproduce: steps,
       errorMessage: errorMessage,
@@ -477,14 +477,42 @@ class _HelpScreenState extends State<HelpScreen> {
       reportedAt: DateTime.now(),
     );
 
-    // TODO: Send bug report to backend
-    // For now, just show confirmation
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Bug report submitted. Thank you!'),
-        backgroundColor: Color(0xFF4CAF50),
-      ),
+    // Send bug report via email
+    final body = '''
+Bug Report - PACT Mobile
+
+Steps to Reproduce:
+${steps.isNotEmpty ? steps : 'Not provided'}
+
+Error Message:
+${errorMessage.isNotEmpty ? errorMessage : 'Not provided'}
+
+Device Info:
+${bugReport.deviceInfo}
+
+Reported At:
+${bugReport.reportedAt.toIso8601String()}
+''';
+
+    final uri = Uri(
+      scheme: 'mailto',
+      path: 'kazibwe@pactorg.org',
+      queryParameters: {
+        'subject': 'PACT Mobile Bug Report',
+        'body': body,
+      },
     );
+
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Bug report submitted. Thank you!'),
+          backgroundColor: Color(0xFF4CAF50),
+        ),
+      );
+    }
   }
 
   Future<void> _launchEmail(String email) async {

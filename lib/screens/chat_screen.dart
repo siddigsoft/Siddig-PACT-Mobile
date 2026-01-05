@@ -37,6 +37,7 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _participantsLoaded = false;
   ChatContact? _chatContact;
   String? _contactUserId;
+  RealtimeChannel? _messageChannel;
 
   @override
   void initState() {
@@ -46,10 +47,12 @@ class _ChatScreenState extends State<ChatScreen> {
     _loadParticipants();
     _loadContactInfo();
     _markMessagesAsRead();
+    _subscribeToMessages();
   }
 
   @override
   void dispose() {
+    _messageChannel?.unsubscribe();
     _messageController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -59,7 +62,7 @@ class _ChatScreenState extends State<ChatScreen> {
     final messages = await _chatService.getChatMessages(widget.chat.id);
 
     setState(() {
-      _messages = messages.reversed.toList(); // Show newest at bottom
+      _messages = messages; // Messages already ordered by created_at ascending (oldest first)
       _isLoading = false;
     });
 
@@ -67,6 +70,40 @@ class _ChatScreenState extends State<ChatScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _scrollToBottom();
     });
+  }
+
+  /// Subscribe to realtime messages for this chat
+  void _subscribeToMessages() {
+    _messageChannel = Supabase.instance.client
+        .channel('chat_messages:${widget.chat.id}')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'chat_messages',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'chat_id',
+            value: widget.chat.id,
+          ),
+          callback: (payload) {
+            final newMessage = ChatMessage.fromJson(payload.newRecord);
+            // Only add if not already in list (avoid duplicates from own sent messages)
+            if (!_messages.any((m) => m.id == newMessage.id)) {
+              setState(() {
+                _messages.add(newMessage);
+              });
+              // Scroll to bottom when new message arrives
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                _scrollToBottom();
+              });
+              // Mark as read if from other user
+              if (newMessage.senderId != _currentUserId) {
+                _markMessagesAsRead();
+              }
+            }
+          },
+        )
+        .subscribe();
   }
 
   Future<void> _loadParticipants() async {

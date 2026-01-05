@@ -238,11 +238,6 @@ class _WalletScreenState extends ConsumerState<WalletScreen> with SingleTickerPr
 
             // Payment Methods Section
             _buildPaymentMethodsSection(),
-
-            const SizedBox(height: 16),
-
-            // Help & Support Section
-            _buildHelpSection(),
           ],
         ),
       ),

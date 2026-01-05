@@ -12,9 +12,15 @@
   "@fieldOperations": {
     "description": "Title for the field operations screen"
   },
-  "tasksInArea": "مهام في منطقتك",
+  "tasksInArea": "{count} مهام في منطقتك",
   "@tasksInArea": {
-    "description": "Subtitle showing number of tasks in area"
+    "description": "Subtitle showing number of tasks in area",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "5"
+      }
+    }
   },
   "accept": "قبول",
   "@accept": {
@@ -180,10 +186,6 @@
   "@signInCaps": {
     "description": "Sign in button text in caps"
   },
-  "createAccount": "إنشاء حساب",
-  "@createAccount": {
-    "description": "Create account title"
-  },
   "createAccountCaps": "إنشاء حساب",
   "@createAccountCaps": {
     "description": "Create account button text in caps"
@@ -288,10 +290,6 @@
   "@submit": {
     "description": "Submit button text"
   },
-  "equipment": "المعدات",
-  "@equipment": {
-    "description": "Equipment screen title"
-  },
   "filterEquipment": "تصفية المعدات",
   "@filterEquipment": {
     "description": "Filter equipment bottom sheet title"
@@ -368,6 +366,10 @@
   "@incidentReport": {
     "description": "Incident report item title"
   },
+  "reportIncident": "الإبلاغ عن حادث",
+  "@reportIncident": {
+    "description": "Report incident screen title"
+  },
   "regionalHelplines": "خطوط المساعدة الإقليمية",
   "@regionalHelplines": {
     "description": "Regional helplines item title"
@@ -395,10 +397,6 @@
   "medicalEmergency": "طوارئ طبية:911",
   "@medicalEmergency": {
     "description": "Medical emergency contact"
-  },
-  "chat": "الدردشة",
-  "@chat": {
-    "description": "Chat screen title"
   },
   "hiHowCanIHelp": "مرحباً! كيف يمكنني مساعدتك اليوم؟",
   "@hiHowCanIHelp": {
@@ -435,5 +433,617 @@
   "typeAMessage": "اكتب رسالة...",
   "@typeAMessage": {
     "description": "Message input hint text"
+  },
+  "wallet": "المحفظة",
+  "@wallet": {
+    "description": "Wallet navigation tab"
+  },
+  "helpAndSupport": "المساعدة والدعم",
+  "@helpAndSupport": {
+    "description": "Help and support menu item"
+  },
+  "sendFeedback": "إرسال ملاحظات",
+  "@sendFeedback": {
+    "description": "Send feedback menu item"
+  },
+  "aboutPact": "عن باكت",
+  "@aboutPact": {
+    "description": "About PACT menu item"
+  },
+  "syncData": "مزامنة البيانات",
+  "@syncData": {
+    "description": "Sync data menu item"
+  },
+  "signOut": "تسجيل الخروج",
+  "@signOut": {
+    "description": "Sign out button text"
+  },
+  "draft": "مسودة",
+  "@draft": {
+    "description": "Draft status label"
+  },
+  "complete": "إكمال",
+  "@complete": {
+    "description": "Complete button text"
+  },
+  "saveAsDraft": "حفظ كمسودة",
+  "@saveAsDraft": {
+    "description": "Save as draft button"
+  },
+  "submitNow": "إرسال الآن",
+  "@submitNow": {
+    "description": "Submit now button"
+  },
+  "pendingSync": "في انتظار المزامنة",
+  "@pendingSync": {
+    "description": "Pending sync status"
+  },
+  "synced": "تمت المزامنة",
+  "@synced": {
+    "description": "Synced status"
+  },
+  "offline": "غير متصل",
+  "@offline": {
+    "description": "Offline status"
+  },
+  "online": "متصل",
+  "@online": {
+    "description": "Online status"
+  },
+  "offlineMode": "وضع عدم الاتصال",
+  "@offlineMode": {
+    "description": "Offline mode label"
+  },
+  "siteVisit": "زيارة الموقع",
+  "@siteVisit": {
+    "description": "Site visit label"
+  },
+  "siteVisitHub": "مركز زيارة المواقع",
+  "@siteVisitHub": {
+    "description": "Site visit hub title"
+  },
+  "completedSites": "المواقع المكتملة",
+  "@completedSites": {
+    "description": "Completed sites counter label"
+  },
+  "pendingPayments": "المدفوعات المعلقة",
+  "@pendingPayments": {
+    "description": "Pending payments label"
+  },
+  "totalEarnings": "إجمالي الأرباح",
+  "@totalEarnings": {
+    "description": "Total earnings label"
+  },
+  "paymentMethods": "طرق الدفع",
+  "@paymentMethods": {
+    "description": "Payment methods section"
+  },
+  "costSubmissions": "تقديم التكاليف",
+  "@costSubmissions": {
+    "description": "Cost submissions tab"
+  },
+  "transactions": "المعاملات",
+  "@transactions": {
+    "description": "Transactions tab"
+  },
+  "havingTroubleSigningIn": "هل تواجه مشكلة في تسجيل الدخول؟",
+  "@havingTroubleSigningIn": {
+    "description": "Login help link"
+  },
+  "loginTroubleshooting": "حل مشاكل تسجيل الدخول",
+  "@loginTroubleshooting": {
+    "description": "Login troubleshooting dialog title"
+  },
+  "contactSupport": "اتصل بالدعم",
+  "@contactSupport": {
+    "description": "Contact support section"
+  },
+  "reportBug": "الإبلاغ عن خطأ",
+  "@reportBug": {
+    "description": "Report bug option"
+  },
+  "commonErrors": "الأخطاء الشائعة",
+  "@commonErrors": {
+    "description": "Common errors section"
+  },
+  "searchHelp": "البحث في المساعدة...",
+  "@searchHelp": {
+    "description": "Help search placeholder"
+  },
+  "noResultsFound": "لم يتم العثور على نتائج",
+  "@noResultsFound": {
+    "description": "No search results message"
+  },
+  "getHelpAndFindAnswers": "احصل على المساعدة وإجابات",
+  "@getHelpAndFindAnswers": {
+    "description": "Help subtitle"
+  },
+  "shareYourThoughts": "شاركنا رأيك",
+  "@shareYourThoughts": {
+    "description": "Feedback subtitle"
+  },
+  "learnMoreAboutUs": "تعرف علينا أكثر",
+  "@learnMoreAboutUs": {
+    "description": "About PACT subtitle"
+  },
+  "updateLocalData": "تحديث البيانات المحلية",
+  "@updateLocalData": {
+    "description": "Sync data subtitle"
+  },
+  "pactDashboard": "لوحة تحكم باكت",
+  "@pactDashboard": {
+    "description": "PACT Dashboard menu item"
+  },
+  "viewOnWeb": "عرض على الويب",
+  "@viewOnWeb": {
+    "description": "PACT Dashboard subtitle"
+  },
+  "version": "الإصدار",
+  "@version": {
+    "description": "Version label"
+  },
+  "build": "البناء",
+  "@build": {
+    "description": "Build label"
+  },
+  "voiceCall": "مكالمة صوتية",
+  "@voiceCall": {
+    "description": "Voice call button"
+  },
+  "videoCall": "مكالمة فيديو",
+  "@videoCall": {
+    "description": "Video call button"
+  },
+  "endCall": "إنهاء المكالمة",
+  "@endCall": {
+    "description": "End call button"
+  },
+  "incomingCall": "مكالمة واردة",
+  "@incomingCall": {
+    "description": "Incoming call notification"
+  },
+  "calling": "جاري الاتصال...",
+  "@calling": {
+    "description": "Calling status"
+  },
+  "ringing": "جاري الرنين...",
+  "@ringing": {
+    "description": "Ringing status"
+  },
+  "connected": "متصل",
+  "@connected": {
+    "description": "Call connected status"
+  },
+  "callEnded": "انتهت المكالمة",
+  "@callEnded": {
+    "description": "Call ended status"
+  },
+  "mute": "كتم",
+  "@mute": {
+    "description": "Mute button"
+  },
+  "unmute": "إلغاء الكتم",
+  "@unmute": {
+    "description": "Unmute button"
+  },
+  "speaker": "مكبر الصوت",
+  "@speaker": {
+    "description": "Speaker button"
+  },
+  "camera": "الكاميرا",
+  "@camera": {
+    "description": "Camera button"
+  },
+  "notifications": "الإشعارات",
+  "@notifications": {
+    "description": "Notifications screen title"
+  },
+  "markAllAsRead": "تحديد الكل كمقروء",
+  "@markAllAsRead": {
+    "description": "Mark all notifications as read"
+  },
+  "noNotifications": "لا توجد إشعارات",
+  "@noNotifications": {
+    "description": "No notifications message"
+  },
+  "today": "اليوم",
+  "@today": {
+    "description": "Today label"
+  },
+  "yesterday": "أمس",
+  "@yesterday": {
+    "description": "Yesterday label"
+  },
+  "earlier": "سابقاً",
+  "@earlier": {
+    "description": "Earlier label"
+  },
+  "reports": "التقارير",
+  "@reports": {
+    "description": "Reports screen title"
+  },
+  "visitReports": "تقارير الزيارات",
+  "@visitReports": {
+    "description": "Visit reports section"
+  },
+  "filterByDate": "تصفية حسب التاريخ",
+  "@filterByDate": {
+    "description": "Filter by date option"
+  },
+  "filterByMonth": "تصفية حسب الشهر",
+  "@filterByMonth": {
+    "description": "Filter by month option"
+  },
+  "filterByYear": "تصفية حسب السنة",
+  "@filterByYear": {
+    "description": "Filter by year option"
+  },
+  "date": "التاريخ",
+  "@date": {
+    "description": "Date label"
+  },
+  "month": "الشهر",
+  "@month": {
+    "description": "Month label"
+  },
+  "year": "السنة",
+  "@year": {
+    "description": "Year label"
+  },
+  "noReportsFound": "لم يتم العثور على تقارير",
+  "@noReportsFound": {
+    "description": "No reports message"
+  },
+  "downloadReport": "تنزيل التقرير",
+  "@downloadReport": {
+    "description": "Download report button"
+  },
+  "shareReport": "مشاركة التقرير",
+  "@shareReport": {
+    "description": "Share report button"
+  },
+  "duration": "المدة",
+  "@duration": {
+    "description": "Duration label"
+  },
+  "minutes": "دقائق",
+  "@minutes": {
+    "description": "Minutes unit"
+  },
+  "finalLocation": "الموقع النهائي",
+  "@finalLocation": {
+    "description": "Final location label"
+  },
+  "coordinates": "الإحداثيات",
+  "@coordinates": {
+    "description": "Coordinates label"
+  },
+  "accuracy": "الدقة",
+  "@accuracy": {
+    "description": "Accuracy label"
+  },
+  "notes": "ملاحظات",
+  "@notes": {
+    "description": "Notes label"
+  },
+  "noNotes": "لا توجد ملاحظات",
+  "@noNotes": {
+    "description": "No notes message"
+  },
+  "activities": "الأنشطة",
+  "@activities": {
+    "description": "Activities label"
+  },
+  "photos": "الصور",
+  "@photos": {
+    "description": "Photos label"
+  },
+  "generatedByPact": "تم إنشاؤه بواسطة PACT Mobile",
+  "@generatedByPact": {
+    "description": "Report footer"
+  },
+  "errorLoadingVisits": "خطأ في تحميل الزيارات",
+  "@errorLoadingVisits": {
+    "description": "Error loading visits message"
+  },
+  "errorDownloadingReport": "خطأ في تنزيل التقرير",
+  "@errorDownloadingReport": {
+    "description": "Error downloading report message"
+  },
+  "visitsThisMonth": "الزيارات هذا الشهر",
+  "@visitsThisMonth": {
+    "description": "Visits this month summary"
+  },
+  "visitsThisYear": "الزيارات هذه السنة",
+  "@visitsThisYear": {
+    "description": "Visits this year summary"
+  },
+  "totalVisits": "إجمالي الزيارات",
+  "@totalVisits": {
+    "description": "Total visits summary"
+  },
+  "viewDetails": "عرض التفاصيل",
+  "@viewDetails": {
+    "description": "View details button"
+  },
+  "completed": "مكتمل",
+  "@completed": {
+    "description": "Completed status"
+  },
+  "pending": "قيد الانتظار",
+  "@pending": {
+    "description": "Pending status"
+  },
+  "approved": "موافق عليه",
+  "@approved": {
+    "description": "Approved status"
+  },
+  "rejected": "مرفوض",
+  "@rejected": {
+    "description": "Rejected status"
+  },
+  "cancelled": "ملغى",
+  "@cancelled": {
+    "description": "Cancelled status"
+  },
+  "underReview": "قيد المراجعة",
+  "@underReview": {
+    "description": "Under review status"
+  },
+  "paid": "مدفوع",
+  "@paid": {
+    "description": "Paid status"
+  },
+  "balance": "الرصيد",
+  "@balance": {
+    "description": "Balance label"
+  },
+  "earnings": "الأرباح",
+  "@earnings": {
+    "description": "Earnings label"
+  },
+  "withdrawals": "السحوبات",
+  "@withdrawals": {
+    "description": "Withdrawals label"
+  },
+  "withdrawFunds": "سحب الأموال",
+  "@withdrawFunds": {
+    "description": "Withdraw funds button"
+  },
+  "requestWithdrawal": "طلب سحب",
+  "@requestWithdrawal": {
+    "description": "Request withdrawal button"
+  },
+  "amount": "المبلغ",
+  "@amount": {
+    "description": "Amount label"
+  },
+  "enterAmount": "أدخل المبلغ",
+  "@enterAmount": {
+    "description": "Enter amount hint"
+  },
+  "reason": "السبب",
+  "@reason": {
+    "description": "Reason label"
+  },
+  "enterReason": "أدخل السبب",
+  "@enterReason": {
+    "description": "Enter reason hint"
+  },
+  "selectPaymentMethod": "اختر طريقة الدفع",
+  "@selectPaymentMethod": {
+    "description": "Select payment method prompt"
+  },
+  "addPaymentMethod": "إضافة طريقة دفع",
+  "@addPaymentMethod": {
+    "description": "Add payment method button"
+  },
+  "noPaymentMethods": "لا توجد طرق دفع",
+  "@noPaymentMethods": {
+    "description": "No payment methods message"
+  },
+  "bankAccount": "حساب بنكي",
+  "@bankAccount": {
+    "description": "Bank account option"
+  },
+  "mobileMoney": "المال المحمول",
+  "@mobileMoney": {
+    "description": "Mobile money option"
+  },
+  "debitCard": "بطاقة الخصم/الائتمان",
+  "@debitCard": {
+    "description": "Debit card option"
+  },
+  "accountNumber": "رقم الحساب",
+  "@accountNumber": {
+    "description": "Account number label"
+  },
+  "bankName": "اسم البنك",
+  "@bankName": {
+    "description": "Bank name label"
+  },
+  "phoneNumberForMoney": "رقم الهاتف",
+  "@phoneNumberForMoney": {
+    "description": "Phone number for mobile money"
+  },
+  "providerName": "اسم المزود",
+  "@providerName": {
+    "description": "Provider name label"
+  },
+  "cardholderName": "اسم حامل البطاقة",
+  "@cardholderName": {
+    "description": "Cardholder name label"
+  },
+  "cardNumber": "رقم البطاقة",
+  "@cardNumber": {
+    "description": "Card number label"
+  },
+  "setAsDefault": "تعيين كافتراضي",
+  "@setAsDefault": {
+    "description": "Set as default button"
+  },
+  "defaultPayment": "افتراضي",
+  "@defaultPayment": {
+    "description": "Default payment indicator"
+  },
+  "remove": "إزالة",
+  "@remove": {
+    "description": "Remove button"
+  },
+  "unknown": "غير معروف",
+  "@unknown": {
+    "description": "Unknown label"
+  },
+  "confirmDelete": "تأكيد الحذف",
+  "@confirmDelete": {
+    "description": "Confirm delete dialog title"
+  },
+  "areYouSure": "هل أنت متأكد؟",
+  "@areYouSure": {
+    "description": "Are you sure prompt"
+  },
+  "delete": "حذف",
+  "@delete": {
+    "description": "Delete button"
+  },
+  "save": "حفظ",
+  "@save": {
+    "description": "Save button"
+  },
+  "edit": "تعديل",
+  "@edit": {
+    "description": "Edit button"
+  },
+  "search": "بحث",
+  "@search": {
+    "description": "Search button/label"
+  },
+  "filter": "تصفية",
+  "@filter": {
+    "description": "Filter button"
+  },
+  "sort": "ترتيب",
+  "@sort": {
+    "description": "Sort button"
+  },
+  "loading": "جاري التحميل...",
+  "@loading": {
+    "description": "Loading message"
+  },
+  "retry": "إعادة المحاولة",
+  "@retry": {
+    "description": "Retry button"
+  },
+  "error": "خطأ",
+  "@error": {
+    "description": "Error label"
+  },
+  "success": "نجاح",
+  "@success": {
+    "description": "Success label"
+  },
+  "warning": "تحذير",
+  "@warning": {
+    "description": "Warning label"
+  },
+  "info": "معلومات",
+  "@info": {
+    "description": "Info label"
+  },
+  "ok": "حسناً",
+  "@ok": {
+    "description": "OK button"
+  },
+  "yes": "نعم",
+  "@yes": {
+    "description": "Yes button"
+  },
+  "no": "لا",
+  "@no": {
+    "description": "No button"
+  },
+  "confirm": "تأكيد",
+  "@confirm": {
+    "description": "Confirm button"
+  },
+  "back": "رجوع",
+  "@back": {
+    "description": "Back button"
+  },
+  "done": "تم",
+  "@done": {
+    "description": "Done button"
+  },
+  "continueText": "متابعة",
+  "@continueText": {
+    "description": "Continue button"
+  },
+  "skip": "تخطي",
+  "@skip": {
+    "description": "Skip button"
+  },
+  "siteCode": "رمز الموقع",
+  "@siteCode": {
+    "description": "Site code label"
+  },
+  "siteName": "اسم الموقع",
+  "@siteName": {
+    "description": "Site name label"
+  },
+  "village": "القرية",
+  "@village": {
+    "description": "Village label"
+  },
+  "district": "المنطقة",
+  "@district": {
+    "description": "District label"
+  },
+  "region": "الإقليم",
+  "@region": {
+    "description": "Region label"
+  },
+  "household": "الأسرة",
+  "@household": {
+    "description": "Household label"
+  },
+  "mmpCode": "رمز MMP",
+  "@mmpCode": {
+    "description": "MMP code label"
+  },
+  "startVisit": "بدء الزيارة",
+  "@startVisit": {
+    "description": "Start visit button"
+  },
+  "continueVisit": "متابعة الزيارة",
+  "@continueVisit": {
+    "description": "Continue visit button"
+  },
+  "endVisit": "إنهاء الزيارة",
+  "@endVisit": {
+    "description": "End visit button"
+  },
+  "gpsAccuracy": "دقة GPS",
+  "@gpsAccuracy": {
+    "description": "GPS accuracy label"
+  },
+  "meters": "أمتار",
+  "@meters": {
+    "description": "Meters unit"
+  },
+  "requiredField": "هذا الحقل مطلوب",
+  "@requiredField": {
+    "description": "Required field validation message"
+  },
+  "invalidEmail": "عنوان بريد إلكتروني غير صالح",
+  "@invalidEmail": {
+    "description": "Invalid email validation message"
+  },
+  "passwordTooShort": "يجب أن تكون كلمة المرور 8 أحرف على الأقل",
+  "@passwordTooShort": {
+    "description": "Password too short validation message"
+  },
+  "passwordsDoNotMatch": "كلمات المرور غير متطابقة",
+  "@passwordsDoNotMatch": {
+    "description": "Passwords do not match validation message"
   }
 }

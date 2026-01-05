@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import '../services/auth_service.dart';
 import '../providers/sync_provider.dart';
 import '../providers/profile_provider.dart';
@@ -11,6 +12,7 @@ import '../theme/app_colors.dart';
 import '../widgets/app_widgets.dart';
 import '../utils/error_handler.dart';
 import '../screens/profile_screen.dart';
+import '../screens/help_screen.dart';
 
 class CustomDrawerMenu extends ConsumerStatefulWidget {
   final User? currentUser;
@@ -28,16 +30,33 @@ class CustomDrawerMenu extends ConsumerStatefulWidget {
 
 class _CustomDrawerMenuState extends ConsumerState<CustomDrawerMenu> {
   String _userRole = 'Loading...';
+  String _appVersion = '';
+  String _buildNumber = '';
 
   @override
   void initState() {
     super.initState();
     _userRole = widget.currentUser?.userMetadata?['role'] ?? 'User';
     _fetchUserRole();
+    _fetchAppVersion();
     // Load profile data
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(profileProvider.notifier).loadProfile();
     });
+  }
+
+  Future<void> _fetchAppVersion() async {
+    try {
+      final packageInfo = await PackageInfo.fromPlatform();
+      if (mounted) {
+        setState(() {
+          _appVersion = packageInfo.version;
+          _buildNumber = packageInfo.buildNumber;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error fetching app version: $e');
+    }
   }
 
   Future<void> _fetchUserRole() async {
@@ -92,7 +111,7 @@ class _CustomDrawerMenuState extends ConsumerState<CustomDrawerMenu> {
   Future<void> _launchPactDashboard(BuildContext context) async {
     await _launchUrl(
       context,
-      'https://pact-dashboard-831y.vercel.app/',
+      'https://app.pactorg.com/',
       'Unable to open PACT Dashboard. Please check your internet connection.',
     );
   }
@@ -100,7 +119,7 @@ class _CustomDrawerMenuState extends ConsumerState<CustomDrawerMenu> {
   Future<void> _sendFeedback(BuildContext context) async {
     final Uri emailLaunchUri = Uri(
       scheme: 'mailto',
-      path: 'francis.b.kaz@gmail.com',
+      path: 'kazibwe@pactorg.org',
       queryParameters: {
         'subject': 'PACT Mobile App Feedback',
         'body':
@@ -375,8 +394,23 @@ class _CustomDrawerMenuState extends ConsumerState<CustomDrawerMenu> {
                       _MenuItemData(
                         icon: Icons.help_rounded,
                         title: 'Help & Support',
-                        subtitle: 'Send us feedback',
+                        subtitle: 'Get help and find answers',
                         iconColor: Colors.purple,
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const HelpScreen(),
+                            ),
+                          );
+                          widget.onClose();
+                        },
+                      ),
+                      _MenuItemData(
+                        icon: Icons.feedback_rounded,
+                        title: 'Send Feedback',
+                        subtitle: 'Share your thoughts',
+                        iconColor: Colors.teal,
                         onTap: () async {
                           await _sendFeedback(context);
                           widget.onClose();
@@ -470,12 +504,27 @@ class _CustomDrawerMenuState extends ConsumerState<CustomDrawerMenu> {
             // App Version
             Padding(
               padding: const EdgeInsets.only(bottom: 16),
-              child: Text(
-                'PACT Mobile v1.0.0',
-                style: TextStyle(
-                  color: Colors.grey.shade500,
-                  fontSize: 12,
-                ),
+              child: Column(
+                children: [
+                  Text(
+                    _appVersion.isNotEmpty 
+                        ? 'PACT Mobile v$_appVersion' 
+                        : 'PACT Mobile',
+                    style: TextStyle(
+                      color: Colors.grey.shade500,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  if (_buildNumber.isNotEmpty)
+                    Text(
+                      'Build $_buildNumber',
+                      style: TextStyle(
+                        color: Colors.grey.shade400,
+                        fontSize: 10,
+                      ),
+                    ),
+                ],
               ),
             ),
           ],

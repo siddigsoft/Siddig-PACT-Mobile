@@ -63,6 +63,31 @@ class HelpService {
       meaning: 'Unable to synchronize your local data with the server',
       solution: 'Check your internet connection. Your data is saved locally and will sync automatically when connection is restored',
     ),
+    'draft_not_found': ErrorMessage(
+      error: 'Draft Not Found',
+      meaning: 'The saved draft could not be loaded',
+      solution: 'The draft may have been corrupted. Check your offline queue or create a new entry',
+    ),
+    'submission_queued': ErrorMessage(
+      error: 'Submission Queued',
+      meaning: 'Your submission is waiting to be sent (offline mode)',
+      solution: 'This is not an error. Your data will be submitted automatically when internet is available',
+    ),
+    'biometric_failed': ErrorMessage(
+      error: 'Biometric Authentication Failed',
+      meaning: 'Fingerprint or face recognition was not recognized',
+      solution: 'Try again or use your password. Ensure finger is clean and properly placed. You may need to re-register biometrics in device settings',
+    ),
+    'call_failed': ErrorMessage(
+      error: 'Call Failed',
+      meaning: 'Unable to connect the voice or video call',
+      solution: 'Check your internet connection. Ensure microphone/camera permissions are granted. Try calling again',
+    ),
+    'chat_message_failed': ErrorMessage(
+      error: 'Message Not Sent',
+      meaning: 'Your chat message could not be delivered',
+      solution: 'Check your internet connection and try sending again. Messages require an active connection',
+    ),
   };
 
   /// Help categories with articles
@@ -321,6 +346,7 @@ What Works Offline:
 - Take photos
 - Record GPS coordinates
 - View existing data
+- Save work as draft
 
 What Syncs Later:
 - All offline data syncs automatically when connection restored
@@ -334,6 +360,61 @@ Best Practices:
 - Ensure sufficient device storage
 ''',
           tags: ['offline', 'sync', 'field operations'],
+        ),
+        HelpArticle(
+          id: 'draft_vs_complete',
+          title: 'Draft vs Complete Submission',
+          content: '''
+Understanding draft and complete modes:
+
+DRAFT MODE (Save as Draft):
+- Saves your work locally
+- Shows orange "Draft" badge on site tile
+- Can continue editing anytime
+- Does NOT submit to server
+- Use when: No internet, need more info, taking break
+
+COMPLETE MODE (Submit Now):
+- Submits directly to server when online
+- If offline, queues for submission
+- Shows pending sync indicator
+- Cannot edit after successful submission
+- Use when: All data is ready and verified
+
+OFFLINE QUEUE:
+- If you tap "Complete" while offline
+- Entry is queued for submission
+- Auto-submits when online
+- Check sync status in site details
+''',
+          tags: ['draft', 'complete', 'offline', 'submission'],
+        ),
+        HelpArticle(
+          id: 'site_visits',
+          title: 'Recording Site Visits',
+          content: '''
+How to record a site visit:
+
+1. Go to Field Operations > Site Visit Hub
+2. Select a site from your assignments
+3. Tap "Start Visit" or "Continue Visit"
+4. Fill in required information:
+   - MMP Code
+   - Household details
+   - Equipment readings
+   - Safety assessment
+   - Photos/evidence
+5. Choose action:
+   - "Save as Draft" - Save locally for later
+   - "Complete" - Submit for processing
+
+Tips:
+- GPS is captured automatically
+- Take clear photos of equipment
+- Answer all required fields (marked with *)
+- Review before completing
+''',
+          tags: ['site visit', 'mmp', 'field operations'],
         ),
       ],
     ),
@@ -524,6 +605,63 @@ Notification Types:
 - Email: Email notifications
 ''',
           tags: ['notifications', 'settings'],
+        ),
+      ],
+    ),
+    HelpCategory(
+      id: 'communication',
+      title: 'Communication',
+      description: 'Chat, calls, and messaging features',
+      articles: [
+        HelpArticle(
+          id: 'using_chat',
+          title: 'Using the Chat Feature',
+          content: '''
+Communicating with team members:
+
+1. Go to Chat from the bottom navigation
+2. View your conversations
+3. Tap a conversation to open it
+4. Type your message and tap send
+
+Features:
+- Real-time messaging
+- Messages appear in chronological order
+- New messages appear at bottom
+- Unread message indicators
+- Group and individual chats
+
+Tips:
+- Pull down to refresh messages
+- Messages sync automatically
+- Works when online only
+''',
+          tags: ['chat', 'messaging', 'communication'],
+        ),
+        HelpArticle(
+          id: 'voice_calls',
+          title: 'Making Voice/Video Calls',
+          content: '''
+Calling team members within the app:
+
+1. Open a chat conversation
+2. Tap the phone or video icon in the header
+3. Wait for the other person to answer
+4. Tap end call button when finished
+
+Call Features:
+- Voice calls
+- Video calls
+- Mute/unmute
+- Speaker mode
+- Camera on/off
+
+Requirements:
+- Stable internet connection
+- Microphone permission
+- Camera permission (for video)
+''',
+          tags: ['calls', 'video', 'voice', 'communication'],
         ),
       ],
     ),

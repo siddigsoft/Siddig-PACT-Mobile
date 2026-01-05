@@ -177,10 +177,7 @@ class _AcceptAssignmentButtonState extends ConsumerState<AcceptAssignmentButton>
                 ),
                 child: Column(
                   children: [
-                    _buildFeeRow('Enumerator Fee', enumeratorFee),
-                    const Divider(),
-                    _buildFeeRow('Transport Budget', transportFee),
-                    const Divider(thickness: 2),
+
                     _buildFeeRow('Total Payment', totalCost, isBold: true),
                   ],
                 ),
