@@ -916,4 +916,233 @@ class OfflineDataService {
       return {};
     }
   }
+
+  // ==================== WALLET CACHING ====================
+
+  static const String _walletBox = 'wallet_cache';
+
+  /// Cache wallet data for offline access
+  Future<void> cacheWalletData(String key, Map<String, dynamic> data) async {
+    try {
+      if (!Hive.isBoxOpen(_walletBox)) {
+        await Hive.openBox(_walletBox);
+      }
+      final box = Hive.box(_walletBox);
+      await box.put(key, jsonEncode({
+        'data': data,
+        'cachedAt': DateTime.now().toIso8601String(),
+      }));
+    } catch (e) {
+      debugPrint('Error caching wallet data: $e');
+    }
+  }
+
+  /// Get cached wallet data
+  Future<Map<String, dynamic>?> getCachedWalletData(String key) async {
+    try {
+      if (!Hive.isBoxOpen(_walletBox)) {
+        await Hive.openBox(_walletBox);
+      }
+      final box = Hive.box(_walletBox);
+      final cached = box.get(key);
+      if (cached != null) {
+        final decoded = Map<String, dynamic>.from(jsonDecode(cached));
+        return Map<String, dynamic>.from(decoded['data']);
+      }
+    } catch (e) {
+      debugPrint('Error getting cached wallet data: $e');
+    }
+    return null;
+  }
+
+  // ==================== PROFILE CACHING ====================
+
+  static const String _profileBox = 'profile_cache';
+
+  /// Cache user profile for offline access
+  Future<void> cacheUserProfile(String userId, Map<String, dynamic> profile) async {
+    try {
+      if (!Hive.isBoxOpen(_profileBox)) {
+        await Hive.openBox(_profileBox);
+      }
+      final box = Hive.box(_profileBox);
+      await box.put(userId, jsonEncode({
+        'data': profile,
+        'cachedAt': DateTime.now().toIso8601String(),
+      }));
+    } catch (e) {
+      debugPrint('Error caching user profile: $e');
+    }
+  }
+
+  /// Get cached user profile
+  Future<Map<String, dynamic>?> getCachedUserProfile(String userId) async {
+    try {
+      if (!Hive.isBoxOpen(_profileBox)) {
+        await Hive.openBox(_profileBox);
+      }
+      final box = Hive.box(_profileBox);
+      final cached = box.get(userId);
+      if (cached != null) {
+        final decoded = Map<String, dynamic>.from(jsonDecode(cached));
+        return Map<String, dynamic>.from(decoded['data']);
+      }
+    } catch (e) {
+      debugPrint('Error getting cached user profile: $e');
+    }
+    return null;
+  }
+
+  // ==================== COMPLETED VISITS CACHING ====================
+
+  static const String _completedVisitsBox = 'completed_visits_cache';
+
+  /// Cache completed visits for offline access
+  Future<void> cacheCompletedVisits(String userId, List<Map<String, dynamic>> visits) async {
+    try {
+      if (!Hive.isBoxOpen(_completedVisitsBox)) {
+        await Hive.openBox(_completedVisitsBox);
+      }
+      final box = Hive.box(_completedVisitsBox);
+      await box.put(userId, jsonEncode({
+        'data': visits,
+        'cachedAt': DateTime.now().toIso8601String(),
+      }));
+    } catch (e) {
+      debugPrint('Error caching completed visits: $e');
+    }
+  }
+
+  /// Get cached completed visits
+  Future<List<Map<String, dynamic>>> getCachedCompletedVisits(String userId) async {
+    try {
+      if (!Hive.isBoxOpen(_completedVisitsBox)) {
+        await Hive.openBox(_completedVisitsBox);
+      }
+      final box = Hive.box(_completedVisitsBox);
+      final cached = box.get(userId);
+      if (cached != null) {
+        final decoded = Map<String, dynamic>.from(jsonDecode(cached));
+        final data = decoded['data'] as List;
+        return data.map((e) => Map<String, dynamic>.from(e)).toList();
+      }
+    } catch (e) {
+      debugPrint('Error getting cached completed visits: $e');
+    }
+    return [];
+  }
+
+  // ==================== WALLET STATS CACHING ====================
+
+  /// Cache wallet stats for offline access
+  Future<void> cacheWalletStats(String userId, Map<String, dynamic> stats) async {
+    try {
+      if (!Hive.isBoxOpen(_walletBox)) {
+        await Hive.openBox(_walletBox);
+      }
+      final box = Hive.box(_walletBox);
+      await box.put('stats_$userId', jsonEncode({
+        'data': stats,
+        'cachedAt': DateTime.now().toIso8601String(),
+      }));
+    } catch (e) {
+      debugPrint('Error caching wallet stats: $e');
+    }
+  }
+
+  /// Get cached wallet stats
+  Future<Map<String, dynamic>?> getCachedWalletStats(String userId) async {
+    try {
+      if (!Hive.isBoxOpen(_walletBox)) {
+        await Hive.openBox(_walletBox);
+      }
+      final box = Hive.box(_walletBox);
+      final cached = box.get('stats_$userId');
+      if (cached != null) {
+        final decoded = Map<String, dynamic>.from(jsonDecode(cached));
+        return Map<String, dynamic>.from(decoded['data']);
+      }
+    } catch (e) {
+      debugPrint('Error getting cached wallet stats: $e');
+    }
+    return null;
+  }
+
+  // ==================== REPORTS CACHING (for Reports Screen) ====================
+
+  static const String _reportsCacheBox = 'reports_cache';
+
+  /// Cache reports data for offline access (keyed by userId)
+  Future<void> cacheReports(String userId, Map<String, Map<String, dynamic>> reports) async {
+    try {
+      if (!Hive.isBoxOpen(_reportsCacheBox)) {
+        await Hive.openBox(_reportsCacheBox);
+      }
+      final box = Hive.box(_reportsCacheBox);
+      await box.put('reports_$userId', jsonEncode({
+        'data': reports,
+        'cachedAt': DateTime.now().toIso8601String(),
+      }));
+    } catch (e) {
+      debugPrint('Error caching reports: $e');
+    }
+  }
+
+  /// Get cached reports data
+  Future<Map<String, Map<String, dynamic>>?> getCachedReportsData(String userId) async {
+    try {
+      if (!Hive.isBoxOpen(_reportsCacheBox)) {
+        await Hive.openBox(_reportsCacheBox);
+      }
+      final box = Hive.box(_reportsCacheBox);
+      final cached = box.get('reports_$userId');
+      if (cached != null) {
+        final decoded = Map<String, dynamic>.from(jsonDecode(cached));
+        final data = decoded['data'] as Map<String, dynamic>;
+        return data.map((key, value) => MapEntry(key, Map<String, dynamic>.from(value)));
+      }
+    } catch (e) {
+      debugPrint('Error getting cached reports: $e');
+    }
+    return null;
+  }
+
+  // ==================== SITE LOCATIONS CACHING ====================
+
+  static const String _siteLocationsCacheBox = 'site_locations_cache';
+
+  /// Cache site locations for offline access
+  Future<void> cacheSiteLocations(String userId, Map<String, Map<String, dynamic>> locations) async {
+    try {
+      if (!Hive.isBoxOpen(_siteLocationsCacheBox)) {
+        await Hive.openBox(_siteLocationsCacheBox);
+      }
+      final box = Hive.box(_siteLocationsCacheBox);
+      await box.put('locations_$userId', jsonEncode({
+        'data': locations,
+        'cachedAt': DateTime.now().toIso8601String(),
+      }));
+    } catch (e) {
+      debugPrint('Error caching site locations: $e');
+    }
+  }
+
+  /// Get cached site locations
+  Future<Map<String, Map<String, dynamic>>?> getCachedSiteLocations(String userId) async {
+    try {
+      if (!Hive.isBoxOpen(_siteLocationsCacheBox)) {
+        await Hive.openBox(_siteLocationsCacheBox);
+      }
+      final box = Hive.box(_siteLocationsCacheBox);
+      final cached = box.get('locations_$userId');
+      if (cached != null) {
+        final decoded = Map<String, dynamic>.from(jsonDecode(cached));
+        final data = decoded['data'] as Map<String, dynamic>;
+        return data.map((key, value) => MapEntry(key, Map<String, dynamic>.from(value)));
+      }
+    } catch (e) {
+      debugPrint('Error getting cached site locations: $e');
+    }
+    return null;
+  }
 }

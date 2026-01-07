@@ -10,6 +10,7 @@ import 'safety_hub_screen.dart';
 import 'chat_list_screen.dart';
 import 'reports_screen.dart';
 import 'wallet_screen.dart';
+import 'site_verification_screen.dart';
 import '../widgets/online_offline_toggle.dart';
 import '../widgets/network_status_indicator.dart';
 import '../widgets/movable_online_offline_toggle.dart';
@@ -28,10 +29,13 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   int _currentIndex = 0;
   StreamSubscription<CallState>? _callStateSubscription;
+  bool _isCoordinator = false;
+  bool _isLoadingRole = true;
 
   @override
   void initState() {
     super.initState();
+    _checkUserRole();
     _initializeWebRTC();
   }
 
@@ -39,6 +43,38 @@ class _MainScreenState extends State<MainScreen> {
   void dispose() {
     _callStateSubscription?.cancel();
     super.dispose();
+  }
+
+  Future<void> _checkUserRole() async {
+    try {
+      final user = Supabase.instance.client.auth.currentUser;
+      if (user == null) {
+        setState(() => _isLoadingRole = false);
+        return;
+      }
+
+      final response = await Supabase.instance.client
+          .from('profiles')
+          .select('role')
+          .eq('id', user.id)
+          .maybeSingle();
+
+      if (response != null && mounted) {
+        final role = (response['role'] as String?)?.toLowerCase() ?? '';
+        setState(() {
+          _isCoordinator = role == 'coordinator' || 
+                           role == 'field_coordinator' ||
+                           role == 'state_coordinator';
+          _isLoadingRole = false;
+        });
+        debugPrint('✅ User role: $role, isCoordinator: $_isCoordinator');
+      } else {
+        setState(() => _isLoadingRole = false);
+      }
+    } catch (e) {
+      debugPrint('❌ Error checking user role: $e');
+      setState(() => _isLoadingRole = false);
+    }
   }
 
   Future<void> _initializeWebRTC() async {
@@ -99,7 +135,8 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   void _onItemTapped(int index) {
-    if (index >= 0 && index < 5) {
+    final maxIndex = _isCoordinator ? 5 : 4;
+    if (index >= 0 && index <= maxIndex) {
       setState(() {
         _currentIndex = index;
       });
@@ -108,16 +145,19 @@ class _MainScreenState extends State<MainScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Get safe area padding to position banner below status bar and app bar
+    final topPadding = MediaQuery.of(context).padding.top;
+    
     return Scaffold(
       body: Stack(
         children: [
           _buildCurrentScreen(),
-          // Offline mode banner at top
-          const Positioned(
-            top: 0,
+          // Offline mode banner - positioned below status bar and app bar area
+          Positioned(
+            top: topPadding + 56, // Below status bar + approximate app bar height
             left: 0,
             right: 0,
-            child: OfflineModeBanner(),
+            child: const OfflineModeBanner(),
           ),
           // Movable Online/Offline toggle (only for data collectors)
           MovableOnlineOfflineToggle(
@@ -128,6 +168,7 @@ class _MainScreenState extends State<MainScreen> {
       bottomNavigationBar: CustomBottomNavigationBar(
         currentIndex: _currentIndex,
         onTap: _onItemTapped,
+        isCoordinator: _isCoordinator,
       ),
     );
   }
@@ -144,6 +185,12 @@ class _MainScreenState extends State<MainScreen> {
         return const ChatListScreen(key: ValueKey('chat'));
       case 4:
         return const WalletScreen(key: ValueKey('wallet'));
+      case 5:
+        // Only accessible for coordinators
+        if (_isCoordinator) {
+          return const SiteVerificationScreen(key: ValueKey('verification'));
+        }
+        return const FieldOperationsEnhancedScreen(key: ValueKey('home'));
       default:
         return const FieldOperationsEnhancedScreen(key: ValueKey('home'));
     }

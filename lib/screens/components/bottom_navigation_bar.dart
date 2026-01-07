@@ -9,11 +9,13 @@ import '../../l10n/app_localizations.dart';
 class CustomBottomNavigationBar extends StatelessWidget {
   final int currentIndex;
   final Function(int) onTap;
+  final bool isCoordinator;
 
   const CustomBottomNavigationBar({
     super.key,
     required this.currentIndex,
     required this.onTap,
+    this.isCoordinator = false,
   });
 
   @override
@@ -22,6 +24,9 @@ class CustomBottomNavigationBar extends StatelessWidget {
     final screenWidth = MediaQuery.of(context).size.width;
     // Get bottom padding for system navigation (Samsung and other Android devices)
     final bottomPadding = MediaQuery.of(context).viewPadding.bottom;
+    
+    // Calculate number of items based on role
+    final itemCount = isCoordinator ? 6 : 5;
 
     return Container(
       padding: EdgeInsets.only(bottom: bottomPadding),
@@ -46,7 +51,7 @@ class CustomBottomNavigationBar extends StatelessWidget {
           AnimatedPositioned(
             duration: const Duration(milliseconds: 300),
             curve: Curves.easeInOut,
-            left: (screenWidth / 5) * currentIndex + (screenWidth / 10) - 24,
+            left: (screenWidth / itemCount) * currentIndex + (screenWidth / (itemCount * 2)) - 24,
             top: 8,
             child: Container(
               width: 48,
@@ -72,22 +77,30 @@ class CustomBottomNavigationBar extends StatelessWidget {
               width: double.infinity,
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  _buildNavItem(0, AppLocalizations.of(context)!.home,
-                      Icons.home_outlined),
-                  _buildNavItem(1, 'Reports', Icons.bar_chart_outlined),
-                  _buildNavItem(2, AppLocalizations.of(context)!.safety,
-                      Icons.shield_outlined),
-                  _buildNavItem(3, AppLocalizations.of(context)!.chat,
-                      Icons.chat_bubble_outline),
-                  _buildNavItem(4, 'Wallet', Icons.wallet_giftcard),
-                ],
+                children: _buildNavItems(context),
               ),
             ),
           ),
         ],
       ),
     );
+  }
+  
+  List<Widget> _buildNavItems(BuildContext context) {
+    final items = <Widget>[
+      _buildNavItem(0, AppLocalizations.of(context)!.home, Icons.home_outlined),
+      _buildNavItem(1, 'Reports', Icons.bar_chart_outlined),
+      _buildNavItem(2, AppLocalizations.of(context)!.safety, Icons.shield_outlined),
+      _buildNavItem(3, AppLocalizations.of(context)!.chat, Icons.chat_bubble_outline),
+      _buildNavItem(4, 'Wallet', Icons.wallet_giftcard),
+    ];
+    
+    // Add verification tab for coordinators
+    if (isCoordinator) {
+      items.add(_buildNavItem(5, 'Verify', Icons.verified_user_outlined));
+    }
+    
+    return items;
   }
 
   // Helper method to get the active color based on tab index
@@ -98,6 +111,8 @@ class CustomBottomNavigationBar extends StatelessWidget {
       case 3:
       case 4:
         return AppColors.primaryBlue;
+      case 5:
+        return AppColors.primaryOrange; // Verification tab
       default:
         return AppColors.primaryOrange;
     }
@@ -106,17 +121,19 @@ class CustomBottomNavigationBar extends StatelessWidget {
   Widget _buildNavItem(int index, String label, IconData icon) {
     final isActive = currentIndex == index;
     final activeColor = _getActiveColor(index);
+    // Smaller width for 6 items
+    final itemWidth = isCoordinator ? 55.0 : 65.0;
 
     return GestureDetector(
       onTap: () => onTap(index),
       behavior: HitTestBehavior.opaque,
       child: SizedBox(
-        width: 65,
+        width: itemWidth,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              padding: const EdgeInsets.all(8),
+              padding: EdgeInsets.all(isCoordinator ? 6 : 8),
               decoration: BoxDecoration(
                 color: isActive
                     ? activeColor.withOpacity(0.1)
@@ -136,7 +153,7 @@ class CustomBottomNavigationBar extends StatelessWidget {
               child: Icon(
                 icon,
                 color: isActive ? activeColor : AppColors.textLight,
-                size: isActive ? 24 : 22,
+                size: isActive ? (isCoordinator ? 22 : 24) : (isCoordinator ? 20 : 22),
               ),
             ),
             const SizedBox(height: 2),
@@ -146,7 +163,7 @@ class CustomBottomNavigationBar extends StatelessWidget {
                 label,
                 style: GoogleFonts.poppins(
                   color: isActive ? activeColor : AppColors.textLight,
-                  fontSize: 11,
+                  fontSize: isCoordinator ? 10 : 11,
                   fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
                   height: 1.1,
                 ),

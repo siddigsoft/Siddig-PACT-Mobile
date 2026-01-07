@@ -8,8 +8,10 @@ import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import '../models/site_visit.dart';
 import '../services/site_visit_service.dart';
+import '../services/offline_data_service.dart';
 
 class _VisitReportData {
   final String reportId;
@@ -42,9 +44,11 @@ class ReportsScreen extends StatefulWidget {
 
 class _ReportsScreenState extends State<ReportsScreen> {
   final SiteVisitService _siteVisitService = SiteVisitService();
+  final OfflineDataService _offlineDataService = OfflineDataService();
   List<SiteVisit> _allVisits = [];
   List<SiteVisit> _filteredVisits = [];
   bool _isLoading = true;
+  bool _isOffline = false;
   String? _userId;
   Map<String, Map<String, dynamic>> _siteLocations = {}; // site_id -> location data
   final Map<String, _VisitReportData> _reportByVisitId = {}; // site_visit_id -> report data
@@ -67,18 +71,118 @@ class _ReportsScreenState extends State<ReportsScreen> {
     setState(() => _isLoading = true);
     try {
       _userId = Supabase.instance.client.auth.currentUser?.id;
+      if (_userId == null) return;
+      
+      // Check if we're online
+      _isOffline = !(await _offlineDataService.isOnline());
+      
+      if (_isOffline) {
+        // Load from cache when offline
+        await _loadFromCache();
+      } else {
+        // Load from server and cache
+        await _loadFromServer();
+      }
+      
+      _applyFilter();
+    } catch (e) {
+      // On any error, try loading from cache
+      debugPrint('Error loading reports: $e');
       if (_userId != null) {
-        _allVisits = await _siteVisitService.getCompletedSiteVisits(_userId!);
-        await _loadReportsForVisits();
-        await _loadSiteLocations();
+        await _loadFromCache();
         _applyFilter();
       }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error loading visits: $e')),
-      );
+      if (mounted && _allVisits.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading visits: $e')),
+        );
+      }
     } finally {
       setState(() => _isLoading = false);
+    }
+  }
+  
+  Future<void> _loadFromCache() async {
+    debugPrint('📦 Loading reports from offline cache...');
+    
+    // Load cached visits
+    final cachedVisits = await _offlineDataService.getCachedCompletedVisits(_userId!);
+    if (cachedVisits.isNotEmpty) {
+      _allVisits = cachedVisits.map((v) => SiteVisit.fromJson(v)).toList();
+    }
+    
+    // Load cached reports
+    final cachedReports = await _offlineDataService.getCachedReportsData(_userId!);
+    if (cachedReports != null) {
+      _reportByVisitId.clear();
+      cachedReports.forEach((visitId, data) {
+        _reportByVisitId[visitId] = _VisitReportData(
+          reportId: data['reportId']?.toString() ?? '',
+          siteVisitId: visitId,
+          notes: data['notes']?.toString() ?? '',
+          activities: data['activities']?.toString(),
+          durationMinutes: data['durationMinutes'] as int?,
+          coordinates: data['coordinates'] as Map<String, dynamic>?,
+          submittedAt: data['submittedAt'] != null 
+              ? DateTime.tryParse(data['submittedAt'].toString()) 
+              : null,
+          photoUrls: (data['photoUrls'] as List?)?.cast<String>() ?? [],
+        );
+      });
+    }
+    
+    // Load cached site locations
+    final cachedLocations = await _offlineDataService.getCachedSiteLocations(_userId!);
+    if (cachedLocations != null) {
+      _siteLocations = cachedLocations;
+    }
+    
+    if (mounted && _allVisits.isNotEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Showing cached reports (offline mode)'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+  
+  Future<void> _loadFromServer() async {
+    _allVisits = await _siteVisitService.getCompletedSiteVisits(_userId!);
+    await _loadReportsForVisits();
+    await _loadSiteLocations();
+    
+    // Cache data for offline use
+    await _cacheDataForOffline();
+  }
+  
+  Future<void> _cacheDataForOffline() async {
+    if (_userId == null) return;
+    
+    try {
+      // Cache visits
+      final visitsJson = _allVisits.map((v) => v.toJson()).toList();
+      await _offlineDataService.cacheCompletedVisits(_userId!, visitsJson);
+      
+      // Cache reports
+      final reportsJson = <String, Map<String, dynamic>>{};
+      _reportByVisitId.forEach((visitId, report) {
+        reportsJson[visitId] = {
+          'reportId': report.reportId,
+          'notes': report.notes,
+          'activities': report.activities,
+          'durationMinutes': report.durationMinutes,
+          'coordinates': report.coordinates,
+          'submittedAt': report.submittedAt?.toIso8601String(),
+          'photoUrls': report.photoUrls,
+        };
+      });
+      await _offlineDataService.cacheReports(_userId!, reportsJson);
+      
+      // Cache site locations
+      await _offlineDataService.cacheSiteLocations(_userId!, _siteLocations);
+    } catch (e) {
+      debugPrint('Error caching reports data: $e');
     }
   }
 

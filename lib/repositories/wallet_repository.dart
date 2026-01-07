@@ -1,14 +1,33 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:flutter/foundation.dart';
 import '../models/wallet_models.dart';
 import '../models/wallet_transaction.dart';
 import '../models/down_payment_request.dart';
+import '../services/offline_data_service.dart';
 
 class WalletRepository {
   final SupabaseClient _supabase = Supabase.instance.client;
+  final OfflineDataService _offlineDataService = OfflineDataService();
+  
+  /// Check if device is online
+  Future<bool> _isOnline() async {
+    try {
+      final result = await Connectivity().checkConnectivity();
+      return !result.contains(ConnectivityResult.none);
+    } catch (e) {
+      return false;
+    }
+  }
 
   // Get current user's wallet
   Future<Wallet?> getWallet(String userId) async {
     try {
+      // Check if online
+      if (!(await _isOnline())) {
+        return _getWalletFromCache(userId);
+      }
+      
       final response = await _supabase
           .from('wallets')
           .select()
@@ -20,10 +39,28 @@ class WalletRepository {
         return await _createWallet(userId);
       }
 
-      return Wallet.fromJson(response);
+      final wallet = Wallet.fromJson(response);
+      
+      // Cache for offline use
+      await _offlineDataService.cacheWalletData(userId, response);
+      
+      return wallet;
     } catch (e) {
+      // Try cache on error
+      debugPrint('Error fetching wallet: $e - trying cache');
+      final cachedWallet = await _getWalletFromCache(userId);
+      if (cachedWallet != null) return cachedWallet;
       throw WalletException('Failed to fetch wallet: $e');
     }
+  }
+  
+  Future<Wallet?> _getWalletFromCache(String userId) async {
+    final cachedData = await _offlineDataService.getCachedWalletData(userId);
+    if (cachedData != null) {
+      debugPrint('📦 Returning cached wallet data');
+      return Wallet.fromJson(cachedData);
+    }
+    return null;
   }
 
   // Create new wallet for user
@@ -415,7 +452,7 @@ class WalletRepository {
           .where((t) => t.type == 'site_visit_fee')
           .length;
 
-      return WalletStats(
+      final stats = WalletStats(
         totalEarned: wallet.totalEarned,
         totalWithdrawn: wallet.totalWithdrawn,
         pendingWithdrawals: pendingWithdrawals,
@@ -423,9 +460,41 @@ class WalletRepository {
         totalTransactions: transactions.length,
         completedSiteVisits: siteVisitTransactions,
       );
+      
+      // Cache stats for offline use
+      await _offlineDataService.cacheWalletStats(userId, {
+        'totalEarned': stats.totalEarned,
+        'totalWithdrawn': stats.totalWithdrawn,
+        'pendingWithdrawals': stats.pendingWithdrawals,
+        'currentBalance': stats.currentBalance,
+        'totalTransactions': stats.totalTransactions,
+        'completedSiteVisits': stats.completedSiteVisits,
+      });
+      
+      return stats;
     } catch (e) {
+      // Try cache on error
+      debugPrint('Error calculating wallet stats: $e - trying cache');
+      final cachedStats = await _getWalletStatsFromCache(userId);
+      if (cachedStats != null) return cachedStats;
       throw WalletException('Failed to calculate wallet stats: $e');
     }
+  }
+  
+  Future<WalletStats?> _getWalletStatsFromCache(String userId) async {
+    final cachedData = await _offlineDataService.getCachedWalletStats(userId);
+    if (cachedData != null) {
+      debugPrint('📦 Returning cached wallet stats');
+      return WalletStats(
+        totalEarned: (cachedData['totalEarned'] as num?)?.toDouble() ?? 0,
+        totalWithdrawn: (cachedData['totalWithdrawn'] as num?)?.toDouble() ?? 0,
+        pendingWithdrawals: cachedData['pendingWithdrawals'] as int? ?? 0,
+        currentBalance: (cachedData['currentBalance'] as num?)?.toDouble() ?? 0,
+        totalTransactions: cachedData['totalTransactions'] as int? ?? 0,
+        completedSiteVisits: cachedData['completedSiteVisits'] as int? ?? 0,
+      );
+    }
+    return null;
   }
 
   // Real-time stream for wallet updates

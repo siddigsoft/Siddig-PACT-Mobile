@@ -30,6 +30,8 @@ class OfflineDb {
   static const String projectsCacheBox = 'projects_cache';
   static const String walletCacheBox = 'wallet_cache';
   static const String budgetCacheBox = 'budget_cache';
+  static const String reportsCacheBox = 'reports_cache';
+  static const String profileCacheBox = 'profile_cache';
   static const String metadataBox = 'offline_metadata';
 
   late Box<PendingSyncAction> _pendingSync;
@@ -43,6 +45,8 @@ class OfflineDb {
   late Box<CachedItem> _projectsCache;
   late Box<CachedItem> _walletCache;
   late Box<CachedItem> _budgetCache;
+  late Box<CachedItem> _reportsCache;
+  late Box<CachedItem> _profileCache;
   late Box<dynamic> _metadata;
 
   /// Initialize all Hive boxes
@@ -76,6 +80,8 @@ class OfflineDb {
     _projectsCache = await Hive.openBox<CachedItem>(projectsCacheBox);
     _walletCache = await Hive.openBox<CachedItem>(walletCacheBox);
     _budgetCache = await Hive.openBox<CachedItem>(budgetCacheBox);
+    _reportsCache = await Hive.openBox<CachedItem>(reportsCacheBox);
+    _profileCache = await Hive.openBox<CachedItem>(profileCacheBox);
     _metadata = await Hive.openBox(metadataBox);
   }
 
@@ -384,6 +390,10 @@ class OfflineDb {
         return _walletCache;
       case budgetCacheBox:
         return _budgetCache;
+      case reportsCacheBox:
+        return _reportsCache;
+      case profileCacheBox:
+        return _profileCache;
       default:
         throw Exception('Unknown cache box: $boxName');
     }

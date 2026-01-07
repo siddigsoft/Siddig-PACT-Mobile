@@ -1,13 +1,27 @@
 import 'dart:convert';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:flutter/foundation.dart';
 import '../models/pact_user_profile.dart';
+import '../services/offline_data_service.dart';
 
 /// Repository for user profile operations
 class ProfileRepository {
   final SupabaseClient _supabase;
+  final OfflineDataService _offlineDataService = OfflineDataService();
 
   ProfileRepository(this._supabase);
+  
+  /// Check if device is online
+  Future<bool> _isOnline() async {
+    try {
+      final result = await Connectivity().checkConnectivity();
+      return !result.contains(ConnectivityResult.none);
+    } catch (e) {
+      return false;
+    }
+  }
 
   /// Get current user's profile
   Future<PACTUserProfile> getCurrentUserProfile() async {
@@ -22,18 +36,47 @@ class ProfileRepository {
   /// Get user profile by ID
   Future<PACTUserProfile> getUserProfileById(String userId) async {
     try {
+      // Check if online
+      if (!(await _isOnline())) {
+        final cachedProfile = await _getProfileFromCache(userId);
+        if (cachedProfile != null) return cachedProfile;
+        throw Exception('No cached profile available offline');
+      }
+      
       final response = await _supabase
           .from('profiles')
           .select()
           .eq('id', userId)
           .single();
 
-      return PACTUserProfile.fromJson(response);
+      final profile = PACTUserProfile.fromJson(response);
+      
+      // Cache for offline use
+      await _offlineDataService.cacheUserProfile(userId, response);
+      
+      return profile;
     } on PostgrestException catch (e) {
+      // Try cache on error
+      debugPrint('Error loading profile: ${e.message} - trying cache');
+      final cachedProfile = await _getProfileFromCache(userId);
+      if (cachedProfile != null) return cachedProfile;
       throw Exception('Failed to load profile: ${e.message}');
     } catch (e) {
+      // Try cache on error
+      debugPrint('Error loading profile: $e - trying cache');
+      final cachedProfile = await _getProfileFromCache(userId);
+      if (cachedProfile != null) return cachedProfile;
       throw Exception('Failed to load profile: $e');
     }
+  }
+  
+  Future<PACTUserProfile?> _getProfileFromCache(String userId) async {
+    final cachedData = await _offlineDataService.getCachedUserProfile(userId);
+    if (cachedData != null) {
+      debugPrint('📦 Returning cached user profile');
+      return PACTUserProfile.fromJson(cachedData);
+    }
+    return null;
   }
 
   /// Update user profile

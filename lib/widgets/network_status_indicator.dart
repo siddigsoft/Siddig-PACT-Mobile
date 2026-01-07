@@ -113,6 +113,7 @@ class OfflineModeBanner extends StatefulWidget {
 
 class _OfflineModeBannerState extends State<OfflineModeBanner> {
   bool _isOnline = true;
+  bool _isDismissed = false;
   StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
 
   @override
@@ -147,6 +148,10 @@ class _OfflineModeBannerState extends State<OfflineModeBanner> {
       if (mounted) {
         setState(() {
           _isOnline = isOnlineNow;
+          // Reset dismissed state when connectivity changes
+          if (!isOnlineNow) {
+            _isDismissed = false;
+          }
         });
 
         // Show snackbar when coming back online
@@ -171,51 +176,62 @@ class _OfflineModeBannerState extends State<OfflineModeBanner> {
 
   @override
   Widget build(BuildContext context) {
-    if (_isOnline) return const SizedBox.shrink();
+    // Don't show if online or dismissed
+    if (_isOnline || _isDismissed) return const SizedBox.shrink();
 
     return Material(
-      elevation: 4,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Colors.orange[700]!, Colors.orange[600]!],
+      elevation: 8,
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: () {
+          setState(() {
+            _isDismissed = true;
+          });
+        },
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Colors.orange[700]!, Colors.orange[600]!],
+            ),
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.2),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
-        ),
-        child: SafeArea(
-          bottom: false,
           child: Row(
             children: [
-              const Icon(Icons.cloud_off, color: Colors.white, size: 20),
-              const SizedBox(width: 12),
+              const Icon(Icons.cloud_off, color: Colors.white, size: 18),
+              const SizedBox(width: 10),
               const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'You are offline',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                      ),
-                    ),
-                    Text(
-                      'Changes will sync when connected',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
+                child: Text(
+                  'Offline - Changes will sync when connected',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w500,
+                    fontSize: 13,
+                  ),
                 ),
               ),
-              IconButton(
-                icon: const Icon(Icons.refresh, color: Colors.white),
-                onPressed: _checkConnectivity,
-                tooltip: 'Check connection',
+              GestureDetector(
+                onTap: _checkConnectivity,
+                child: const Icon(Icons.refresh, color: Colors.white, size: 20),
+              ),
+              const SizedBox(width: 8),
+              GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _isDismissed = true;
+                  });
+                },
+                child: const Icon(Icons.close, color: Colors.white, size: 18),
               ),
             ],
           ),

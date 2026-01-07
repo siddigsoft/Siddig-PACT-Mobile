@@ -405,8 +405,8 @@ class _FieldOperationsEnhancedScreenState
               latlong.LatLng(position.latitude, position.longitude);
         });
 
-        // Don't call _updateMapCamera here - let the map use initialCenter
-        // Camera updates will happen via onMapReady or manual user interaction
+        // Move map camera to current location when user presses the location button
+        _updateMapCamera();
         _updateMarkers();
       }
     } catch (e) {
