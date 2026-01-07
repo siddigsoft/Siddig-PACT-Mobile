@@ -22,14 +22,15 @@ class CustomBottomNavigationBar extends StatelessWidget {
   Widget build(BuildContext context) {
     // Get screen width to calculate positions
     final screenWidth = MediaQuery.of(context).size.width;
-    // Get bottom padding for system navigation (Samsung and other Android devices)
-    final bottomPadding = MediaQuery.of(context).viewPadding.bottom;
-    
+    // Get bottom safe area padding (includes system navigation bar)
+    final bottomSafeArea = MediaQuery.of(context).padding.bottom;
+
     // Calculate number of items based on role
     final itemCount = isCoordinator ? 6 : 5;
 
     return Container(
-      padding: EdgeInsets.only(bottom: bottomPadding),
+      // Add padding for system navigation bar
+      padding: EdgeInsets.only(bottom: bottomSafeArea),
       decoration: BoxDecoration(
         color: Colors.white,
         boxShadow: [

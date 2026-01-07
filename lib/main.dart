@@ -97,8 +97,13 @@ void main() async {
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
       statusBarIconBrightness: Brightness.dark,
+      systemNavigationBarColor: Colors.transparent, // Make navigation bar transparent
+      systemNavigationBarIconBrightness: Brightness.dark,
     ),
   );
+
+  // Enable edge-to-edge mode for better system navigation bar handling
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
 
   // Set up a route observer for logging navigation (helps with debugging)
   final routeObserver = RouteObserver<PageRoute>();

@@ -143,32 +143,68 @@ class _MainScreenState extends State<MainScreen> {
     }
   }
 
+  Future<bool> _onWillPop() async {
+    final shouldExit = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Exit App'),
+        content: const Text(
+          'Are you sure you want to exit the app? Your session will remain active. '
+          'To sign out completely, please use the menu in the top-left corner.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Stay'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Exit'),
+          ),
+        ],
+      ),
+    );
+
+    return shouldExit ?? false;
+  }
+
   @override
   Widget build(BuildContext context) {
     // Get safe area padding to position banner below status bar and app bar
     final topPadding = MediaQuery.of(context).padding.top;
     
-    return Scaffold(
-      body: Stack(
-        children: [
-          _buildCurrentScreen(),
-          // Offline mode banner - positioned below status bar and app bar area
-          Positioned(
-            top: topPadding + 56, // Below status bar + approximate app bar height
-            left: 0,
-            right: 0,
-            child: const OfflineModeBanner(),
+    return WillPopScope(
+      onWillPop: _onWillPop,
+      child: Scaffold(
+        body: SafeArea(
+          top: false, // Allow content to extend behind status bar
+          bottom: false, // Allow bottom navigation to handle its own safe area
+          child: Stack(
+            children: [
+              _buildCurrentScreen(),
+              // Offline mode banner - positioned below status bar and app bar area
+              Positioned(
+                top: topPadding + 56, // Below status bar + approximate app bar height
+                left: 0,
+                right: 0,
+                child: const OfflineModeBanner(),
+              ),
+              // Movable Online/Offline toggle (only for data collectors)
+              MovableOnlineOfflineToggle(
+                variant: ToggleVariant.uber,
+              ),
+            ],
           ),
-          // Movable Online/Offline toggle (only for data collectors)
-          MovableOnlineOfflineToggle(
-            variant: ToggleVariant.uber,
-          ),
-        ],
-      ),
-      bottomNavigationBar: CustomBottomNavigationBar(
-        currentIndex: _currentIndex,
-        onTap: _onItemTapped,
-        isCoordinator: _isCoordinator,
+        ),
+        bottomNavigationBar: CustomBottomNavigationBar(
+          currentIndex: _currentIndex,
+          onTap: _onItemTapped,
+          isCoordinator: _isCoordinator,
+        ),
       ),
     );
   }

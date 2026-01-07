@@ -53,14 +53,10 @@ class SafetyHubScreen extends StatelessWidget {
     return Builder(
       builder: (context) => ModernAppHeader(
         title: AppLocalizations.of(context)!.safetyHub,
-        showBackButton: true,
+        showBackButton: false,
         centerTitle: true,
         backgroundColor: const Color(0xFF1976D2), // Deep blue
         textColor: Colors.white,
-        onLeadingIconPressed: () {
-          HapticFeedback.lightImpact();
-          Navigator.pop(context);
-        },
         actions: [
           HeaderActionButton(
             icon: Icons.info_outline_rounded,

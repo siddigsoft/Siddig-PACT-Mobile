@@ -348,6 +348,21 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                               const SizedBox(height: 12),
                             ],
 
+                            if (profile.hubId != null) ...[
+                              _buildInfoRow('Hub ID', profile.hubId!),
+                              const SizedBox(height: 12),
+                            ],
+
+                            if (profile.stateId != null) ...[
+                              _buildInfoRow('State ID', profile.stateId!),
+                              const SizedBox(height: 12),
+                            ],
+
+                            if (profile.localityId != null) ...[
+                              _buildInfoRow('Locality ID', profile.localityId!),
+                              const SizedBox(height: 12),
+                            ],
+
                             _buildInfoRow('Member Since', _formatDate(profile.createdAt)),
                             
                             if (profile.lastActive != null) ...[

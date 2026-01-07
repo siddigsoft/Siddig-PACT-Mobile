@@ -116,10 +116,6 @@ class _ChatListScreenState extends State<ChatListScreen> {
         backgroundColor: const Color(0xFF1976D2), // Deep blue
         elevation: 0,
         foregroundColor: Colors.white,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
-        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.add, color: Colors.white),

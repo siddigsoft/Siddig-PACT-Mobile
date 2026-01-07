@@ -364,61 +364,46 @@ class _FieldOperationsEnhancedScreenState
     }
   }
 
-  // Get current location
+  // Get current location - immediate response using cached location, then refresh in background
   Future<void> _getCurrentLocation() async {
+    // Immediately center map on current location (already updated by location stream)
+    _updateMapCamera();
+    _updateMarkers();
+
+    // Show immediate feedback
+    if (mounted) {
+      AppSnackBar.show(
+        context,
+        message: 'Centered on current location',
+        type: SnackBarType.info,
+        duration: const Duration(seconds: 1),
+      );
+    }
+
+    // In background, try to get a fresh, more accurate position
     try {
-      // Now get fresh, accurate position with retry for better accuracy
-      Position position;
-      int retryCount = 0;
-      const maxRetries = 3;
-      const maxAccuracy = 5.0; // Maximum 5 meters accuracy
+      // Get fresh position with shorter timeout for background update
+      Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: kIsWeb ? LocationAccuracy.high : LocationAccuracy.best,
+        timeLimit: const Duration(seconds: 5), // Shorter timeout
+      );
 
-      do {
-        position = await Geolocator.getCurrentPosition(
-          desiredAccuracy: kIsWeb ? LocationAccuracy.high : LocationAccuracy.best,
-          forceAndroidLocationManager:
-              false, // Use FusedLocationProvider on Android for better accuracy
-        );
-
-        debugPrint(
-            'GPS location attempt ${retryCount + 1}: ${position.latitude}, ${position.longitude}, accuracy: ${position.accuracy}m');
-
-        if (position.accuracy <= maxAccuracy) {
-          debugPrint('✓ Accuracy acceptable: ${position.accuracy}m');
-          break;
-        }
-
-        retryCount++;
-        if (retryCount < maxRetries) {
-          debugPrint('⚠ Accuracy too low (${position.accuracy}m), retrying...');
-          await Future.delayed(const Duration(seconds: 2));
-        }
-      } while (retryCount < maxRetries);
-
-      if (position.accuracy > maxAccuracy) {
-        debugPrint('⚠ Could not achieve ${maxAccuracy}m accuracy after $maxRetries attempts. Using best available: ${position.accuracy}m');
-      }
+      debugPrint('Background location update: ${position.latitude}, ${position.longitude}, accuracy: ${position.accuracy}m');
 
       if (mounted) {
         setState(() {
-          _currentLocation =
-              latlong.LatLng(position.latitude, position.longitude);
+          _currentLocation = latlong.LatLng(position.latitude, position.longitude);
         });
 
-        // Move map camera to current location when user presses the location button
-        _updateMapCamera();
-        _updateMarkers();
+        // Update map if accuracy improved significantly
+        if (position.accuracy < 10.0) { // Only update if accuracy is good
+          _updateMapCamera();
+          _updateMarkers();
+        }
       }
     } catch (e) {
-      debugPrint('Error getting current location: $e');
-
-      if (mounted) {
-        AppSnackBar.show(
-          context,
-          message: 'Location error. Using default location.',
-          type: SnackBarType.warning,
-        );
-      }
+      debugPrint('Background location update failed: $e');
+      // Don't show error since we already centered on cached location
     }
   }
 
