@@ -11,6 +11,7 @@ import '../theme/app_colors.dart';
 import '../models/site_visit.dart';
 import '../services/site_visit_service.dart';
 import '../l10n/app_localizations.dart';
+import '../widgets/custom_drawer_menu.dart';
 
 /// Permit decision structure for state and locality permits
 class PermitDecision {
@@ -68,6 +69,8 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
     with SingleTickerProviderStateMixin {
   final SiteVisitService _siteVisitService = SiteVisitService();
   final SupabaseClient _supabase = Supabase.instance.client;
+  // Key to control the Scaffold for opening/closing drawer
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   late TabController _tabController;
   bool _isLoading = true;
@@ -650,8 +653,18 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
     final l10n = AppLocalizations.of(context)!;
 
     return Scaffold(
+      key: _scaffoldKey,
+      drawer: CustomDrawerMenu(
+        currentUser: _supabase.auth.currentUser,
+        onClose: () => _scaffoldKey.currentState?.closeDrawer(),
+      ),
       backgroundColor: const Color(0xFFF5F7FA),
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.menu, color: Colors.white),
+          onPressed: () => _scaffoldKey.currentState?.openDrawer(),
+          tooltip: 'Menu',
+        ),
         title: Text(
           'Site Verification',
           style: GoogleFonts.poppins(
@@ -1023,7 +1036,25 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
                 ),
               ),
             ),
-            children: sites.map((site) => _buildSiteCard(site, 'new')).toList(),
+            children: [
+              if (sitesNeedingStatePermit.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          icon: const Icon(Icons.upload_file),
+                          label: Text('Manage state permit (${sitesNeedingStatePermit.length})'),
+                          style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+                          onPressed: () => _handleStateCardClick(state, sites),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ...sites.map((site) => _buildSiteCard(site, 'new')).toList(),
+            ],
           ),
         );
       },
@@ -1065,12 +1096,35 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
                 size: 20,
               ),
             ),
-            title: Text(
-              locality,
-              style: GoogleFonts.poppins(
-                fontWeight: FontWeight.w600,
-                fontSize: 14,
-              ),
+            title: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    locality,
+                    style: GoogleFonts.poppins(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+                if (sites.any((s) {
+                  final additional = s['additional_data'] as Map<String, dynamic>? ?? {};
+                  return additional['locality_permit_skipped'] == true;
+                }))
+                  Container(
+                    margin: const EdgeInsets.only(left: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.orange.withOpacity(0.2)),
+                    ),
+                    child: Text(
+                      'Skipped',
+                      style: GoogleFonts.poppins(fontSize: 11, color: Colors.orange[800], fontWeight: FontWeight.w600),
+                    ),
+                  ),
+              ],
             ),
             subtitle: Text(
               '${sitesNeedingLocalityPermit.length} sites need locality permit',
@@ -1091,9 +1145,29 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
               ),
             ),
             // Use 'locality_permit' category for different handling
-            children: sites
-                .map((site) => _buildSiteCard(site, 'locality_permit'))
-                .toList(),
+            children: [
+              if (sitesNeedingLocalityPermit.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          icon: const Icon(Icons.upload_file),
+                          label: Text('Upload locality permit (${sitesNeedingLocalityPermit.length})'),
+                          onPressed: () {
+                            final parts = locality.split(' - ');
+                            final stateName = parts.length > 0 ? parts[0] : '';
+                            final localityName = parts.length > 1 ? parts[1] : '';
+                            _handleLocalityCardClick(stateName, localityName, sites);
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ...sites.map((site) => _buildSiteCard(site, 'locality_permit')).toList(),
+            ],
           ),
         );
       },
@@ -1171,6 +1245,57 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
               textAlign: TextAlign.center,
             ),
           ],
+        ),
+      );
+    }
+
+    // Special grouping for CP Verification: group sites by state + locality
+    if (category == 'cp_verification') {
+      final grouped = <String, List<Map<String, dynamic>>>{};
+      for (final site in sites) {
+        final state = site['state']?.toString() ?? 'Unknown';
+        final locality = site['locality']?.toString() ?? 'Unknown';
+        final key = '$state - $locality';
+        grouped.putIfAbsent(key, () => []).add(site);
+      }
+
+      return RefreshIndicator(
+        color: AppColors.primaryBlue,
+        onRefresh: _loadData,
+        child: ListView.builder(
+          padding: const EdgeInsets.all(16),
+          itemCount: grouped.length,
+          itemBuilder: (context, index) {
+            final key = grouped.keys.elementAt(index);
+            final localitySites = grouped[key]!;
+            final parts = key.split(' - ');
+            final stateName = parts.length > 0 ? parts[0] : '';
+            final localityName = parts.length > 1 ? parts[1] : '';
+
+            return Card(
+              margin: const EdgeInsets.only(bottom: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              elevation: 2,
+              child: ExpansionTile(
+                title: Text(
+                  key,
+                  style: GoogleFonts.poppins(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 15,
+                  ),
+                ),
+                trailing: ElevatedButton.icon(
+                  icon: const Icon(Icons.check_circle),
+                  label: Text('Verify All (${localitySites.length})'),
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                  onPressed: () => _showBulkVerifyDialog(stateName, localityName, localitySites),
+                ),
+                children: localitySites.map((s) => _buildSiteCard(s, category)).toList(),
+              ),
+            );
+          },
         ),
       );
     }
@@ -2189,9 +2314,9 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
           notificationMessage =
               'All permits attached - Site ready for verification';
         } else {
-          newStatus = 'Dispatched'; // State done, waiting for locality
+          // Don't change site status here; wait for locality permit
           notificationMessage =
-              'State permit verified - Upload locality permit to continue';
+              'State permit recorded - Upload locality permit to continue';
         }
       } else if (stateReq == 'not_required') {
         // State permit not required - skip to locality
@@ -2207,7 +2332,7 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
           newStatus = 'permits_attached'; // Ready for verification
           notificationMessage = 'Permits ready - Site can now be verified';
         } else {
-          newStatus = 'Dispatched'; // Waiting for locality permit
+          // Don't change site status here; wait for locality permit
           notificationMessage =
               'State permit not required - Upload locality permit to continue';
         }
@@ -2215,6 +2340,8 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
           canWorkWithout == 'yes') {
         // Can proceed without state permit
         additionalData['state_permit_can_work_without'] = true;
+        // Mark as not required so validation allows proceeding to locality
+        additionalData['state_permit_not_required'] = true;
         additionalData['state_permit_decision_at'] = DateTime.now()
             .toIso8601String();
 
@@ -2227,8 +2354,8 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
           notificationMessage =
               'Proceeding without state permit - Site ready for verification';
         } else {
-          newStatus = 'Dispatched'; // Waiting for locality permit
-          notificationMessage = 'Upload locality permit to continue';
+          // Don't change site status here; wait for locality permit
+          notificationMessage = 'State permit skipped - Upload locality permit to continue';
         }
       }
 
@@ -2299,6 +2426,421 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
       if (mounted) {
         setState(() => _isLoading = false);
       }
+    }
+  }
+
+  // Bulk handlers: state permit, locality permit, and locality verification
+  Future<void> _handleStateCardClick(String state, List<Map<String, dynamic>> sites) async {
+    // If any site in state already has a state permit or marked not required, show info and still allow decision
+    final firstSite = sites.isNotEmpty ? sites.first : null;
+    if (firstSite == null) return;
+
+    final PermitDecision? decision = await showDialog<PermitDecision>(
+      context: context,
+      builder: (context) => _PermitVerificationDialog(
+        site: firstSite,
+        onComplete: (d) => Navigator.of(context).pop(d),
+      ),
+    );
+
+    if (decision == null) return;
+
+    await _bulkUpdateStatePermit(state, decision);
+  }
+
+  Future<void> _bulkUpdateStatePermit(String state, PermitDecision decision) async {
+    try {
+      setState(() => _isLoading = true);
+
+      final sitesInState = _newSites.where((s) => (s['state']?.toString() ?? '') == state).toList();
+      int updated = 0;
+      for (final site in sitesInState) {
+        final siteId = site['id'].toString();
+        final additionalData = Map<String, dynamic>.from(site['additional_data'] as Map<String, dynamic>? ?? {});
+        additionalData['permit_decision'] = decision.toJson();
+
+        final stateReq = decision.statePermit.requirement;
+        final canWorkWithout = decision.statePermit.canWorkWithout;
+
+        String newStatus = site['status']?.toString() ?? 'Pending';
+
+        if (stateReq == 'required_dont_have_it' && canWorkWithout == 'no') {
+          newStatus = 'returned_to_fom';
+          additionalData['return_reason'] = 'State permit required but not available - Cannot proceed without permit';
+          additionalData['returned_at'] = DateTime.now().toIso8601String();
+          additionalData['returned_by'] = _userId;
+        } else if (stateReq == 'required_have_it') {
+          additionalData['state_permit_attached'] = true;
+          additionalData['state_permit_verified_at'] = DateTime.now().toIso8601String();
+          additionalData['state_permit_verified_by'] = _userId;
+          // Do not change status here; wait for locality permits
+        } else if (stateReq == 'not_required') {
+          additionalData['state_permit_not_required'] = true;
+          additionalData['state_permit_decision_at'] = DateTime.now().toIso8601String();
+          // Do not change status here; wait for locality permits
+        } else if (stateReq == 'required_dont_have_it' && canWorkWithout == 'yes') {
+          additionalData['state_permit_can_work_without'] = true;
+          // Mark as not required so mobile validation allows proceeding
+          additionalData['state_permit_not_required'] = true;
+          additionalData['state_permit_decision_at'] = DateTime.now().toIso8601String();
+          // Do not change status here; wait for locality permits
+        }
+
+        await _supabase
+            .from('mmp_site_entries')
+            .update({
+              'status': newStatus,
+              'additional_data': additionalData,
+              'updated_at': DateTime.now().toIso8601String(),
+            })
+            .eq('id', siteId);
+
+        updated++;
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Updated $updated site(s) for state $state'), backgroundColor: Colors.green),
+        );
+      }
+      await _loadData();
+    } catch (e) {
+      debugPrint('Error performing bulk state update: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _handleLocalityCardClick(String state, String locality, List<Map<String, dynamic>> sites) async {
+    final firstSite = sites.isNotEmpty ? sites.first : null;
+    if (firstSite == null) return;
+
+    final siteAdditional = Map<String, dynamic>.from(firstSite['additional_data'] as Map<String, dynamic>? ?? {});
+    final hasStatePermit = siteAdditional['state_permit_attached'] == true || siteAdditional['state_permit_not_required'] == true;
+
+    final Map<String, dynamic>? decision = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (context) => _LocalityPermitDialog(
+        site: firstSite,
+        onComplete: (d) => Navigator.of(context).pop(d),
+        onStatePermitMissing: () {
+          Navigator.of(context).pop(); // close and show a note
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('State permit not found - upload state permit first'), backgroundColor: Colors.orange));
+        },
+        startOnUpload: true,
+        initialStateConfirmed: hasStatePermit,
+      ),
+    );
+
+    if (decision == null) return;
+
+    // If the user chose to proceed without locality permit, handle specially
+    if (decision['proceed_without_locality_permit'] == true) {
+      await _proceedWithoutLocalityPermit(state, locality, sites);
+      return;
+    }
+
+    await _bulkUpdateLocalityPermit(state, locality, decision);
+  }
+
+  Future<void> _bulkUpdateLocalityPermit(String state, String locality, Map<String, dynamic> decision) async {
+    try {
+      setState(() => _isLoading = true);
+
+      final eligibleStatuses = ['Pending', 'Dispatched', 'assigned', 'inProgress', 'in_progress'];
+      final targetSites = _newSites.where((s) {
+        final sState = (s['state']?.toString() ?? '');
+        final sLocality = (s['locality']?.toString() ?? '');
+        final status = s['status']?.toString() ?? '';
+        return sState == state && sLocality == locality && eligibleStatuses.contains(status);
+      }).toList();
+
+      int updated = 0;
+      for (final site in targetSites) {
+        final siteId = site['id'].toString();
+        final additionalData = Map<String, dynamic>.from(site['additional_data'] as Map<String, dynamic>? ?? {});
+
+        additionalData['locality_permit_attached'] = true;
+        additionalData['locality_permit_uploaded_at'] = DateTime.now().toIso8601String();
+        additionalData['locality_permit_uploaded_by'] = _userId;
+
+        if (decision['locality_permit_issue_date'] != null) {
+          additionalData['locality_permit_issue_date'] = decision['locality_permit_issue_date'];
+        }
+        if (decision['locality_permit_expiry_date'] != null) {
+          additionalData['locality_permit_expiry_date'] = decision['locality_permit_expiry_date'];
+        }
+
+        // Attempt mmp_files update like single-update flow (best-effort)
+        final mmpFiles = Map<String, dynamic>.from(site['mmp_files'] as Map<String, dynamic>? ?? {});
+        final permits = Map<String, dynamic>.from(mmpFiles['permits'] as Map<String, dynamic>? ?? {});
+        final localPermits = List<Map<String, dynamic>>.from(permits['localPermits'] as List? ?? []);
+
+        final newLocalPermit = {
+          'uploaded_at': additionalData['locality_permit_uploaded_at'],
+          'uploaded_by': additionalData['locality_permit_uploaded_by'],
+          if (additionalData['locality_permit_issue_date'] != null) 'issue_date': additionalData['locality_permit_issue_date'],
+          if (additionalData['locality_permit_expiry_date'] != null) 'expiry_date': additionalData['locality_permit_expiry_date'],
+          'source': 'coordinator',
+        };
+
+        localPermits.add(newLocalPermit);
+        permits['localPermits'] = localPermits;
+        mmpFiles['permits'] = permits;
+
+        try {
+          await _supabase
+              .from('mmp_site_entries')
+              .update({
+                'status': 'permits_attached',
+                'additional_data': additionalData,
+                'mmp_files': mmpFiles,
+                'updated_at': DateTime.now().toIso8601String(),
+              })
+              .eq('id', siteId);
+        } catch (e) {
+          final err = e.toString();
+          debugPrint('Failed updating mmp_files during bulk locality update: $err');
+          if (err.contains("Could not find the 'mmp_files' column")) {
+            await _supabase
+                .from('mmp_site_entries')
+                .update({
+                  'status': 'permits_attached',
+                  'additional_data': additionalData,
+                  'updated_at': DateTime.now().toIso8601String(),
+                })
+                .eq('id', siteId);
+          } else {
+            rethrow;
+          }
+        }
+
+        // Try to insert a coordinator_locality_permits record (best-effort)
+        try {
+          await _supabase.from('coordinator_locality_permits').insert({
+            'site_entry_id': siteId,
+            'uploaded_at': additionalData['locality_permit_uploaded_at'],
+            'uploaded_by': additionalData['locality_permit_uploaded_by'],
+            'issue_date': additionalData['locality_permit_issue_date'],
+            'expiry_date': additionalData['locality_permit_expiry_date'],
+            'metadata': {'source': 'mobile_coordinator_bulk'},
+          });
+        } catch (e) {
+          debugPrint('Could not insert coordinator_locality_permits record during bulk: $e');
+        }
+
+        updated++;
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Uploaded locality permit for $updated site(s) in $locality, $state'), backgroundColor: Colors.green));
+      }
+
+      await _loadData();
+    } catch (e) {
+      debugPrint('Error performing bulk locality update: $e');
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _proceedWithoutLocalityPermit(String state, String locality, List<Map<String, dynamic>> sites) async {
+    try {
+      setState(() => _isLoading = true);
+
+      final eligibleStatuses = ['Pending', 'Dispatched', 'assigned', 'inProgress', 'in_progress'];
+      final targetSites = sites.where((s) {
+        final status = s['status']?.toString() ?? '';
+        return eligibleStatuses.contains(status);
+      }).toList();
+
+      int updated = 0;
+      for (final site in targetSites) {
+        final siteId = site['id'].toString();
+        final additionalData = Map<String, dynamic>.from(site['additional_data'] as Map<String, dynamic>? ?? {});
+
+        additionalData['locality_permit_skipped'] = true;
+        additionalData['locality_permit_skipped_at'] = DateTime.now().toIso8601String();
+        additionalData['locality_permit_skipped_by'] = _userId;
+
+        await _supabase
+            .from('mmp_site_entries')
+            .update({
+              'status': 'permits_attached',
+              'additional_data': additionalData,
+              'updated_at': DateTime.now().toIso8601String(),
+            })
+            .eq('id', siteId);
+
+        // Insert an audit record for the skip action (best-effort)
+        try {
+          await _supabase.from('coordinator_locality_permits').insert({
+            'site_entry_id': siteId,
+            'uploaded_at': additionalData['locality_permit_skipped_at'],
+            'uploaded_by': additionalData['locality_permit_skipped_by'],
+            'issue_date': additionalData['locality_permit_issue_date'],
+            'expiry_date': additionalData['locality_permit_expiry_date'],
+            'metadata': {'source': 'mobile_coordinator_skip', 'skipped': true},
+          });
+        } catch (e) {
+          debugPrint('Could not insert coordinator_locality_permits skip record: $e');
+        }
+
+        updated++;
+      }
+
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Proceeding without local permit for $updated site(s) in $locality, $state'), backgroundColor: Colors.green));
+      await _loadData();
+    } catch (e) {
+      debugPrint('Error during proceed without locality permit: $e');
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _showBulkVerifyDialog(String state, String locality, List<Map<String, dynamic>> sites) async {
+    // Determine activity mix across sites
+    final anyDm = sites.any((s) => _isDmActivity(s));
+    final anyMulti = sites.any((s) => _isMultiVisitActivity(s));
+    final anyUrgent = sites.any((s) => _isUrgentActivity(s));
+
+    final firstSite = sites.isNotEmpty ? sites.first : null;
+    if (firstSite == null) return;
+
+    // Use the existing VerificationDialog to collect the relevant dates/inputs
+    final Map<String, dynamic>? result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (context) => _VerificationDialog(
+        site: firstSite,
+        isDMActivity: anyDm,
+        isMultiVisitActivity: anyMulti,
+        isUrgentActivity: anyUrgent,
+      ),
+    );
+
+    if (result == null) return;
+
+    await _bulkVerifyLocality(state, locality, sites, result);
+  }
+
+  Future<void> _bulkVerifyLocality(String state, String locality, List<Map<String, dynamic>> sites, Map<String, dynamic> result) async {
+    try {
+      setState(() => _isLoading = true);
+
+      // Validate result depending on activity types
+      final activityType = result['activity_type'] as String? ?? 'standard';
+      final visitDate = result['visit_date'] as DateTime?;
+      final distributionStart = result['distribution_start'] as DateTime?;
+      final distributionEnd = result['distribution_end'] as DateTime?;
+      final followUpDate = result['follow_up_date'] as DateTime?;
+      final requiresFollowUp = result['requires_follow_up'] as bool? ?? false;
+
+      if (visitDate == null) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: const Text('Please select a visit date'), backgroundColor: Colors.red));
+        return;
+      }
+
+      if (activityType == 'distribution') {
+        if (distributionStart == null || distributionEnd == null) {
+          if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: const Text('Please select distribution start and end dates'), backgroundColor: Colors.red));
+          return;
+        }
+        if (visitDate.isBefore(distributionStart) || visitDate.isAfter(distributionEnd)) {
+          if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: const Text('Visit date must be within distribution period'), backgroundColor: Colors.red));
+          return;
+        }
+      }
+
+      if (activityType == 'multi_visit' && requiresFollowUp) {
+        if (followUpDate == null) {
+          if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: const Text('Please select a follow-up date'), backgroundColor: Colors.red));
+          return;
+        }
+        if (followUpDate.isBefore(visitDate)) {
+          if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: const Text('Follow-up date must be after the primary visit'), backgroundColor: Colors.red));
+          return;
+        }
+      }
+
+      int updated = 0;
+
+      for (final site in sites) {
+        final siteId = site['id'].toString();
+        final existingAdditionalData = site['additional_data'] as Map<String, dynamic>? ?? {};
+
+        // Determine per-site activity type (use site-specific detection)
+        final isDm = _isDmActivity(site);
+        final isMulti = _isMultiVisitActivity(site);
+        final isUrgent = _isUrgentActivity(site);
+
+        // Build expected_visit per site
+        final Map<String, dynamic> expectedVisit;
+        if (isDm) {
+          expectedVisit = {
+            'type': 'range',
+            'start_date': DateFormat('yyyy-MM-dd').format(distributionStart!),
+            'end_date': DateFormat('yyyy-MM-dd').format(distributionEnd!),
+            'expected_date': DateFormat('yyyy-MM-dd').format(visitDate),
+          };
+        } else if (isMulti) {
+          expectedVisit = {
+            'type': 'multi_visit',
+            'primary_visit': DateFormat('yyyy-MM-dd').format(visitDate),
+            'follow_up_visit': requiresFollowUp && followUpDate != null
+                ? DateFormat('yyyy-MM-dd').format(followUpDate)
+                : null,
+            'requires_follow_up': requiresFollowUp,
+          };
+        } else if (isUrgent) {
+          expectedVisit = {
+            'type': 'urgent',
+            'expected_date': DateFormat('yyyy-MM-dd').format(visitDate),
+            'priority': 'high',
+          };
+        } else {
+          expectedVisit = {
+            'type': 'single',
+            'expected_date': DateFormat('yyyy-MM-dd').format(visitDate),
+          };
+        }
+
+        final updatedAdditionalData = {
+          ...existingAdditionalData,
+          'expected_visit': expectedVisit,
+          'cp_verification': {
+            'status': 'verified',
+            'verified_at': DateTime.now().toIso8601String(),
+            'verified_by': _userId,
+          },
+        };
+
+        await _supabase
+            .from('mmp_site_entries')
+            .update({
+              'status': 'verified',
+              'verified_at': DateTime.now().toIso8601String(),
+              'verified_by': _userId,
+              'visit_date': DateFormat('yyyy-MM-dd').format(visitDate),
+              'additional_data': updatedAdditionalData,
+              'updated_at': DateTime.now().toIso8601String(),
+            })
+            .eq('id', siteId);
+
+        updated++;
+      }
+
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Verified $updated site(s) in $locality, $state'), backgroundColor: Colors.green));
+      await _loadData();
+    } catch (e) {
+      debugPrint('Error during bulk verify: $e');
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -3699,9 +4241,26 @@ class _PermitVerificationDialogState extends State<_PermitVerificationDialog> {
                 ),
                 const SizedBox(height: 12),
                 TextButton(
-                  onPressed: () {
-                    // Skip locality permit - optional
-                    setState(() => _localityPermitUploaded = false);
+                  onPressed: () async {
+                    // Confirm proceeding without locality permit
+                    final confirm = await showDialog<bool>(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        title: const Text('Proceed without locality permit?'),
+                        content: const Text(
+                          'Are you sure you want to proceed without uploading a locality permit? This will allow sites in this locality to be marked as ready for verification.',
+                        ),
+                        actions: [
+                          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+                          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Proceed')),
+                        ],
+                      ),
+                    );
+
+                    if (confirm == true) {
+                      // Return special marker to parent to indicate skip action
+                      Navigator.of(context).pop({'proceed_without_locality_permit': true});
+                    }
                   },
                   child: Text(
                     'Skip (proceed without locality permit)',
@@ -3931,11 +4490,15 @@ class _LocalityPermitDialog extends StatefulWidget {
   final Map<String, dynamic> site;
   final Function(Map<String, dynamic>) onComplete;
   final VoidCallback onStatePermitMissing;
+  final bool startOnUpload; // If true, open the dialog on the upload step
+  final bool initialStateConfirmed; // Pre-fill state permit confirmation
 
   const _LocalityPermitDialog({
     required this.site,
     required this.onComplete,
     required this.onStatePermitMissing,
+    this.startOnUpload = false,
+    this.initialStateConfirmed = false,
   });
 
   @override
@@ -3948,6 +4511,18 @@ class _LocalityPermitDialogState extends State<_LocalityPermitDialog> {
   bool _localityPermitUploaded = false;
   File? _localityPermitImage;
   final ImagePicker _imagePicker = ImagePicker();
+
+  @override
+  void initState() {
+    super.initState();
+    // If dialog was requested to start on upload step, set initial state
+    if (widget.initialStateConfirmed) {
+      _statePermitConfirmed = true;
+    }
+    if (widget.startOnUpload) {
+      _currentStep = 1;
+    }
+  }
 
   // Optional issue/expiry dates for locality permit (coordinator-entered)
   DateTime? _localityPermitIssueDate;
@@ -4468,10 +5043,15 @@ class _LocalityPermitDialogState extends State<_LocalityPermitDialog> {
         setState(() {
           _localityPermitImage = File(image.path);
           _localityPermitUploaded = true;
+          // Ensure we're on upload step when an image is selected
+          _currentStep = 1;
         });
 
         // Prompt immediately for dates after upload
         await _promptForLocalityPermitDates();
+
+        // Ensure UI updates and canProceed recalculates
+        setState(() {});
       }
     } catch (e) {
       debugPrint('Error picking image: $e');
@@ -4747,12 +5327,10 @@ class _LocalityPermitDialogState extends State<_LocalityPermitDialog> {
       case 0:
         return _statePermitConfirmed;
       case 1:
-        if (!_localityPermitUploaded) return false;
-        // If either date is set, require both and ensure expiry is after issue
-        if (_localityPermitIssueDate != null ||
-            _localityPermitExpiryDate != null) {
-          if (_localityPermitIssueDate == null ||
-              _localityPermitExpiryDate == null)
+        // Allow proceeding even when an image wasn't uploaded (user may choose to
+        // proceed without a locality permit). If dates are provided, validate them.
+        if (_localityPermitIssueDate != null || _localityPermitExpiryDate != null) {
+          if (_localityPermitIssueDate == null || _localityPermitExpiryDate == null)
             return false;
           if (_localityPermitExpiryDate!.isBefore(_localityPermitIssueDate!))
             return false;
@@ -4768,17 +5346,31 @@ class _LocalityPermitDialogState extends State<_LocalityPermitDialog> {
   }
 
   void _complete() async {
-    // Ensure an image has been uploaded
+    // If no image uploaded, offer to proceed without locality permit (confirmation)
     if (!_localityPermitUploaded) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Please upload the locality permit image before completing.',
+      final confirm = await showDialog<String?>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('No locality permit uploaded'),
+          content: const Text(
+            'You have not uploaded a locality permit image. Would you like to proceed without uploading it? Sites in this locality will be marked ready for verification.',
           ),
-          backgroundColor: Colors.orange,
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context, 'cancel'), child: const Text('Cancel')),
+            TextButton(onPressed: () => Navigator.pop(context, 'upload'), child: const Text('Upload')),
+            TextButton(onPressed: () => Navigator.pop(context, 'proceed'), child: const Text('Proceed without permit')),
+          ],
         ),
       );
-      return;
+
+      if (confirm == 'cancel' || confirm == null) return; // do nothing
+      if (confirm == 'upload') return; // allow user to upload
+
+      // If user chose to proceed without permit, signal parent
+      if (confirm == 'proceed') {
+        widget.onComplete({'proceed_without_locality_permit': true});
+        return;
+      }
     }
 
     // If both dates are not provided, prompt user to enter them or skip
