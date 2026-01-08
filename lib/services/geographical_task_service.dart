@@ -4,6 +4,7 @@ import 'dart:async';
 import 'package:geolocator/geolocator.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import '../models/site_visit.dart';
+import '../models/pact_user_profile.dart';
 import '../algorithms/nearest_site_visits.dart';
 import '../services/site_visit_service.dart';
 
@@ -17,6 +18,7 @@ class GeographicalTaskService {
   Future<List<SiteVisitWithDistance>> getNearbyAvailableTasks({
     int maxTasks = 10,
     double maxRadiusKm = 50.0, // 50km radius
+    PACTUserProfile? userProfile,
   }) async {
     try {
       // Get current user location
@@ -29,8 +31,8 @@ class GeographicalTaskService {
         longitude: position.longitude,
       );
 
-      // Get all available site visits from service
-      final allAvailableVisits = await _service.getAvailableSiteVisits();
+      // Get all available site visits from service (respect user profile filtering)
+      final allAvailableVisits = await _service.getAvailableSiteVisits(userProfile);
 
       // Filter visits with valid coordinates
       final validVisits = allAvailableVisits.where((visit) {
@@ -186,6 +188,7 @@ class GeographicalTaskService {
   Future<List<SiteVisitWithDistance>> getNearbyAvailableTasksCached({
     int maxTasks = 10,
     double maxRadiusKm = 50.0,
+    PACTUserProfile? userProfile,
   }) async {
     try {
       // Try to get current location
@@ -211,6 +214,7 @@ class GeographicalTaskService {
       final freshTasks = await getNearbyAvailableTasks(
         maxTasks: maxTasks,
         maxRadiusKm: maxRadiusKm,
+        userProfile: userProfile,
       );
 
       // Cache the results

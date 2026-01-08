@@ -8,10 +8,14 @@ import '../theme/app_design_system.dart';
 import '../widgets/app_widgets.dart';
 import '../providers/offline_provider.dart';
 import '../models/site_visit.dart';
+import '../models/pact_user_profile.dart';
+import '../utils/site_visit_constraints.dart';
 
 class AcceptAssignmentButton extends ConsumerStatefulWidget {
   final String siteEntryId;
   final String siteName;
+  final PACTUserProfile? userProfile;
+  final SiteVisit? siteVisit;
   final VoidCallback? onAcceptSuccess;
   final VoidCallback? onAcceptError;
 
@@ -19,6 +23,8 @@ class AcceptAssignmentButton extends ConsumerStatefulWidget {
     super.key,
     required this.siteEntryId,
     required this.siteName,
+    this.userProfile,
+    this.siteVisit,
     this.onAcceptSuccess,
     this.onAcceptError,
   });
@@ -63,6 +69,22 @@ class _AcceptAssignmentButtonState extends ConsumerState<AcceptAssignmentButton>
 
   Future<void> _acceptAssignment() async {
     if (_isLoading) return; // Prevent double-click
+
+    // Check constraints first
+    if (widget.userProfile != null && widget.siteVisit != null) {
+      final constraintCheck = SiteVisitConstraints.canAcceptSite(widget.siteVisit!, widget.userProfile!);
+      if (!constraintCheck.allowed) {
+        widget.onAcceptError?.call();
+        if (mounted) {
+          AppSnackBar.show(
+            context,
+            message: constraintCheck.reason ?? 'Cannot accept this assignment',
+            type: SnackBarType.error,
+          );
+        }
+        return;
+      }
+    }
     
     // First, show cost acknowledgment dialog
     final confirmed = await _showCostAcknowledgmentDialog();

@@ -612,7 +612,9 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
 
     final combined = '$main $activity $activityAtSite'.toUpperCase();
 
-    return combined.contains('GFA') || combined.contains('CBT') || combined.contains('EBSFP');
+    return combined.contains('GFA') ||
+        combined.contains('CBT') ||
+        combined.contains('EBSFP');
   }
 
   /// Helper: Check if activity requires multiple visits
@@ -1409,6 +1411,119 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
                     ],
                   ),
                 ],
+
+                // Coordinator summary fields (CP, Activity, Tool)
+                const SizedBox(height: 8),
+                if (additionalData['cp_name'] != null) ...[
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.person_outline,
+                        size: 14,
+                        color: const Color(0xFF9CA3AF),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          additionalData['cp_name'].toString(),
+                          style: GoogleFonts.poppins(
+                            fontSize: 12,
+                            color: const Color(0xFF374151),
+                            fontWeight: FontWeight.w600,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                ],
+
+                if ((site['main_activity'] ?? '').toString().isNotEmpty ||
+                    (site['activity_at_site'] ?? '').toString().isNotEmpty) ...[
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.work_outline,
+                        size: 14,
+                        color: const Color(0xFF9CA3AF),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          '${site['main_activity'] ?? ''} ${(site['activity_at_site'] ?? '')}'
+                              .trim(),
+                          style: GoogleFonts.poppins(
+                            fontSize: 12,
+                            color: const Color(0xFF6B7280),
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                ],
+
+                if (additionalData['survey_tool'] != null) ...[
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.analytics_outlined,
+                        size: 14,
+                        color: const Color(0xFF9CA3AF),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Tool: ${additionalData['survey_tool'].toString()}',
+                          style: GoogleFonts.poppins(
+                            fontSize: 12,
+                            color: const Color(0xFF6B7280),
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                ],
+
+                // Flag indicator
+                if (additionalData['isFlagged'] == true) ...[
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.red.withOpacity(0.12)),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.report_problem, size: 14, color: Colors.red),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Flagged: ${additionalData['flagReason'] ?? 'Issue reported'}',
+                            style: GoogleFonts.poppins(
+                              fontSize: 12,
+                              color: Colors.red[700],
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
                 // Permit status indicators
                 const SizedBox(height: 16),
                 _buildPermitIndicators(additionalData),
@@ -1893,16 +2008,95 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
             .toIso8601String();
         additionalData['locality_permit_uploaded_by'] = _userId;
 
+        // If coordinator provided issue/expiry dates, persist them in additional_data
+        if (decision['locality_permit_issue_date'] != null) {
+          additionalData['locality_permit_issue_date'] =
+              decision['locality_permit_issue_date'];
+        }
+        if (decision['locality_permit_expiry_date'] != null) {
+          additionalData['locality_permit_expiry_date'] =
+              decision['locality_permit_expiry_date'];
+        }
+
+        // Attach metadata into mmp_files.permits.localPermits for discoverability/search
+        final mmpFiles = Map<String, dynamic>.from(
+          site['mmp_files'] as Map<String, dynamic>? ?? {},
+        );
+        final permits = Map<String, dynamic>.from(
+          mmpFiles['permits'] as Map<String, dynamic>? ?? {},
+        );
+        final localPermits = List<Map<String, dynamic>>.from(
+          permits['localPermits'] as List? ?? [],
+        );
+
+        final newLocalPermit = {
+          'uploaded_at': additionalData['locality_permit_uploaded_at'],
+          'uploaded_by': additionalData['locality_permit_uploaded_by'],
+          if (additionalData['locality_permit_issue_date'] != null)
+            'issue_date': additionalData['locality_permit_issue_date'],
+          if (additionalData['locality_permit_expiry_date'] != null)
+            'expiry_date': additionalData['locality_permit_expiry_date'],
+          'source': 'coordinator',
+        };
+
+        localPermits.add(newLocalPermit);
+        permits['localPermits'] = localPermits;
+        mmpFiles['permits'] = permits;
+
         // Since state permit is already verified (that's why it's in locality tab),
-        // move to permits_attached status
-        await _supabase
-            .from('mmp_site_entries')
-            .update({
-              'status': 'permits_attached',
-              'additional_data': additionalData,
-              'updated_at': DateTime.now().toIso8601String(),
-            })
-            .eq('id', siteId);
+        // move to permits_attached status and persist mmp_files + additional data
+        try {
+          await _supabase
+              .from('mmp_site_entries')
+              .update({
+                'status': 'permits_attached',
+                'additional_data': additionalData,
+                'mmp_files': mmpFiles,
+                'updated_at': DateTime.now().toIso8601String(),
+              })
+              .eq('id', siteId);
+        } catch (e) {
+          // Some deployments may not have an `mmp_files` column in the table.
+          // Fall back to updating only additional_data to avoid hard failures.
+          final err = e.toString();
+          debugPrint('Failed updating with mmp_files: $err');
+
+          if (err.contains("Could not find the 'mmp_files' column")) {
+            try {
+              await _supabase
+                  .from('mmp_site_entries')
+                  .update({
+                    'status': 'permits_attached',
+                    'additional_data': additionalData,
+                    'updated_at': DateTime.now().toIso8601String(),
+                  })
+                  .eq('id', siteId);
+
+              debugPrint('Updated site without mmp_files column fallback.');
+            } catch (e2) {
+              debugPrint('Fallback update also failed: $e2');
+              rethrow;
+            }
+          } else {
+            rethrow;
+          }
+        }
+
+        // Try to also insert a record into coordinator_locality_permits table for indexing
+        try {
+          await _supabase.from('coordinator_locality_permits').insert({
+            'site_entry_id': siteId,
+            'uploaded_at': additionalData['locality_permit_uploaded_at'],
+            'uploaded_by': additionalData['locality_permit_uploaded_by'],
+            'issue_date': additionalData['locality_permit_issue_date'],
+            'expiry_date': additionalData['locality_permit_expiry_date'],
+            'metadata': {'source': 'mobile_coordinator'},
+          });
+        } catch (e) {
+          debugPrint(
+            'Could not insert coordinator_locality_permits record: $e',
+          );
+        }
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -2181,13 +2375,19 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
     final isUrgentActivity = _isUrgentActivity(site);
 
     // Debug logging - include activity_at_site for clarity
-    debugPrint('Activity detection: main=${site['main_activity'] ?? ''}, activity=${site['activity'] ?? ''}, activity_at_site=${site['activity_at_site'] ?? ''}');
-    debugPrint('isDMActivity=$isDMActivity, isMultiVisit=$isMultiVisitActivity, isUrgent=$isUrgentActivity');
+    debugPrint(
+      'Activity detection: main=${site['main_activity'] ?? ''}, activity=${site['activity'] ?? ''}, activity_at_site=${site['activity_at_site'] ?? ''}',
+    );
+    debugPrint(
+      'isDMActivity=$isDMActivity, isMultiVisit=$isMultiVisitActivity, isUrgent=$isUrgentActivity',
+    );
 
     // Optional visual debug during development: show a short message when opened in debug mode
     assert(() {
       // ignore: avoid_print
-      print('DEBUG: DM detection -> $isDMActivity (combined="${(site['main_activity'] ?? '')} ${(site['activity'] ?? '')} ${(site['activity_at_site'] ?? '')}")');
+      print(
+        'DEBUG: DM detection -> $isDMActivity (combined="${(site['main_activity'] ?? '')} ${(site['activity'] ?? '')} ${(site['activity_at_site'] ?? '')}")',
+      );
       return true;
     }());
 
@@ -2303,8 +2503,7 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
           'expected_date': DateFormat('yyyy-MM-dd').format(visitDate),
         };
       } else if (activityType == 'multi_visit') {
-        final requiresFollowUp =
-            result['requires_follow_up'] as bool? ?? false;
+        final requiresFollowUp = result['requires_follow_up'] as bool? ?? false;
         final followUpDate = result['follow_up_date'] as DateTime?;
         expectedVisit = {
           'type': 'multi_visit',
@@ -2555,9 +2754,37 @@ class _SiteDetailsSheet extends StatelessWidget {
     final cpName = site['cp_name']?.toString() ?? '';
     final visitType = site['visit_type']?.toString() ?? '';
     final mainActivity = site['main_activity']?.toString() ?? '';
+    // Local helper to format statuses within this sheet
+    String formatStatus(String status) {
+      return status
+          .replaceAll('_', ' ')
+          .split(' ')
+          .map(
+            (word) => word.isNotEmpty
+                ? '${word[0].toUpperCase()}${word.substring(1).toLowerCase()}'
+                : '',
+          )
+          .join(' ');
+    }
+
     final comments = site['comments']?.toString() ?? '';
     final additionalData =
         site['additional_data'] as Map<String, dynamic>? ?? {};
+
+    final visitDateRaw = site['visit_date']?.toString();
+    final visitDate = visitDateRaw != null && visitDateRaw.isNotEmpty
+        ? DateTime.tryParse(visitDateRaw)
+        : null;
+    final verifiedAtRaw = site['verified_at']?.toString();
+    final verifiedAt = verifiedAtRaw != null && verifiedAtRaw.isNotEmpty
+        ? DateTime.tryParse(verifiedAtRaw)
+        : null;
+    final verifiedBy = site['verified_by']?.toString() ?? '';
+    final verificationNotes =
+        additionalData['verification_notes']?.toString() ?? '';
+    final surveyTool = additionalData['survey_tool']?.toString() ?? '';
+    final marketDiversion = additionalData['market_diversion_monitoring'];
+    final warehouseMonitoring = additionalData['warehouse_monitoring'];
 
     return Container(
       constraints: BoxConstraints(
@@ -2664,6 +2891,56 @@ class _SiteDetailsSheet extends StatelessWidget {
                   _buildInfoRow('Location', '$locality, $state'),
                   _buildInfoRow('Hub Office', hubOffice),
                   _buildInfoRow('CP Name', cpName),
+                  if (site['status'] != null)
+                    _buildInfoRow(
+                      'Status',
+                      formatStatus(site['status'].toString()),
+                    ),
+                  if (visitDate != null)
+                    _buildInfoRow(
+                      'Visit Date',
+                      '${visitDate.day}/${visitDate.month}/${visitDate.year}',
+                    ),
+                  if (surveyTool.isNotEmpty)
+                    _buildInfoRow('Tool to be Used', surveyTool),
+                  if (verificationNotes.isNotEmpty)
+                    _buildInfoRow('Verification Notes', verificationNotes),
+                  if (verifiedAt != null)
+                    _buildInfoRow(
+                      'Verified At',
+                      '${verifiedAt.day}/${verifiedAt.month}/${verifiedAt.year} by ${verifiedBy.isNotEmpty ? verifiedBy : 'Unknown'}',
+                    ),
+                  if (additionalData['locality_permit_issue_date'] != null)
+                    _buildInfoRow(
+                      'Locality Permit Issue',
+                      additionalData['locality_permit_issue_date'].toString(),
+                    ),
+                  if (additionalData['locality_permit_expiry_date'] != null)
+                    _buildInfoRow(
+                      'Locality Permit Expiry',
+                      additionalData['locality_permit_expiry_date'].toString(),
+                    ),
+                  if (marketDiversion != null)
+                    _buildInfoRow(
+                      'Market Diversion Monitoring',
+                      marketDiversion is bool
+                          ? (marketDiversion ? 'Yes' : 'No')
+                          : marketDiversion.toString(),
+                    ),
+                  if (warehouseMonitoring != null)
+                    _buildInfoRow(
+                      'Warehouse Monitoring',
+                      warehouseMonitoring is bool
+                          ? (warehouseMonitoring ? 'Yes' : 'No')
+                          : warehouseMonitoring.toString(),
+                    ),
+                  if ((additionalData['isFlagged'] == true) &&
+                      (additionalData['flagReason'] != null))
+                    _buildInfoRow(
+                      'Flag Reason',
+                      additionalData['flagReason'].toString(),
+                    ),
+                  const SizedBox(height: 16),
                   _buildInfoRow('Visit Type', visitType),
                   _buildInfoRow('Main Activity', mainActivity),
                   if (comments.isNotEmpty) _buildInfoRow('Comments', comments),
@@ -3672,6 +3949,13 @@ class _LocalityPermitDialogState extends State<_LocalityPermitDialog> {
   File? _localityPermitImage;
   final ImagePicker _imagePicker = ImagePicker();
 
+  // Optional issue/expiry dates for locality permit (coordinator-entered)
+  DateTime? _localityPermitIssueDate;
+  DateTime? _localityPermitExpiryDate;
+
+  String _formatDate(DateTime date) =>
+      '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+
   /// Helper to build a placeholder for broken/unavailable images
   Widget _buildImagePlaceholder() {
     return Container(
@@ -4079,6 +4363,91 @@ class _LocalityPermitDialogState extends State<_LocalityPermitDialog> {
                     ),
                   ],
                 ),
+                const SizedBox(height: 12),
+                // Optional issue / expiry dates for locality permit
+                Row(
+                  children: [
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () async {
+                          final picked = await showDatePicker(
+                            context: context,
+                            initialDate:
+                                _localityPermitIssueDate ?? DateTime.now(),
+                            firstDate: DateTime(2000),
+                            lastDate: DateTime(2100),
+                          );
+                          if (picked != null)
+                            setState(() => _localityPermitIssueDate = picked);
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 12,
+                            horizontal: 12,
+                          ),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.grey[300]!),
+                          ),
+                          child: Text(
+                            _localityPermitIssueDate != null
+                                ? 'Issue: ${_formatDate(_localityPermitIssueDate!)}'
+                                : 'Select issue date',
+                            style: GoogleFonts.poppins(fontSize: 13),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () async {
+                          final picked = await showDatePicker(
+                            context: context,
+                            initialDate:
+                                _localityPermitExpiryDate ?? DateTime.now(),
+                            firstDate: DateTime(2000),
+                            lastDate: DateTime(2100),
+                          );
+                          if (picked != null)
+                            setState(() => _localityPermitExpiryDate = picked);
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 12,
+                            horizontal: 12,
+                          ),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.grey[300]!),
+                          ),
+                          child: Text(
+                            _localityPermitExpiryDate != null
+                                ? 'Expiry: ${_formatDate(_localityPermitExpiryDate!)}'
+                                : 'Select expiry date',
+                            style: GoogleFonts.poppins(fontSize: 13),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                if ((_localityPermitIssueDate != null ||
+                        _localityPermitExpiryDate != null) &&
+                    (_localityPermitIssueDate == null ||
+                        _localityPermitExpiryDate == null ||
+                        (_localityPermitIssueDate != null &&
+                            _localityPermitExpiryDate != null &&
+                            _localityPermitExpiryDate!.isBefore(
+                              _localityPermitIssueDate!,
+                            )))) ...[
+                  Text(
+                    'Please ensure both Issue and Expiry dates are set and Expiry is after Issue.',
+                    style: GoogleFonts.poppins(color: Colors.red, fontSize: 12),
+                  ),
+                  const SizedBox(height: 8),
+                ],
               ],
             ],
           ),
@@ -4100,9 +4469,181 @@ class _LocalityPermitDialogState extends State<_LocalityPermitDialog> {
           _localityPermitImage = File(image.path);
           _localityPermitUploaded = true;
         });
+
+        // Prompt immediately for dates after upload
+        await _promptForLocalityPermitDates();
       }
     } catch (e) {
       debugPrint('Error picking image: $e');
+    }
+  }
+
+  /// Prompt the coordinator to optionally enter Issue and Expiry dates
+  Future<void> _promptForLocalityPermitDates() async {
+    DateTime? tempIssue = _localityPermitIssueDate;
+    DateTime? tempExpiry = _localityPermitExpiryDate;
+
+    final result = await showDialog<String?>(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            return AlertDialog(
+              title: const Text('Enter Permit Dates'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  GestureDetector(
+                    onTap: () async {
+                      final picked = await showDatePicker(
+                        context: context,
+                        initialDate: tempIssue ?? DateTime.now(),
+                        firstDate: DateTime(2000),
+                        lastDate: DateTime(2100),
+                      );
+                      if (picked != null)
+                        setStateDialog(() => tempIssue = picked);
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 12,
+                        horizontal: 12,
+                      ),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.grey[300]!),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.calendar_today,
+                            size: 18,
+                            color: Colors.grey[700],
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              tempIssue != null
+                                  ? 'Issue: ${_formatDate(tempIssue!)}'
+                                  : 'Select issue date',
+                              style: GoogleFonts.poppins(fontSize: 13),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  GestureDetector(
+                    onTap: () async {
+                      final picked = await showDatePicker(
+                        context: context,
+                        initialDate: tempExpiry ?? DateTime.now(),
+                        firstDate: DateTime(2000),
+                        lastDate: DateTime(2100),
+                      );
+                      if (picked != null)
+                        setStateDialog(() => tempExpiry = picked);
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 12,
+                        horizontal: 12,
+                      ),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.grey[300]!),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.calendar_today_outlined,
+                            size: 18,
+                            color: Colors.grey[700],
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              tempExpiry != null
+                                  ? 'Expiry: ${_formatDate(tempExpiry!)}'
+                                  : 'Select expiry date',
+                              style: GoogleFonts.poppins(fontSize: 13),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  if ((tempIssue != null || tempExpiry != null) &&
+                      (tempIssue == null ||
+                          tempExpiry == null ||
+                          (tempIssue != null &&
+                              tempExpiry != null &&
+                              tempExpiry!.isBefore(tempIssue!))))
+                    Text(
+                      'Please provide both dates and ensure Expiry is after Issue.',
+                      style: GoogleFonts.poppins(
+                        color: Colors.red,
+                        fontSize: 12,
+                      ),
+                    ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, null),
+                  child: const Text('Cancel'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(context, 'skip'),
+                  child: const Text('Skip'),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    // Validate before closing
+                    if ((tempIssue != null || tempExpiry != null) &&
+                        (tempIssue == null || tempExpiry == null)) {
+                      // keep dialog open
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Please set both dates or Skip.'),
+                        ),
+                      );
+                      return;
+                    }
+                    if (tempIssue != null &&
+                        tempExpiry != null &&
+                        tempExpiry!.isBefore(tempIssue!)) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Expiry must be after Issue.'),
+                        ),
+                      );
+                      return;
+                    }
+
+                    // Save to state
+                    setState(() {
+                      _localityPermitIssueDate = tempIssue;
+                      _localityPermitExpiryDate = tempExpiry;
+                    });
+
+                    Navigator.pop(context, 'saved');
+                  },
+                  child: const Text('Save'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (result == 'saved') {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Permit dates recorded')));
     }
   }
 
@@ -4206,7 +4747,17 @@ class _LocalityPermitDialogState extends State<_LocalityPermitDialog> {
       case 0:
         return _statePermitConfirmed;
       case 1:
-        return _localityPermitUploaded;
+        if (!_localityPermitUploaded) return false;
+        // If either date is set, require both and ensure expiry is after issue
+        if (_localityPermitIssueDate != null ||
+            _localityPermitExpiryDate != null) {
+          if (_localityPermitIssueDate == null ||
+              _localityPermitExpiryDate == null)
+            return false;
+          if (_localityPermitExpiryDate!.isBefore(_localityPermitIssueDate!))
+            return false;
+        }
+        return true;
       default:
         return false;
     }
@@ -4216,10 +4767,88 @@ class _LocalityPermitDialogState extends State<_LocalityPermitDialog> {
     setState(() => _currentStep++);
   }
 
-  void _complete() {
+  void _complete() async {
+    // Ensure an image has been uploaded
+    if (!_localityPermitUploaded) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Please upload the locality permit image before completing.',
+          ),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    // If both dates are not provided, prompt user to enter them or skip
+    if (_localityPermitIssueDate == null && _localityPermitExpiryDate == null) {
+      final choice = await showDialog<String?>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Add permit dates?'),
+          content: const Text(
+            'You have not entered Issue or Expiry dates for this locality permit. Would you like to add them now?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, 'enter'),
+              child: const Text('Enter dates'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, 'skip'),
+              child: const Text('Skip'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, null),
+              child: const Text('Cancel'),
+            ),
+          ],
+        ),
+      );
+
+      if (choice == 'enter' || choice == null) {
+        // Let the user add dates (or cancelled)
+        return;
+      }
+      // if 'skip', proceed without dates
+    }
+
+    // If only one date is set, block
+    if ((_localityPermitIssueDate == null) !=
+        (_localityPermitExpiryDate == null)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Please provide both Issue and Expiry dates or leave both empty.',
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    // If both set, ensure expiry > issue
+    if (_localityPermitIssueDate != null && _localityPermitExpiryDate != null) {
+      if (_localityPermitExpiryDate!.isBefore(_localityPermitIssueDate!)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Expiry date must be after the issue date.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+    }
+
+    // All good - complete
     widget.onComplete({
       'state_permit_confirmed': true,
       'locality_permit_uploaded': _localityPermitUploaded,
+      if (_localityPermitIssueDate != null)
+        'locality_permit_issue_date': _formatDate(_localityPermitIssueDate!),
+      if (_localityPermitExpiryDate != null)
+        'locality_permit_expiry_date': _formatDate(_localityPermitExpiryDate!),
     });
   }
 }
@@ -4415,7 +5044,10 @@ class _VerificationDialogState extends State<_VerificationDialog> {
                 onTap: () async {
                   final date = await showDatePicker(
                     context: context,
-                    initialDate: _distributionEnd ?? _distributionStart ?? DateTime.now(),
+                    initialDate:
+                        _distributionEnd ??
+                        _distributionStart ??
+                        DateTime.now(),
                     firstDate: _distributionStart ?? DateTime.now(),
                     lastDate: DateTime.now().add(const Duration(days: 365)),
                   );
@@ -4439,8 +5071,12 @@ class _VerificationDialogState extends State<_VerificationDialog> {
                 label: 'Select Date (must be within distribution period)',
                 value: _visitDate,
                 onTap: () async {
-                  final firstDate = _distributionStart ?? DateTime.now().subtract(const Duration(days: 30));
-                  final lastDate = _distributionEnd ?? DateTime.now().add(const Duration(days: 365));
+                  final firstDate =
+                      _distributionStart ??
+                      DateTime.now().subtract(const Duration(days: 30));
+                  final lastDate =
+                      _distributionEnd ??
+                      DateTime.now().add(const Duration(days: 365));
                   final date = await showDatePicker(
                     context: context,
                     initialDate: _visitDate ?? DateTime.now(),
@@ -4681,7 +5317,8 @@ class _VerificationDialogState extends State<_VerificationDialog> {
                           : widget.isUrgentActivity
                           ? 'urgent'
                           : 'standard',
-                      'requires_follow_up': widget.isMultiVisitActivity && _requiresFollowUp,
+                      'requires_follow_up':
+                          widget.isMultiVisitActivity && _requiresFollowUp,
                     });
                   }
                 : null,

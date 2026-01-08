@@ -8,6 +8,8 @@ import 'package:geocoding/geocoding.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'notification_trigger_service.dart';
 import '../models/site_visit.dart';
+import '../models/pact_user_profile.dart';
+import '../utils/site_visit_constraints.dart';
 
 class SiteVisitService {
   final SupabaseClient _supabase = Supabase.instance.client;
@@ -87,14 +89,42 @@ class SiteVisitService {
     }
   }
 
-  Future<List<SiteVisit>> getAvailableSiteVisits() async {
+  Future<List<SiteVisit>> getAvailableSiteVisits([PACTUserProfile? userProfile]) async {
     final response = await _supabase
         .from('mmp_site_entries')
         .select()
         .eq('status', 'Dispatched')
         .order('created_at', ascending: false);
 
-    return response.map((json) => SiteVisit.fromJson(json)).toList();
+    final allSites = response.map((json) => SiteVisit.fromJson(json)).toList();
+
+    // Apply constraints if user profile is provided
+    if (userProfile != null) {
+      return SiteVisitConstraints.filterVisibleSites(allSites, userProfile);
+    }
+
+    return allSites;
+  }
+
+  /// Check if user can claim a specific site visit
+  Future<ConstraintCheckResult> canClaimSite(SiteVisit visit, PACTUserProfile userProfile) async {
+    return SiteVisitConstraints.canClaimSite(visit, userProfile);
+  }
+
+  /// Check if user can accept a specific site visit
+  Future<ConstraintCheckResult> canAcceptSite(SiteVisit visit, PACTUserProfile userProfile) async {
+    return SiteVisitConstraints.canAcceptSite(visit, userProfile);
+  }
+
+  /// Get filtered site visits based on user constraints
+  Future<List<SiteVisit>> getFilteredSiteVisits(PACTUserProfile userProfile) async {
+    final response = await _supabase
+        .from('mmp_site_entries')
+        .select()
+        .order('created_at', ascending: false);
+
+    final allSites = response.map((json) => SiteVisit.fromJson(json)).toList();
+    return SiteVisitConstraints.filterVisibleSites(allSites, userProfile);
   }
 
   Future<List<SiteVisit>> getClaimedSiteVisits(String userId) async {
@@ -662,10 +692,10 @@ class SiteVisitService {
   }
 
   /// Get available site visits with local caching
-  Future<List<SiteVisit>> getAvailableSiteVisitsCached() async {
+  Future<List<SiteVisit>> getAvailableSiteVisitsCached([PACTUserProfile? userProfile]) async {
     try {
       // Try to get from remote first
-      final remoteData = await getAvailableSiteVisits();
+      final remoteData = await getAvailableSiteVisits(userProfile);
 
       // Cache the data locally
       await cacheVisitsLocally(remoteData, 'available_visits');

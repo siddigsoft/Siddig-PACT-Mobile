@@ -8,10 +8,15 @@ import '../theme/app_design_system.dart';
 import '../widgets/app_widgets.dart';
 import '../providers/offline_provider.dart';
 import '../services/site_visit_service.dart';
+import '../models/pact_user_profile.dart';
+import '../models/site_visit.dart';
+import '../utils/site_visit_constraints.dart';
 
 class ClaimSiteButton extends ConsumerStatefulWidget {
   final String siteEntryId;
   final String siteName;
+  final PACTUserProfile? userProfile;
+  final SiteVisit? siteVisit;
   final VoidCallback? onClaimSuccess;
   final VoidCallback? onClaimError;
 
@@ -19,6 +24,8 @@ class ClaimSiteButton extends ConsumerStatefulWidget {
     super.key,
     required this.siteEntryId,
     required this.siteName,
+    this.userProfile,
+    this.siteVisit,
     this.onClaimSuccess,
     this.onClaimError,
   });
@@ -65,6 +72,22 @@ class _ClaimSiteButtonState extends ConsumerState<ClaimSiteButton> {
   }
 
   Future<void> _claimSite() async {
+    // Check constraints first
+    if (widget.userProfile != null && widget.siteVisit != null) {
+      final constraintCheck = SiteVisitConstraints.canClaimSite(widget.siteVisit!, widget.userProfile!);
+      if (!constraintCheck.allowed) {
+        widget.onClaimError?.call();
+        if (mounted) {
+          AppSnackBar.show(
+            context,
+            message: constraintCheck.reason ?? 'Cannot claim this site',
+            type: SnackBarType.error,
+          );
+        }
+        return;
+      }
+    }
+
     setState(() {
       _isLoading = true;
     });

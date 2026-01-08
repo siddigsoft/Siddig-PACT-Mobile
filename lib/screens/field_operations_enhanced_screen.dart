@@ -13,6 +13,8 @@ import 'package:location/location.dart' as location_package;
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../providers/profile_provider.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -29,6 +31,7 @@ import '../services/mmp_file_service.dart';
 import '../l10n/app_localizations.dart';
 import '../widgets/language_switcher.dart';
 import '../services/geographical_task_service.dart';
+import '../utils/site_visit_constraints.dart';
 import '../services/journey_service.dart';
 import '../services/staff_tracking_service.dart';
 import '../widgets/task_dashboard.dart';
@@ -52,16 +55,16 @@ import '../widgets/active_visit_overlay.dart';
 import '../utils/error_handler.dart';
 import '../widgets/app_widgets.dart';
 
-class FieldOperationsEnhancedScreen extends StatefulWidget {
+class FieldOperationsEnhancedScreen extends ConsumerStatefulWidget {
   const FieldOperationsEnhancedScreen({super.key});
 
   @override
-  State<FieldOperationsEnhancedScreen> createState() =>
+  ConsumerState<FieldOperationsEnhancedScreen> createState() =>
       _FieldOperationsEnhancedScreenState();
 }
 
 class _FieldOperationsEnhancedScreenState
-    extends State<FieldOperationsEnhancedScreen> {
+    extends ConsumerState<FieldOperationsEnhancedScreen> {
   // UI state
   bool _isOnline = false;
   bool _showMenu = false;
@@ -702,7 +705,8 @@ class _FieldOperationsEnhancedScreenState
       if (isOnline) {
         // ONLINE: Fetch from service methods and cache for offline
         try {
-          final available = await _siteVisitService.getAvailableSiteVisits();
+          final profile = ref.read(currentUserProfileProvider);
+          final available = await _siteVisitService.getAvailableSiteVisits(profile);
           final claimed = await _siteVisitService.getClaimedSiteVisits(userId);
           final accepted = await _siteVisitService.getAcceptedSiteVisits(userId);
           final ongoing = await _siteVisitService.getOngoingSiteVisits(userId);
@@ -771,6 +775,11 @@ class _FieldOperationsEnhancedScreenState
     
     // Convert to SiteVisit objects
     final available = availableData.map((j) => SiteVisit.fromJson(j)).toList();
+
+    final profile = ref.read(currentUserProfileProvider);
+    final visibleAvailable = profile != null
+        ? SiteVisitConstraints.filterVisibleSites(available, profile)
+        : available;
     final claimed = claimedData.map((j) => SiteVisit.fromJson(j)).toList();
     final accepted = acceptedData.map((j) => SiteVisit.fromJson(j)).toList();
     final ongoing = ongoingData.map((j) => SiteVisit.fromJson(j)).toList();
@@ -786,9 +795,9 @@ class _FieldOperationsEnhancedScreenState
 
     if (mounted) {
       setState(() {
-        _availableVisits = available;
-        _myVisits = [...available, ...claimed, ...accepted, ...ongoing];
-        _assignedVisits = [...available, ...claimed, ...accepted, ...ongoing];
+        _availableVisits = visibleAvailable;
+        _myVisits = [...visibleAvailable, ...claimed, ...accepted, ...ongoing];
+        _assignedVisits = [...visibleAvailable, ...claimed, ...accepted, ...ongoing];
         _pendingSyncVisitIds = pendingIds;
         _draftVisitIds = draftIds;
         _isLoading = false;
@@ -1344,7 +1353,8 @@ class _FieldOperationsEnhancedScreenState
     });
 
     try {
-      final tasks = await _geographicalTaskService.getNearbyAvailableTasks();
+      final profile = ref.read(currentUserProfileProvider);
+      final tasks = await _geographicalTaskService.getNearbyAvailableTasks(userProfile: profile);
       if (mounted) {
         setState(() {
           _nearbyTasks = tasks;

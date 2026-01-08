@@ -16,9 +16,11 @@ import '../../widgets/claim_site_button.dart';
 import '../../widgets/start_visit_button.dart';
 import '../../widgets/complete_visit_button.dart';
 import '../../widgets/accept_assignment_button.dart';
+import '../../models/pact_user_profile.dart';
 
 class VisitDetailsSheet extends StatefulWidget {
   final SiteVisit visit;
+  final PACTUserProfile? userProfile;
   final Future<void> Function(String) onStatusChanged;
   final Future<void> Function(String)? onReject; // New callback for rejection
   final bool isTrackingJourney;
@@ -33,6 +35,7 @@ class VisitDetailsSheet extends StatefulWidget {
   const VisitDetailsSheet({
     super.key,
     required this.visit,
+    this.userProfile,
     required this.onStatusChanged,
     this.onReject,
     this.isTrackingJourney = false,
@@ -1017,6 +1020,8 @@ class _VisitDetailsSheetState extends State<VisitDetailsSheet> {
               AcceptAssignmentButton(
                 siteEntryId: _visit.id,
                 siteName: _visit.siteName,
+                userProfile: widget.userProfile,
+                siteVisit: widget.visit,
                 onAcceptSuccess: () async {
                   setState(() {
                     _visit = _visit.copyWith(
@@ -1049,6 +1054,8 @@ class _VisitDetailsSheetState extends State<VisitDetailsSheet> {
               ClaimSiteButton(
                 siteEntryId: _visit.id,
                 siteName: _visit.siteName,
+                userProfile: widget.userProfile,
+                siteVisit: widget.visit,
                 onClaimSuccess: () {
                   setState(() {
                     _visit = _visit.copyWith(
@@ -1068,6 +1075,8 @@ class _VisitDetailsSheetState extends State<VisitDetailsSheet> {
               AcceptAssignmentButton(
                 siteEntryId: _visit.id,
                 siteName: _visit.siteName,
+                userProfile: widget.userProfile,
+                siteVisit: widget.visit,
                 onAcceptSuccess: () async {
                   setState(() {
                     _visit = _visit.copyWith(
@@ -1143,6 +1152,8 @@ class _VisitDetailsSheetState extends State<VisitDetailsSheet> {
             AcceptAssignmentButton(
               siteEntryId: _visit.id,
               siteName: _visit.siteName,
+              userProfile: widget.userProfile,
+              siteVisit: widget.visit,
               onAcceptSuccess: () async {
                 setState(() {
                   _visit = _visit.copyWith(
