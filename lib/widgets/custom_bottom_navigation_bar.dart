@@ -50,7 +50,7 @@ class CustomBottomNavigationBar extends StatelessWidget {
     final bottomSafeArea = MediaQuery.of(context).padding.bottom;
 
     // Calculate number of items - now showing only 3 items (Dashboard, Sites Management, Wallet)
-    final itemCount = 3;
+    final itemCount = isCoordinator ? 4 : 3;
 
     return Container(
       // Add padding for system navigation bar
@@ -131,6 +131,10 @@ class CustomBottomNavigationBar extends StatelessWidget {
     // if (isCoordinator) {
     //   items.add(_buildNavItem(5, 'Verify', Icons.verified_user_outlined));
     // }
+
+    if (isCoordinator) {
+      items.add(_buildNavItem(3, 'Verify', Icons.verified_user_outlined));
+    }
     
     return items;
   }
@@ -144,6 +148,8 @@ class CustomBottomNavigationBar extends StatelessWidget {
         return AppColors.primaryOrange; // Sites Management tab
       case 2:
         return AppColors.primaryBlue; // Wallet tab
+      case 3:
+        return AppColors.primaryOrange; // Verification tab (coordinator only)
       // Commented out colors for hidden tabs
       // case 2:
       //   return AppColors.accentGreen; // Safety tab

@@ -86,7 +86,7 @@ class _MainLayoutState extends State<MainLayout> {
     if (index == _currentIndex) return;
 
     // Now only 3 items: Dashboard (0), Sites Management (1), Wallet (2)
-    final maxIndex = 2;
+    final maxIndex = _isCoordinator ? 3 : 2;
     if (index < 0 || index > maxIndex) return;
 
     // Navigate to the appropriate screen
@@ -114,12 +114,12 @@ class _MainLayoutState extends State<MainLayout> {
       // case 3:
       //   screen = const ChatListScreen();
       //   break;
-      // case 5:
-      //   // Only for coordinators
-      //   if (_isCoordinator) {
-      //     screen = const SiteVerificationScreen();
-      //   }
-      //   break;
+      case 3:
+        // Only for coordinators
+        if (_isCoordinator) {
+          screen = const SiteVerificationScreen().withMainLayout(currentIndex: 3);
+        }
+        break;
     }
 
     if (screen != null && mounted) {

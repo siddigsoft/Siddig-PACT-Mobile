@@ -202,11 +202,11 @@ class _MainScreenState extends State<MainScreen> {
             ],
           ),
         ),
-        bottomNavigationBar: CustomBottomNavigationBar(
-          currentIndex: _currentIndex,
-          onTap: _onItemTapped,
-          isCoordinator: _isCoordinator,
-        ),
+        // bottomNavigationBar: CustomBottomNavigationBar(
+        //   currentIndex: _currentIndex,
+        //   onTap: _onItemTapped,
+        //   isCoordinator: _isCoordinator,
+        // ),
       ),
     );
   }
