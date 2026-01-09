@@ -248,16 +248,50 @@ class ReusableAppBar extends StatelessWidget {
   Widget _buildUserAvatar(BuildContext context) {
     final currentUser = Supabase.instance.client.auth.currentUser;
     
-    // Use provided avatar URL or fetch from user metadata
-    final String? finalAvatarUrl = avatarUrl ?? 
-        currentUser?.userMetadata?['avatar_url'] as String?;
+    // If avatar URL is provided, use it directly
+    if (avatarUrl != null && avatarUrl!.isNotEmpty) {
+      return _buildAvatarWidget(context, avatarUrl, userName);
+    }
     
-    // Use provided user name or fetch from user metadata
-    final String finalUserName = userName ?? 
-        currentUser?.userMetadata?['full_name'] as String? ??
-        currentUser?.email?.split('@').first ??
-        'User';
+    // Otherwise, fetch from profiles table
+    if (currentUser == null) {
+      return _buildAvatarWidget(context, null, userName ?? 'User');
+    }
     
+    return FutureBuilder<Map<String, dynamic>?>(
+      future: _fetchUserProfile(currentUser.id),
+      builder: (context, snapshot) {
+        final profile = snapshot.data;
+        final profileAvatarUrl = profile?['avatar_url'] as String?;
+        final profileName = profile?['full_name'] as String? ??
+                           profile?['username'] as String? ??
+                           userName ??
+                           currentUser.email?.split('@').first ??
+                           'User';
+        
+        return _buildAvatarWidget(context, profileAvatarUrl, profileName);
+      },
+    );
+  }
+  
+  /// Fetch user profile from profiles table
+  Future<Map<String, dynamic>?> _fetchUserProfile(String userId) async {
+    try {
+      final profile = await Supabase.instance.client
+          .from('profiles')
+          .select('avatar_url, full_name, username')
+          .eq('id', userId)
+          .maybeSingle();
+      return profile;
+    } catch (e) {
+      debugPrint('Error fetching user profile: $e');
+      return null;
+    }
+  }
+  
+  /// Build the actual avatar widget
+  Widget _buildAvatarWidget(BuildContext context, String? avatarUrl, String? userName) {
+    final String finalUserName = userName ?? 'User';
     final String userInitial = finalUserName.isNotEmpty 
         ? finalUserName[0].toUpperCase() 
         : 'U';
@@ -287,10 +321,10 @@ class ReusableAppBar extends StatelessWidget {
         child: CircleAvatar(
           radius: 18,
           backgroundColor: AppColors.primaryOrange.withOpacity(0.1),
-          backgroundImage: finalAvatarUrl != null && finalAvatarUrl.isNotEmpty
-              ? NetworkImage(finalAvatarUrl)
+          backgroundImage: avatarUrl != null && avatarUrl.isNotEmpty
+              ? NetworkImage(avatarUrl)
               : null,
-          child: finalAvatarUrl == null || finalAvatarUrl.isEmpty
+          child: avatarUrl == null || avatarUrl.isEmpty
               ? Text(
                   userInitial,
                   style: TextStyle(
