@@ -2,7 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'components/bottom_navigation_bar.dart';
+import '../widgets/custom_bottom_navigation_bar.dart';
 import 'field_operations_enhanced_screen.dart';
 // import 'forms_screen.dart'; // Removed forms screen
 // import 'equipment_screen.dart'; // Removed equipment screen

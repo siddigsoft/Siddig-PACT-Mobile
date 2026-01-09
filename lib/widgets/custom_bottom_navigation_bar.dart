@@ -1,14 +1,38 @@
-// lib/screens/components/bottom_navigation_bar.dart
+// lib/widgets/custom_bottom_navigation_bar.dart
 
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../theme/app_colors.dart';
-import '../../l10n/app_localizations.dart';
+import '../theme/app_colors.dart';
+import '../l10n/app_localizations.dart';
 
+/// A reusable bottom navigation bar widget for the app.
+/// 
+/// Features:
+/// - Animated indicator for the selected tab
+/// - Responsive design based on screen size
+/// - Support for coordinator role with additional "Verify" tab
+/// - Custom colors per tab
+/// - Smooth animations and transitions
+/// 
+/// Example usage:
+/// ```dart
+/// CustomBottomNavigationBar(
+///   currentIndex: _currentIndex,
+///   onTap: (index) {
+///     setState(() => _currentIndex = index);
+///   },
+///   isCoordinator: _isCoordinator,
+/// )
+/// ```
 class CustomBottomNavigationBar extends StatelessWidget {
+  /// The currently selected tab index
   final int currentIndex;
+  
+  /// Callback when a tab is tapped
   final Function(int) onTap;
+  
+  /// Whether the user is a coordinator (shows extra "Verify" tab)
   final bool isCoordinator;
 
   const CustomBottomNavigationBar({
@@ -87,6 +111,7 @@ class CustomBottomNavigationBar extends StatelessWidget {
     );
   }
   
+  /// Builds the list of navigation items based on user role
   List<Widget> _buildNavItems(BuildContext context) {
     final items = <Widget>[
       _buildNavItem(0, AppLocalizations.of(context)!.home, Icons.home_outlined),
@@ -104,25 +129,26 @@ class CustomBottomNavigationBar extends StatelessWidget {
     return items;
   }
 
-  // Helper method to get the active color based on tab index
+  /// Returns the active color for a given tab index
   Color _getActiveColor(int index) {
     switch (index) {
       case 2:
-        return AppColors.accentGreen;
+        return AppColors.accentGreen; // Safety tab
       case 3:
       case 4:
-        return AppColors.primaryBlue;
+        return AppColors.primaryBlue; // Chat and Wallet tabs
       case 5:
-        return AppColors.primaryOrange; // Verification tab
+        return AppColors.primaryOrange; // Verification tab (coordinator only)
       default:
-        return AppColors.primaryOrange;
+        return AppColors.primaryOrange; // Home and Reports tabs
     }
   }
 
+  /// Builds a single navigation item
   Widget _buildNavItem(int index, String label, IconData icon) {
     final isActive = currentIndex == index;
     final activeColor = _getActiveColor(index);
-    // Smaller width for 6 items
+    // Smaller width for 6 items to fit better
     final itemWidth = isCoordinator ? 55.0 : 65.0;
 
     return GestureDetector(
@@ -187,3 +213,4 @@ class CustomBottomNavigationBar extends StatelessWidget {
     );
   }
 }
+
