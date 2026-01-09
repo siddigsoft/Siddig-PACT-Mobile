@@ -6,6 +6,7 @@ import '../widgets/reusable_app_bar.dart';
 import '../widgets/dashboard_card.dart';
 import '../widgets/custom_drawer_menu.dart';
 import '../widgets/notifications_panel.dart';
+import '../widgets/main_layout.dart';
 import '../services/wallet_service.dart';
 import '../models/site_visit.dart';
 import '../theme/app_colors.dart';
@@ -332,14 +333,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      key: _scaffoldKey,
-      backgroundColor: AppColors.backgroundGray,
-      drawer: CustomDrawerMenu(
-        currentUser: Supabase.instance.client.auth.currentUser,
-        onClose: () => _scaffoldKey.currentState?.closeDrawer(),
-      ),
-      body: SafeArea(
+    return MainLayout(
+      currentIndex: 0, // Dashboard is index 0
+      child: Scaffold(
+        key: _scaffoldKey,
+        backgroundColor: AppColors.backgroundGray,
+        drawer: CustomDrawerMenu(
+          currentUser: Supabase.instance.client.auth.currentUser,
+          onClose: () => _scaffoldKey.currentState?.closeDrawer(),
+        ),
+        body: SafeArea(
         child: Column(
           children: [
             ReusableAppBar(
@@ -438,6 +441,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
           ],
         ),
+      ),
       ),
     );
   }
