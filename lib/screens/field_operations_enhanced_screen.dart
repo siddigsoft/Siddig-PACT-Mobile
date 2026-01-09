@@ -2,11 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import 'package:geolocator/geolocator.dart';
 import '../widgets/reusable_app_bar.dart';
 import '../widgets/custom_drawer_menu.dart';
 import '../widgets/notifications_panel.dart';
 import '../widgets/main_layout.dart';
+import '../widgets/start_visit_dialog.dart';
+import '../widgets/visit_report_dialog.dart';
 import '../theme/app_colors.dart';
+import '../services/location_service.dart';
+import '../services/photo_upload_service.dart';
+import '../models/visit_report.dart';
 
 class FieldOperationsEnhancedScreen extends StatefulWidget {
   const FieldOperationsEnhancedScreen({super.key});
@@ -452,19 +458,100 @@ class _MMPScreenState extends State<MMPScreen> {
   }
 
   Future<void> _startVisit(Map<String, dynamic> site) async {
-    // Navigate to start visit screen or show dialog
-    // For now, just update status
     try {
+      // Check location permissions
+      final hasPermission = await LocationService.checkPermissions();
+      if (!hasPermission) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Location permission is required to start a visit.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+
+      // Show confirmation dialog
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => StartVisitDialog(
+          site: site,
+          onConfirm: () => Navigator.of(context).pop(true),
+        ),
+      );
+
+      if (confirmed != true) return;
+
+      // Get current location
+      final position = await LocationService.getCurrentLocation();
+      if (position == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Could not get location. Visit will start without location.'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+      }
+
       final now = DateTime.now().toIso8601String();
-      
+      final siteStatus = (site['status'] as String? ?? '').toLowerCase();
+      final isAssigned = siteStatus == 'assigned' && site['accepted_by'] == null;
+
+      // Build update data
+      final updateData = <String, dynamic>{
+        'status': 'In Progress',
+        'visit_started_at': now,
+        'visit_started_by': _userId,
+        'updated_at': now,
+      };
+
+      // Add location to additional_data if available
+      if (position != null) {
+        final additionalData = site['additional_data'] as Map<String, dynamic>? ?? {};
+        additionalData['start_location'] = {
+          'latitude': position.latitude,
+          'longitude': position.longitude,
+          'accuracy': position.accuracy,
+          'timestamp': now,
+        };
+        updateData['additional_data'] = additionalData;
+      }
+
+      // If site was "assigned" (not yet accepted), auto-accept and set fees
+      if (isAssigned) {
+        updateData['accepted_by'] = _userId;
+        updateData['accepted_at'] = now;
+
+        // Fetch fresh site data to get latest fees
+        final freshSite = await Supabase.instance.client
+            .from('mmp_site_entries')
+            .select('enumerator_fee, transport_fee, cost')
+            .eq('id', site['id'])
+            .maybeSingle();
+
+        // Calculate fees if missing
+        var enumeratorFee = (freshSite?['enumerator_fee'] as num?)?.toDouble() ?? 0.0;
+        final transportFee = (freshSite?['transport_fee'] as num?)?.toDouble() ?? 
+                            (site['transport_fee'] as num?)?.toDouble() ?? 0.0;
+
+        // Calculate total cost
+        final calculatedCost = enumeratorFee + transportFee;
+
+        if (enumeratorFee > 0 || calculatedCost > 0) {
+          updateData['enumerator_fee'] = enumeratorFee;
+          updateData['transport_fee'] = transportFee;
+          updateData['cost'] = calculatedCost;
+        }
+      }
+
+      // Update database
       await Supabase.instance.client
           .from('mmp_site_entries')
-          .update({
-            'status': 'In Progress',
-            'visit_started_at': now,
-            'visit_started_by': _userId,
-            'updated_at': now,
-          })
+          .update(updateData)
           .eq('id', site['id']);
 
       if (mounted) {
@@ -476,8 +563,10 @@ class _MMPScreenState extends State<MMPScreen> {
         );
       }
 
+      // Reload data
       await _loadDataCollectorData();
       setState(() {});
+
     } catch (e) {
       debugPrint('Error starting visit: $e');
       if (mounted) {
@@ -492,32 +581,145 @@ class _MMPScreenState extends State<MMPScreen> {
   }
 
   Future<void> _completeVisit(Map<String, dynamic> site) async {
-    // Navigate to complete visit screen or show dialog
-    // For now, just update status
     try {
+      // Show visit report dialog
+      final reportData = await showDialog<VisitReportData>(
+        context: context,
+        builder: (context) => VisitReportDialog(
+          site: site,
+          onSubmit: (data) => Navigator.of(context).pop(data),
+        ),
+      );
+
+      if (reportData == null) return;
+
+      // Get final location
+      final position = reportData.coordinates ?? 
+                       await LocationService.getCurrentLocation();
+
       final now = DateTime.now().toIso8601String();
-      
+
+      // Upload photos
+      List<String> photoUrls = [];
+      if (reportData.photos.isNotEmpty) {
+        photoUrls = await PhotoUploadService.uploadPhotos(
+          site['id'].toString(),
+          reportData.photos,
+        );
+      }
+
+      // Create visit report
+      final report = VisitReport(
+        siteId: site['id'].toString(),
+        activities: reportData.activities,
+        notes: reportData.notes,
+        durationMinutes: reportData.durationMinutes,
+        latitude: position?.latitude,
+        longitude: position?.longitude,
+        accuracy: position?.accuracy,
+        photoUrls: photoUrls,
+        submittedAt: DateTime.now(),
+      );
+
+      // Save report to database
+      final savedReport = await Supabase.instance.client
+          .from('reports')
+          .insert(report.toJson(submittedBy: _userId))
+          .select()
+          .single();
+
+      // Link photos to report
+      if (photoUrls.isNotEmpty && savedReport != null) {
+        final reportPhotos = photoUrls.map((url) => {
+          'report_id': savedReport['id'],
+          'photo_url': url,
+          'storage_path': url, // Use URL as storage path if separate path not available
+        }).toList();
+
+        await Supabase.instance.client
+            .from('report_photos')
+            .insert(reportPhotos);
+      }
+
+      // Update site status
+      final updateData = <String, dynamic>{
+        'status': 'Completed',
+        'visit_completed_at': now,
+        'visit_completed_by': _userId,
+        'updated_at': now,
+        'additional_data': {
+          ...(site['additional_data'] as Map<String, dynamic>? ?? {}),
+          'visit_report_submitted': true,
+          'visit_report_id': savedReport['id'],
+          'visit_report_submitted_at': now,
+          if (position != null)
+            'final_location': {
+              'latitude': position.latitude,
+              'longitude': position.longitude,
+              'accuracy': position.accuracy,
+            },
+        },
+      };
+
+      // Ensure visit_completed_at is set
+      final currentSite = await Supabase.instance.client
+          .from('mmp_site_entries')
+          .select('visit_completed_at, visit_completed_by')
+          .eq('id', site['id'])
+          .maybeSingle();
+
+      if (currentSite?['visit_completed_at'] == null) {
+        updateData['visit_completed_at'] = now;
+      }
+      if (currentSite?['visit_completed_by'] == null) {
+        updateData['visit_completed_by'] = _userId;
+      }
+
       await Supabase.instance.client
           .from('mmp_site_entries')
-          .update({
-            'status': 'Completed',
-            'visit_completed_at': now,
-            'visit_completed_by': _userId,
-            'updated_at': now,
-          })
+          .update(updateData)
           .eq('id', site['id']);
+
+      // Save GPS to site_locations table
+      if (position != null) {
+        await Supabase.instance.client
+            .from('site_locations')
+            .insert({
+              'site_id': site['id'],
+              'user_id': _userId,
+              'latitude': position.latitude,
+              'longitude': position.longitude,
+              'accuracy': position.accuracy ?? 10,
+              'notes': 'Visit end location',
+              'recorded_at': now,
+            });
+      }
+
+      // Create wallet transaction (optional - you may need to implement this)
+      try {
+        // TODO: Call your wallet transaction creation function if needed
+        // await createSiteVisitWalletTransaction(
+        //   siteVisitId: site['id'],
+        //   description: 'Site visit completed: ${site['site_name']}',
+        // );
+      } catch (e) {
+        debugPrint('Error creating wallet transaction: $e');
+        // Don't fail the entire operation
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Visit completed successfully'),
+            content: Text('Visit completed and report submitted successfully'),
             backgroundColor: Colors.green,
           ),
         );
       }
 
+      // Reload data
       await _loadDataCollectorData();
       setState(() {});
+
     } catch (e) {
       debugPrint('Error completing visit: $e');
       if (mounted) {
