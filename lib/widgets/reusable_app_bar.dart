@@ -3,12 +3,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'modern_app_header.dart';
 import 'language_switcher.dart';
 import '../services/user_notification_service.dart';
 import '../services/notification_service.dart';
+import '../services/auth_service.dart';
 import '../models/user_notification.dart';
 import '../theme/app_colors.dart';
+import '../screens/profile_screen.dart';
+import '../screens/settings_screen.dart';
 
 /// A reusable AppBar widget that can be used across all pages.
 /// 
@@ -299,7 +303,12 @@ class ReusableAppBar extends StatelessWidget {
     return GestureDetector(
       onTap: () {
         HapticFeedback.lightImpact();
-        onAvatarTap?.call();
+        // If custom callback provided, use it; otherwise show dropdown
+        if (onAvatarTap != null) {
+          onAvatarTap?.call();
+        } else {
+          _showAccountDropdown(context);
+        }
       },
       child: Container(
         width: 40,
@@ -339,9 +348,318 @@ class ReusableAppBar extends StatelessWidget {
     );
   }
 
+  /// Show account dropdown menu
+  void _showAccountDropdown(BuildContext context) {
+    // Use Navigator to show a custom positioned dialog
+    showGeneralDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
+      barrierColor: Colors.transparent,
+      transitionDuration: const Duration(milliseconds: 200),
+      pageBuilder: (context, animation, secondaryAnimation) {
+        return _AccountDropdownMenu(
+          onProfileTap: () {
+            Navigator.of(context).pop();
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const ProfileScreen(),
+              ),
+            );
+          },
+          onSettingsTap: () {
+            Navigator.of(context).pop();
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const SettingsScreen(),
+              ),
+            );
+          },
+          onLogoutTap: () {
+            Navigator.of(context).pop();
+            _showLogoutConfirmation(context);
+          },
+        );
+      },
+      transitionBuilder: (context, animation, secondaryAnimation, child) {
+        return SlideTransition(
+          position: Tween<Offset>(
+            begin: const Offset(0, -0.1),
+            end: Offset.zero,
+          ).animate(CurvedAnimation(
+            parent: animation,
+            curve: Curves.easeOut,
+          )),
+          child: FadeTransition(
+            opacity: animation,
+            child: child,
+          ),
+        );
+      },
+    );
+  }
+
+  /// Build menu row widget
+  Widget _buildMenuRow(
+    IconData icon,
+    String title, {
+    Color? iconColor,
+    Color? textColor,
+  }) {
+    return Row(
+      children: [
+        Icon(
+          icon,
+          size: 20,
+          color: iconColor ?? Colors.grey.shade700,
+        ),
+        const SizedBox(width: 12),
+        Text(
+          title,
+          style: GoogleFonts.poppins(
+            fontSize: 14,
+            color: textColor ?? Colors.black87,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ],
+    );
+  }
+
+
+  /// Show logout confirmation dialog
+  void _showLogoutConfirmation(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: Text(
+            'Log Out',
+            style: GoogleFonts.poppins(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          content: Text(
+            'Are you sure you want to log out?',
+            style: GoogleFonts.poppins(),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: Text(
+                'Cancel',
+                style: GoogleFonts.poppins(
+                  color: Colors.grey.shade700,
+                ),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                Navigator.of(dialogContext).pop();
+                await _handleLogout(context);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.accentRed,
+                foregroundColor: Colors.white,
+              ),
+              child: Text(
+                'Log Out',
+                style: GoogleFonts.poppins(),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  /// Handle logout
+  Future<void> _handleLogout(BuildContext context) async {
+    try {
+      final authService = AuthService();
+      await authService.signOut();
+      
+      // Navigate to login screen
+      if (context.mounted) {
+        Navigator.of(context).pushNamedAndRemoveUntil(
+          '/login',
+          (route) => false,
+        );
+      }
+    } catch (e) {
+      debugPrint('Error logging out: $e');
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error logging out: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   /// Check if the Navigator can pop (go back)
   bool _canPop(BuildContext context) {
     return Navigator.canPop(context);
+  }
+}
+
+/// Account dropdown menu widget
+class _AccountDropdownMenu extends StatelessWidget {
+  final VoidCallback onProfileTap;
+  final VoidCallback onSettingsTap;
+  final VoidCallback onLogoutTap;
+
+  const _AccountDropdownMenu({
+    required this.onProfileTap,
+    required this.onSettingsTap,
+    required this.onLogoutTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final Size screenSize = MediaQuery.of(context).size;
+    final double dropdownWidth = 200.0;
+    
+    // Position at top right, below the app bar (aligned with avatar position)
+    // App bar is typically around 56-60px, plus status bar
+    final double topOffset = MediaQuery.of(context).padding.top + 56 + 8; // App bar + spacing
+    final double rightOffset = 16.0; // Margin from right edge (aligned with avatar)
+
+    return Stack(
+      children: [
+        // Transparent backdrop
+        Positioned.fill(
+          child: GestureDetector(
+            onTap: () => Navigator.of(context).pop(),
+            child: Container(color: Colors.transparent),
+          ),
+        ),
+        // Dropdown menu
+        Positioned(
+          top: topOffset,
+          right: rightOffset,
+          child: Material(
+            elevation: 8,
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              width: dropdownWidth,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Header
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      border: Border(
+                        bottom: BorderSide(
+                          color: Colors.grey.shade200,
+                          width: 1,
+                        ),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Text(
+                          'My Account',
+                          style: GoogleFonts.poppins(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black87,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Menu items
+                  _buildMenuItem(
+                    context,
+                    icon: Icons.person_outline,
+                    title: 'Profile',
+                    onTap: () {
+                      HapticFeedback.lightImpact();
+                      onProfileTap();
+                    },
+                  ),
+                  _buildMenuItem(
+                    context,
+                    icon: Icons.settings_outlined,
+                    title: 'Settings',
+                    onTap: () {
+                      HapticFeedback.lightImpact();
+                      onSettingsTap();
+                    },
+                  ),
+                  Divider(height: 1, color: Colors.grey.shade200),
+                  _buildMenuItem(
+                    context,
+                    icon: Icons.logout,
+                    title: 'Log out',
+                    iconColor: AppColors.accentRed,
+                    textColor: AppColors.accentRed,
+                    onTap: () {
+                      HapticFeedback.lightImpact();
+                      onLogoutTap();
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMenuItem(
+    BuildContext context, {
+    required IconData icon,
+    required String title,
+    required VoidCallback onTap,
+    Color? iconColor,
+    Color? textColor,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          children: [
+            Icon(
+              icon,
+              size: 20,
+              color: iconColor ?? Colors.grey.shade700,
+            ),
+            const SizedBox(width: 12),
+            Text(
+              title,
+              style: GoogleFonts.poppins(
+                fontSize: 14,
+                color: textColor ?? Colors.black87,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 

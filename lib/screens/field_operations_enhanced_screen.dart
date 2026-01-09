@@ -771,7 +771,6 @@ class _MMPScreenState extends State<MMPScreen> {
                 showNotifications: true,
                 onNotificationTap: () => NotificationsPanel.show(context),
                 showUserAvatar: true,
-                onAvatarTap: () => _scaffoldKey.currentState?.openDrawer(),
               ),
               Expanded(
                 child: _isLoading
