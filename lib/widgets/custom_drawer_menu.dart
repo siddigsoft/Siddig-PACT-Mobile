@@ -16,6 +16,7 @@ import '../screens/help_screen.dart';
 import '../screens/settings_screen.dart';
 import '../screens/field_operations_enhanced_screen.dart';
 import '../screens/dashboard_screen.dart';
+import '../screens/wallet_screen.dart';
 
 class CustomDrawerMenu extends ConsumerStatefulWidget {
   final User? currentUser;
@@ -228,63 +229,63 @@ class _CustomDrawerMenuState extends ConsumerState<CustomDrawerMenu> {
                       Row(
                         children: [
                           // User Avatar with Ring
-                          Container(
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: Colors.white,
-                                width: 3,
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(0.2),
-                                  blurRadius: 8,
-                                  offset: const Offset(0, 4),
-                                ),
-                              ],
-                            ),
-                            child: CircleAvatar(
-                              radius: 32,
-                              backgroundColor: Colors.white,
-                              backgroundImage: avatarUrl != null && avatarUrl.isNotEmpty
-                                  ? NetworkImage(avatarUrl)
-                                  : null,
-                              child: avatarUrl == null || avatarUrl.isEmpty
-                                  ? Text(
-                                      userInitial,
-                                      style: TextStyle(
-                                        fontSize: 32,
-                                        fontWeight: FontWeight.bold,
-                                        color: AppColors.primaryOrange,
-                                      ),
-                                    )
-                                  : null,
-                            ),
-                          ),
-                          const Spacer(),
+                          // Container(
+                          //   decoration: BoxDecoration(
+                          //     shape: BoxShape.circle,
+                          //     border: Border.all(
+                          //       color: Colors.white,
+                          //       width: 3,
+                          //     ),
+                          //     boxShadow: [
+                          //       BoxShadow(
+                          //         color: Colors.black.withOpacity(0.2),
+                          //         blurRadius: 8,
+                          //         offset: const Offset(0, 4),
+                          //       ),
+                          //     ],
+                          //   ),
+                          //   child: CircleAvatar(
+                          //     radius: 32,
+                          //     backgroundColor: Colors.white,
+                          //     backgroundImage: avatarUrl != null && avatarUrl.isNotEmpty
+                          //         ? NetworkImage(avatarUrl)
+                          //         : null,
+                          //     child: avatarUrl == null || avatarUrl.isEmpty
+                          //         ? Text(
+                          //             userInitial,
+                          //             style: TextStyle(
+                          //               fontSize: 32,
+                          //               fontWeight: FontWeight.bold,
+                          //               color: AppColors.primaryOrange,
+                          //             ),
+                          //           )
+                          //         : null,
+                          //   ),
+                          // ),
+                          // const Spacer(),
                           // PACT Logo Badge
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 6,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.2),
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(
-                                color: Colors.white.withOpacity(0.3),
-                              ),
-                            ),
-                            child: const Text(
-                              'PACT',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                                letterSpacing: 1.5,
-                              ),
-                            ),
-                          ),
+                          // Container(
+                          //   padding: const EdgeInsets.symmetric(
+                          //     horizontal: 12,
+                          //     vertical: 6,
+                          //   ),
+                          //   decoration: BoxDecoration(
+                          //     color: Colors.white.withOpacity(0.2),
+                          //     borderRadius: BorderRadius.circular(20),
+                          //     border: Border.all(
+                          //       color: Colors.white.withOpacity(0.3),
+                          //     ),
+                          //   ),
+                          //   // child: const Text(
+                          //   //   'PACT',
+                          //   //   style: TextStyle(
+                          //   //     color: Colors.white,
+                          //   //     fontWeight: FontWeight.bold,
+                          //   //     fontSize: 16,
+                          //   //     letterSpacing: 1.5,
+                          //   //   ),
+                          //   // ),
+                          // ),
                         ],
                       ),
                       const SizedBox(height: 16),
@@ -403,6 +404,21 @@ class _CustomDrawerMenuState extends ConsumerState<CustomDrawerMenu> {
                         },
                       ),
                       _MenuItemData(
+                        icon: Icons.account_balance_wallet_rounded,
+                        title: 'My Wallet',
+                        subtitle: 'View balance and transactions',
+                        iconColor: Colors.green,
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const WalletScreen(),
+                            ),
+                          );
+                          widget.onClose();
+                        },
+                      ),
+                      _MenuItemData(
                         icon: Icons.sync_rounded,
                         title: 'Sync Data',
                         subtitle: 'Update local data',
@@ -461,110 +477,110 @@ class _CustomDrawerMenuState extends ConsumerState<CustomDrawerMenu> {
             ),
 
             // Sign Out Button
-            Container(
-              margin: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    Colors.red.shade400,
-                    Colors.red.shade600,
-                  ],
-                ),
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.red.withOpacity(0.3),
-                    blurRadius: 8,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: () async {
-                    final shouldSignOut = await showDialog<bool>(
-                      context: context,
-                      builder: (context) => AlertDialog(
-                        title: const Text('Sign Out'),
-                        content:
-                            const Text('Are you sure you want to sign out?'),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(context, false),
-                            child: const Text('Cancel'),
-                          ),
-                          ElevatedButton(
-                            onPressed: () => Navigator.pop(context, true),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.red,
-                              foregroundColor: Colors.white,
-                            ),
-                            child: const Text('Sign Out'),
-                          ),
-                        ],
-                      ),
-                    );
+            // Container(
+            //   margin: const EdgeInsets.all(16),
+            //   decoration: BoxDecoration(
+            //     gradient: LinearGradient(
+            //       colors: [
+            //         Colors.red.shade400,
+            //         Colors.red.shade600,
+            //       ],
+            //     ),
+            //     borderRadius: BorderRadius.circular(16),
+            //     boxShadow: [
+            //       BoxShadow(
+            //         color: Colors.red.withOpacity(0.3),
+            //         blurRadius: 8,
+            //         offset: const Offset(0, 4),
+            //       ),
+            //     ],
+            //   ),
+            //   child: Material(
+            //     color: Colors.transparent,
+            //     child: InkWell(
+            //       onTap: () async {
+            //         final shouldSignOut = await showDialog<bool>(
+            //           context: context,
+            //           builder: (context) => AlertDialog(
+            //             title: const Text('Sign Out'),
+            //             content:
+            //                 const Text('Are you sure you want to sign out?'),
+            //             actions: [
+            //               TextButton(
+            //                 onPressed: () => Navigator.pop(context, false),
+            //                 child: const Text('Cancel'),
+            //               ),
+            //               ElevatedButton(
+            //                 onPressed: () => Navigator.pop(context, true),
+            //                 style: ElevatedButton.styleFrom(
+            //                   backgroundColor: Colors.red,
+            //                   foregroundColor: Colors.white,
+            //                 ),
+            //                 child: const Text('Sign Out'),
+            //               ),
+            //             ],
+            //           ),
+            //         );
 
-                    if (shouldSignOut == true) {
-                      await AuthService().signOut();
-                      if (context.mounted) {
-                        Navigator.of(context).pushReplacementNamed('/login');
-                      }
-                    }
-                  },
-                  borderRadius: BorderRadius.circular(16),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(
-                          Icons.exit_to_app_rounded,
-                          color: Colors.white,
-                        ),
-                        const SizedBox(width: 12),
-                        const Text(
-                          'Sign Out',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
+            //         if (shouldSignOut == true) {
+            //           await AuthService().signOut();
+            //           if (context.mounted) {
+            //             Navigator.of(context).pushReplacementNamed('/login');
+            //           }
+            //         }
+            //       },
+            //       borderRadius: BorderRadius.circular(16),
+            //       child: Padding(
+            //         padding: const EdgeInsets.symmetric(vertical: 16),
+            //         child: Row(
+            //           mainAxisAlignment: MainAxisAlignment.center,
+            //           children: [
+            //             const Icon(
+            //               Icons.exit_to_app_rounded,
+            //               color: Colors.white,
+            //             ),
+            //             const SizedBox(width: 12),
+            //             const Text(
+            //               'Sign Out',
+            //               style: TextStyle(
+            //                 color: Colors.white,
+            //                 fontSize: 16,
+            //                 fontWeight: FontWeight.bold,
+            //               ),
+            //             ),
+            //           ],
+            //         ),
+            //       ),
+            //     ),
+            //   ),
+            // ),
 
             // App Version
-            Padding(
-              padding: const EdgeInsets.only(bottom: 16),
-              child: Column(
-                children: [
-                  Text(
-                    _appVersion.isNotEmpty 
-                        ? 'PACT Mobile v$_appVersion' 
-                        : 'PACT Mobile',
-                    style: TextStyle(
-                      color: Colors.grey.shade500,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  if (_buildNumber.isNotEmpty)
-                    Text(
-                      'Build $_buildNumber',
-                      style: TextStyle(
-                        color: Colors.grey.shade400,
-                        fontSize: 10,
-                      ),
-                    ),
-                ],
-              ),
-            ),
+            // Padding(
+            //   padding: const EdgeInsets.only(bottom: 16),
+            //   child: Column(
+            //     children: [
+            //       Text(
+            //         _appVersion.isNotEmpty 
+            //             ? 'PACT Mobile v$_appVersion' 
+            //             : 'PACT Mobile',
+            //         style: TextStyle(
+            //           color: Colors.grey.shade500,
+            //           fontSize: 12,
+            //           fontWeight: FontWeight.w500,
+            //         ),
+            //       ),
+            //       if (_buildNumber.isNotEmpty)
+            //         Text(
+            //           'Build $_buildNumber',
+            //           style: TextStyle(
+            //             color: Colors.grey.shade400,
+            //             fontSize: 10,
+            //           ),
+            //         ),
+            //     ],
+            //   ),
+            // ),
           ],
         ),
       ),
