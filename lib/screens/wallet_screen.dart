@@ -10,6 +10,7 @@ import '../providers/profile_provider.dart';
 import '../providers/down_payment_provider.dart';
 import '../services/wallet_service.dart';
 import '../widgets/down_payment_request_dialog.dart';
+import '../widgets/main_layout.dart';
 import 'cost_submission_history_screen.dart';
 import 'cost_submission_form_screen.dart';
 import 'withdrawal_request_screen.dart';
@@ -50,9 +51,11 @@ class _WalletScreenState extends ConsumerState<WalletScreen> with SingleTickerPr
     final walletStatsAsync = ref.watch(walletStatsProvider);
     final service = ref.watch(walletServiceProvider);
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA), // Light background
-      appBar: AppBar(
+    return MainLayout(
+      currentIndex: 4, // Wallet is index 4
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF8F9FA), // Light background
+        appBar: AppBar(
         title: const Text(
           'My Wallet',
           style: TextStyle(
@@ -106,6 +109,7 @@ class _WalletScreenState extends ConsumerState<WalletScreen> with SingleTickerPr
         error: (error, stack) => Center(
           child: Text('Error: $error'),
         ),
+      ),
       ),
     );
   }
