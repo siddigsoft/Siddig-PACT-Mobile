@@ -55,6 +55,7 @@ import '../theme/app_design_system.dart';
 import '../widgets/active_visit_overlay.dart';
 import '../utils/error_handler.dart';
 import '../widgets/app_widgets.dart';
+import '../widgets/main_layout.dart';
 
 class FieldOperationsEnhancedScreen extends ConsumerStatefulWidget {
   const FieldOperationsEnhancedScreen({super.key});
@@ -1788,7 +1789,9 @@ class _FieldOperationsEnhancedScreenState
     final screenHeight = MediaQuery.of(context).size.height;
     final orientation = MediaQuery.of(context).orientation;
 
-    return Scaffold(
+    return MainLayout(
+      currentIndex: 1, // Sites Management is index 1
+      child: Scaffold(
       key: _scaffoldKey,
       backgroundColor: AppColors.backgroundGray,
       drawer: CustomDrawerMenu(
@@ -1842,6 +1845,7 @@ class _FieldOperationsEnhancedScreenState
           // Active visit overlay
           const ActiveVisitOverlay(),
         ],
+      ),
       ),
     );
   }
