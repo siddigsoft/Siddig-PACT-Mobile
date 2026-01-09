@@ -98,7 +98,7 @@ class _MainLayoutState extends State<MainLayout> {
         break;
       case 1:
         // Sites Management
-        screen = const FieldOperationsEnhancedScreen();
+        screen = FieldOperationsEnhancedScreen();
         break;
       case 2:
         // Wallet

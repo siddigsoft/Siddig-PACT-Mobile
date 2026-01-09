@@ -206,7 +206,7 @@ class _CustomDrawerMenuState extends ConsumerState<CustomDrawerMenu> {
             end: Alignment.bottomRight,
             colors: [
               Colors.white,
-              AppColors.lightOrange.withOpacity(0.05),
+              AppColors.primaryWhite,
             ],
           ),
         ),
@@ -343,6 +343,26 @@ class _CustomDrawerMenuState extends ConsumerState<CustomDrawerMenu> {
                     context,
                     title: 'Quick Access',
                     items: [
+
+
+
+                      _MenuItemData(
+                        icon: Icons.dashboard_rounded,
+                        title: 'PACT Dashboard',
+                        subtitle: 'View dashboard',
+                        iconColor: AppColors.primaryOrange,
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const DashboardScreen(),
+                            ),
+                          );
+                          widget.onClose();
+                        },
+                      ),
+
+
                       _MenuItemData(
                         icon: Icons.assignment_rounded,
                         title: 'Site Management',
@@ -352,12 +372,29 @@ class _CustomDrawerMenuState extends ConsumerState<CustomDrawerMenu> {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (context) => const FieldOperationsEnhancedScreen(),
+                              builder: (context) => FieldOperationsEnhancedScreen(),
                             ),
                           );
                           widget.onClose();
                         },
                       ),
+
+                      _MenuItemData(
+                        icon: Icons.account_balance_wallet_rounded,
+                        title: 'My Wallet',
+                        subtitle: 'View balance and transactions',
+                        iconColor: Colors.green,
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const WalletScreen(),
+                            ),
+                          );
+                          widget.onClose();
+                        },
+                      ),
+
                       _MenuItemData(
                         icon: Icons.person_rounded,
                         title: 'My Profile',
@@ -388,36 +425,36 @@ class _CustomDrawerMenuState extends ConsumerState<CustomDrawerMenu> {
                           widget.onClose();
                         },
                       ),
-                      _MenuItemData(
-                        icon: Icons.dashboard_rounded,
-                        title: 'PACT Dashboard',
-                        subtitle: 'View dashboard',
-                        iconColor: AppColors.primaryOrange,
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => const DashboardScreen(),
-                            ),
-                          );
-                          widget.onClose();
-                        },
-                      ),
-                      _MenuItemData(
-                        icon: Icons.account_balance_wallet_rounded,
-                        title: 'My Wallet',
-                        subtitle: 'View balance and transactions',
-                        iconColor: Colors.green,
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => const WalletScreen(),
-                            ),
-                          );
-                          widget.onClose();
-                        },
-                      ),
+                      // _MenuItemData(
+                      //   icon: Icons.dashboard_rounded,
+                      //   title: 'PACT Dashboard',
+                      //   subtitle: 'View dashboard',
+                      //   iconColor: AppColors.primaryOrange,
+                      //   onTap: () {
+                      //     Navigator.push(
+                      //       context,
+                      //       MaterialPageRoute(
+                      //         builder: (context) => const DashboardScreen(),
+                      //       ),
+                      //     );
+                      //     widget.onClose();
+                      //   },
+                      // ),
+                      // _MenuItemData(
+                      //   icon: Icons.account_balance_wallet_rounded,
+                      //   title: 'My Wallet',
+                      //   subtitle: 'View balance and transactions',
+                      //   iconColor: Colors.green,
+                      //   onTap: () {
+                      //     Navigator.push(
+                      //       context,
+                      //       MaterialPageRoute(
+                      //         builder: (context) => const WalletScreen(),
+                      //       ),
+                      //     );
+                      //     widget.onClose();
+                      //   },
+                      // ),
                       _MenuItemData(
                         icon: Icons.sync_rounded,
                         title: 'Sync Data',
@@ -431,47 +468,47 @@ class _CustomDrawerMenuState extends ConsumerState<CustomDrawerMenu> {
                     ],
                   ),
                   const Divider(height: 24, indent: 16, endIndent: 16),
-                  _buildMenuSection(
-                    context,
-                    title: 'Information',
-                    items: [
-                      _MenuItemData(
-                        icon: Icons.info_rounded,
-                        title: 'About PACT',
-                        subtitle: 'Learn more about us',
-                        iconColor: Colors.green,
-                        onTap: () async {
-                          await _launchPactWebsite(context);
-                          widget.onClose();
-                        },
-                      ),
-                      _MenuItemData(
-                        icon: Icons.help_rounded,
-                        title: 'Help & Support',
-                        subtitle: 'Get help and find answers',
-                        iconColor: Colors.purple,
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => const HelpScreen(),
-                            ),
-                          );
-                          widget.onClose();
-                        },
-                      ),
-                      _MenuItemData(
-                        icon: Icons.feedback_rounded,
-                        title: 'Send Feedback',
-                        subtitle: 'Share your thoughts',
-                        iconColor: Colors.teal,
-                        onTap: () async {
-                          await _sendFeedback(context);
-                          widget.onClose();
-                        },
-                      ),
-                    ],
-                  ),
+                  // _buildMenuSection(
+                  //   context,
+                  //   title: 'Information',
+                  //   items: [
+                  //     _MenuItemData(
+                  //       icon: Icons.info_rounded,
+                  //       title: 'About PACT',
+                  //       subtitle: 'Learn more about us',
+                  //       iconColor: Colors.green,
+                  //       onTap: () async {
+                  //         await _launchPactWebsite(context);
+                  //         widget.onClose();
+                  //       },
+                  //     ),
+                  //     _MenuItemData(
+                  //       icon: Icons.help_rounded,
+                  //       title: 'Help & Support',
+                  //       subtitle: 'Get help and find answers',
+                  //       iconColor: Colors.purple,
+                  //       onTap: () {
+                  //         Navigator.push(
+                  //           context,
+                  //           MaterialPageRoute(
+                  //             builder: (context) => const HelpScreen(),
+                  //           ),
+                  //         );
+                  //         widget.onClose();
+                  //       },
+                  //     ),
+                  //     _MenuItemData(
+                  //       icon: Icons.feedback_rounded,
+                  //       title: 'Send Feedback',
+                  //       subtitle: 'Share your thoughts',
+                  //       iconColor: Colors.teal,
+                  //       onTap: () async {
+                  //         await _sendFeedback(context);
+                  //         widget.onClose();
+                  //       },
+                  //     ),
+                  //   ],
+                  // ),
                 ],
               ),
             ),

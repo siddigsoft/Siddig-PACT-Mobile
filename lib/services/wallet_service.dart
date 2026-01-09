@@ -511,7 +511,7 @@ class WalletService {
       }
 
       final response = await query
-          .order('requested_at', ascending: false)
+          .order('created_at', ascending: false)
           .range(offset, offset + limit - 1)
           .timeout(
             TRANSACTION_FETCH_TIMEOUT,
@@ -537,7 +537,7 @@ class WalletService {
           .from('withdrawal_requests')
           .select()
           .eq('user_id', userId)
-          .order('requested_at', ascending: false)
+          .order('created_at', ascending: false)
           .timeout(
             TRANSACTION_FETCH_TIMEOUT,
             onTimeout: () => throw TimeoutException('All withdrawal requests fetch timeout'),

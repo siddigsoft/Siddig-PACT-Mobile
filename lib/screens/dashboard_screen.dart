@@ -369,7 +369,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
       final data = await Supabase.instance.client
           .from('profiles')
-          .select('location, location_updated_at')
+          .select('location, updated_at')
           .eq('id', _userId!)
           .maybeSingle();
 
@@ -395,7 +395,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           }
         }
 
-        final updatedAt = data['location_updated_at'] as String?;
+        final updatedAt = data['updated_at'] as String?;
         if (updatedAt != null) {
           _locationLastUpdated = updatedAt;
         }
@@ -421,7 +421,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           .from('profiles')
           .update({
             'location': locationData,
-            'location_updated_at': DateTime.now().toIso8601String(),
+            'updated_at': DateTime.now().toIso8601String(),
           })
           .eq('id', _userId!);
 

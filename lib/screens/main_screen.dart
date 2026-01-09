@@ -218,7 +218,7 @@ class _MainScreenState extends State<MainScreen> {
         return const DashboardScreen(key: ValueKey('home'));
       case 1:
         // Sites Management
-        return const FieldOperationsEnhancedScreen(key: ValueKey('sites'));
+        return FieldOperationsEnhancedScreen(key: const ValueKey('sites'));
       case 2:
         // Wallet
         return const WalletScreen(key: ValueKey('wallet'));
