@@ -41,6 +41,7 @@ import '../widgets/app_menu_overlay.dart';
 import '../widgets/modern_app_header.dart';
 import '../widgets/modern_card.dart';
 import '../widgets/custom_drawer_menu.dart';
+import '../widgets/reusable_app_bar.dart';
 import '../widgets/offline_sync_indicator.dart';
 import '../services/notification_service.dart';
 import '../services/user_notification_service.dart';
@@ -1947,8 +1948,9 @@ class _FieldOperationsEnhancedScreenState
   }
 
   Widget _buildHeader() {
-    return ModernAppHeader(
+    return ReusableAppBar(
       title: 'Field Ops',
+      scaffoldKey: _scaffoldKey,
       actions: [
         const SizedBox(width: 8),
         StreamBuilder<List<UserNotification>>(
@@ -1997,17 +1999,6 @@ class _FieldOperationsEnhancedScreenState
                   ),
               ],
             );
-          },
-        ),
-        const SizedBox(width: 8),
-        HeaderActionButton(
-          icon: Icons.menu_rounded,
-          tooltip: 'Menu',
-          backgroundColor: AppColors.primaryBlue.withOpacity(0.1),
-          color: AppColors.primaryBlue,
-          onPressed: () {
-            HapticFeedback.mediumImpact();
-            _scaffoldKey.currentState?.openDrawer();
           },
         ),
         const SizedBox(width: 8),
