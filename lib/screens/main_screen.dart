@@ -136,7 +136,8 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   void _onItemTapped(int index) {
-    final maxIndex = _isCoordinator ? 5 : 4;
+    // Now only 3 items: Dashboard (0), Sites Management (1), Wallet (2)
+    final maxIndex = 2;
     if (index >= 0 && index <= maxIndex) {
       setState(() {
         _currentIndex = index;
@@ -213,23 +214,29 @@ class _MainScreenState extends State<MainScreen> {
   Widget _buildCurrentScreen() {
     switch (_currentIndex) {
       case 0:
+        // Dashboard
         return const DashboardScreen(key: ValueKey('home'));
       case 1:
-        return const ReportsScreen(key: ValueKey('reports'));
+        // Sites Management
+        return const FieldOperationsEnhancedScreen(key: ValueKey('sites'));
       case 2:
-        return const SafetyHubScreen(key: ValueKey('safety'));
-      case 3:
-        return const ChatListScreen(key: ValueKey('chat'));
-      case 4:
+        // Wallet
         return const WalletScreen(key: ValueKey('wallet'));
-      case 5:
-        // Only accessible for coordinators
-        if (_isCoordinator) {
-          return const SiteVerificationScreen(key: ValueKey('verification'));
-        }
-        return const FieldOperationsEnhancedScreen(key: ValueKey('home'));
+      // Commented out screens - keeping for future use
+      // case 1:
+      //   return const ReportsScreen(key: ValueKey('reports'));
+      // case 2:
+      //   return const SafetyHubScreen(key: ValueKey('safety'));
+      // case 3:
+      //   return const ChatListScreen(key: ValueKey('chat'));
+      // case 5:
+      //   // Only accessible for coordinators
+      //   if (_isCoordinator) {
+      //     return const SiteVerificationScreen(key: ValueKey('verification'));
+      //   }
+      //   return const FieldOperationsEnhancedScreen(key: ValueKey('home'));
       default:
-        return const FieldOperationsEnhancedScreen(key: ValueKey('home'));
+        return const DashboardScreen(key: ValueKey('home'));
     }
   }
 }

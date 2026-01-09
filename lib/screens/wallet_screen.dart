@@ -52,7 +52,7 @@ class _WalletScreenState extends ConsumerState<WalletScreen> with SingleTickerPr
     final service = ref.watch(walletServiceProvider);
 
     return MainLayout(
-      currentIndex: 4, // Wallet is index 4
+      currentIndex: 2, // Wallet is index 2
       child: Scaffold(
         backgroundColor: const Color(0xFFF8F9FA), // Light background
         appBar: AppBar(

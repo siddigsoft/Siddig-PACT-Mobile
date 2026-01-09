@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'custom_bottom_navigation_bar.dart';
 import '../screens/dashboard_screen.dart';
+import '../screens/field_operations_enhanced_screen.dart';
 import '../screens/reports_screen.dart';
 import '../screens/safety_hub_screen.dart';
 import '../screens/chat_list_screen.dart';
@@ -84,33 +85,41 @@ class _MainLayoutState extends State<MainLayout> {
     // If tapping on the same tab, do nothing
     if (index == _currentIndex) return;
 
-    final maxIndex = _isCoordinator ? 5 : 4;
+    // Now only 3 items: Dashboard (0), Sites Management (1), Wallet (2)
+    final maxIndex = 2;
     if (index < 0 || index > maxIndex) return;
 
     // Navigate to the appropriate screen
     Widget? screen;
     switch (index) {
       case 0:
+        // Dashboard
         screen = const DashboardScreen();
         break;
       case 1:
-        screen = const ReportsScreen();
+        // Sites Management
+        screen = const FieldOperationsEnhancedScreen();
         break;
       case 2:
-        screen = const SafetyHubScreen();
-        break;
-      case 3:
-        screen = const ChatListScreen();
-        break;
-      case 4:
+        // Wallet
         screen = const WalletScreen();
         break;
-      case 5:
-        // Only for coordinators
-        if (_isCoordinator) {
-          screen = const SiteVerificationScreen();
-        }
-        break;
+      // Commented out screens - keeping for future use
+      // case 1:
+      //   screen = const ReportsScreen();
+      //   break;
+      // case 2:
+      //   screen = const SafetyHubScreen();
+      //   break;
+      // case 3:
+      //   screen = const ChatListScreen();
+      //   break;
+      // case 5:
+      //   // Only for coordinators
+      //   if (_isCoordinator) {
+      //     screen = const SiteVerificationScreen();
+      //   }
+      //   break;
     }
 
     if (screen != null && mounted) {
