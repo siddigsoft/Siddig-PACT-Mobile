@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../widgets/custom_bottom_navigation_bar.dart';
+import 'dashboard_screen.dart';
 import 'field_operations_enhanced_screen.dart';
 // import 'forms_screen.dart'; // Removed forms screen
 // import 'equipment_screen.dart'; // Removed equipment screen
@@ -212,7 +213,7 @@ class _MainScreenState extends State<MainScreen> {
   Widget _buildCurrentScreen() {
     switch (_currentIndex) {
       case 0:
-        return const FieldOperationsEnhancedScreen(key: ValueKey('home'));
+        return const DashboardScreen(key: ValueKey('home'));
       case 1:
         return const ReportsScreen(key: ValueKey('reports'));
       case 2:
