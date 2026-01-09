@@ -13,6 +13,8 @@ import '../widgets/app_widgets.dart';
 import '../utils/error_handler.dart';
 import '../screens/profile_screen.dart';
 import '../screens/help_screen.dart';
+import '../screens/settings_screen.dart';
+import '../screens/field_operations_enhanced_screen.dart';
 
 class CustomDrawerMenu extends ConsumerStatefulWidget {
   final User? currentUser;
@@ -340,6 +342,21 @@ class _CustomDrawerMenuState extends ConsumerState<CustomDrawerMenu> {
                     title: 'Quick Access',
                     items: [
                       _MenuItemData(
+                        icon: Icons.assignment_rounded,
+                        title: 'Field Operations',
+                        subtitle: 'Manage site visits and tasks',
+                        iconColor: AppColors.primaryOrange,
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const FieldOperationsEnhancedScreen(),
+                            ),
+                          );
+                          widget.onClose();
+                        },
+                      ),
+                      _MenuItemData(
                         icon: Icons.person_rounded,
                         title: 'My Profile',
                         subtitle: 'View and edit profile',
@@ -349,6 +366,21 @@ class _CustomDrawerMenuState extends ConsumerState<CustomDrawerMenu> {
                             context,
                             MaterialPageRoute(
                               builder: (context) => const ProfileScreen(),
+                            ),
+                          );
+                          widget.onClose();
+                        },
+                      ),
+                      _MenuItemData(
+                        icon: Icons.settings_rounded,
+                        title: 'Settings',
+                        subtitle: 'App preferences and account',
+                        iconColor: AppColors.primaryBlue,
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const SettingsScreen(),
                             ),
                           );
                           widget.onClose();
