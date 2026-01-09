@@ -15,6 +15,7 @@ import '../screens/profile_screen.dart';
 import '../screens/help_screen.dart';
 import '../screens/settings_screen.dart';
 import '../screens/field_operations_enhanced_screen.dart';
+import '../screens/dashboard_screen.dart';
 
 class CustomDrawerMenu extends ConsumerStatefulWidget {
   final User? currentUser;
@@ -343,7 +344,7 @@ class _CustomDrawerMenuState extends ConsumerState<CustomDrawerMenu> {
                     items: [
                       _MenuItemData(
                         icon: Icons.assignment_rounded,
-                        title: 'Field Operations',
+                        title: 'Site Management',
                         subtitle: 'Manage site visits and tasks',
                         iconColor: AppColors.primaryOrange,
                         onTap: () {
@@ -389,10 +390,15 @@ class _CustomDrawerMenuState extends ConsumerState<CustomDrawerMenu> {
                       _MenuItemData(
                         icon: Icons.dashboard_rounded,
                         title: 'PACT Dashboard',
-                        subtitle: 'Open web portal',
+                        subtitle: 'View dashboard',
                         iconColor: AppColors.primaryOrange,
-                        onTap: () async {
-                          await _launchPactDashboard(context);
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const DashboardScreen(),
+                            ),
+                          );
                           widget.onClose();
                         },
                       ),
