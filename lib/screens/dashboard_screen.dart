@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
+import 'package:geolocator/geolocator.dart';
 import '../widgets/reusable_app_bar.dart';
 import '../widgets/dashboard_card.dart';
 import '../widgets/custom_drawer_menu.dart';
@@ -34,6 +36,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   int _activeOperations = 0;
   int _pendingQueue = 0;
   double _completionRate = 0.0;
+  List<SiteVisit> _coordinatorVisits = [];
   
   // Data Collector metrics
   int _assigned = 0;
@@ -42,6 +45,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
   int _completed = 0;
   int _overdue = 0;
   double _earnings = 0.0;
+  List<SiteVisit> _dataCollectorVisits = [];
+  int _streak = 0;
+  double _completionRateDC = 0.0;
+  int? _averageVisitTime;
+  bool _hasLocation = false;
+  Map<String, double>? _currentLocation;
+  String? _locationLastUpdated;
+  bool _isUpdatingLocation = false;
+  
+  // Tab states
+  String _coordinatorTab = 'overview';
+  String _dataCollectorTab = 'my-visits';
 
   RealtimeChannel? _realtimeChannel;
 
@@ -157,6 +172,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
           .map((json) => SiteVisit.fromJson(json as Map<String, dynamic>))
           .toList();
 
+      _coordinatorVisits = siteVisits;
+
       // Calculate metrics (matching React implementation)
       _totalOperations = siteVisits.length;
       
@@ -260,6 +277,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
           .map((json) => SiteVisit.fromJson(json))
           .toList();
 
+      _dataCollectorVisits = allVisits;
+
       // Calculate metrics
       _assigned = allVisits.length;
 
@@ -323,6 +342,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _earnings = 0.0;
       }
 
+      // Calculate completion rate
+      if (_assigned > 0) {
+        _completionRateDC = (_completed / _assigned) * 100;
+      } else {
+        _completionRateDC = 0.0;
+      }
+
+      // Calculate streak (simplified - consecutive days with completed visits)
+      _streak = _calculateStreak(allVisits);
+
+      // Load location info
+      await _loadLocationInfo();
+
       if (mounted) {
         setState(() {});
       }
@@ -331,10 +363,139 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  Future<void> _loadLocationInfo() async {
+    try {
+      if (_userId == null) return;
+
+      final data = await Supabase.instance.client
+          .from('profiles')
+          .select('location, location_updated_at')
+          .eq('id', _userId!)
+          .maybeSingle();
+
+      if (data != null) {
+        final location = data['location'];
+        if (location != null) {
+          final locMap = location is Map ? location : 
+                        (location is String ? Map<String, dynamic>.from(
+                          Map<String, dynamic>.from(
+                            (location as String).split(',').asMap().map((i, v) => 
+                              MapEntry(i == 0 ? 'latitude' : 'longitude', double.tryParse(v.trim()) ?? 0.0)
+                            )
+                          )
+                        ) : null);
+          
+          if (locMap != null) {
+            _currentLocation = {
+              'latitude': (locMap['latitude'] ?? locMap['lat'] ?? 0.0) as double,
+              'longitude': (locMap['longitude'] ?? locMap['lng'] ?? locMap['lon'] ?? 0.0) as double,
+            };
+            _hasLocation = _currentLocation!['latitude'] != 0.0 && 
+                          _currentLocation!['longitude'] != 0.0;
+          }
+        }
+
+        final updatedAt = data['location_updated_at'] as String?;
+        if (updatedAt != null) {
+          _locationLastUpdated = updatedAt;
+        }
+      }
+    } catch (e) {
+      debugPrint('Error loading location info: $e');
+    }
+  }
+
+  Future<void> _updateLocation() async {
+    setState(() => _isUpdatingLocation = true);
+    try {
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+
+      final locationData = {
+        'latitude': position.latitude,
+        'longitude': position.longitude,
+      };
+
+      await Supabase.instance.client
+          .from('profiles')
+          .update({
+            'location': locationData,
+            'location_updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('id', _userId!);
+
+      _currentLocation = {
+        'latitude': position.latitude,
+        'longitude': position.longitude,
+      };
+      _hasLocation = true;
+      _locationLastUpdated = DateTime.now().toIso8601String();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Location updated successfully'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Error updating location: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error updating location: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      setState(() => _isUpdatingLocation = false);
+    }
+  }
+
+  int _calculateStreak(List<SiteVisit> visits) {
+    // Simplified streak calculation - consecutive days with completed visits
+    final completed = visits.where((v) {
+      final status = v.status.toLowerCase();
+      return status == 'completed' || status == 'complete';
+    }).toList();
+
+    if (completed.isEmpty) return 0;
+
+    final completedDates = completed
+        .where((v) => v.completedAt != null)
+        .map((v) => v.completedAt!.toLocal())
+        .map((d) => DateTime(d.year, d.month, d.day))
+        .toSet()
+        .toList()
+      ..sort((a, b) => b.compareTo(a));
+
+    if (completedDates.isEmpty) return 0;
+
+    int streak = 0;
+    final today = DateTime.now();
+    final todayStart = DateTime(today.year, today.month, today.day);
+    DateTime currentDate = todayStart;
+
+    for (final date in completedDates) {
+      final daysDiff = currentDate.difference(date).inDays;
+      if (daysDiff == streak) {
+        streak++;
+        currentDate = currentDate.subtract(const Duration(days: 1));
+      } else {
+        break;
+      }
+    }
+
+    return streak;
+  }
+
   @override
   Widget build(BuildContext context) {
     return MainLayout(
-      currentIndex: 0, // Dashboard is index 0
+      currentIndex: 0,
       child: Scaffold(
         key: _scaffoldKey,
         backgroundColor: AppColors.backgroundGray,
@@ -343,105 +504,119 @@ class _DashboardScreenState extends State<DashboardScreen> {
           onClose: () => _scaffoldKey.currentState?.closeDrawer(),
         ),
         body: SafeArea(
-        child: Column(
-          children: [
-            ReusableAppBar(
-              title: 'Dashboard',
-              scaffoldKey: _scaffoldKey,
-              showLanguageSwitcher: true,
-              showNotifications: true,
-              onNotificationTap: () => NotificationsPanel.show(context),
-              showUserAvatar: true,
-              onAvatarTap: () => _scaffoldKey.currentState?.openDrawer(),
-            ),
-            Expanded(
-              child: _isLoading
-                  ? const Center(child: CircularProgressIndicator())
-                  : RefreshIndicator(
-                      onRefresh: _initializeDashboard,
-                      child: SingleChildScrollView(
-                        physics: const AlwaysScrollableScrollPhysics(),
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // Operations Center Header
-                            Row(
-                              children: [
-                                Icon(
-                                  Icons.dashboard_outlined,
-                                  color: AppColors.primaryBlue,
-                                  size: 24,
+          child: Column(
+            children: [
+              ReusableAppBar(
+                title: 'Dashboard',
+                scaffoldKey: _scaffoldKey,
+                showLanguageSwitcher: true,
+                showNotifications: true,
+                onNotificationTap: () => NotificationsPanel.show(context),
+                showUserAvatar: true,
+                onAvatarTap: () => _scaffoldKey.currentState?.openDrawer(),
+              ),
+              Expanded(
+                child: _isLoading
+                    ? const Center(child: CircularProgressIndicator())
+                    : RefreshIndicator(
+                        onRefresh: _initializeDashboard,
+                        child: SingleChildScrollView(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Operations Center Header
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.dashboard_outlined,
+                                    color: AppColors.primaryBlue,
+                                    size: 24,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'Operations Center',
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppColors.textDark,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Field operations command and control',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 14,
+                                  color: AppColors.textLight,
                                 ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  'Operations Center',
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.w600,
-                                    color: AppColors.textDark,
+                              ),
+                              const SizedBox(height: 16),
+                              
+                              // State/Hub indicator
+                              if (_userState != null || _userHub != null)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 6,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.accentGreen.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.location_on,
+                                        size: 16,
+                                        color: AppColors.accentGreen,
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        _userState != null 
+                                            ? 'State: $_userState'
+                                            : 'Hub: $_userHub',
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 12,
+                                          color: AppColors.accentGreen,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              'Field operations command and control',
-                              style: GoogleFonts.poppins(
-                                fontSize: 14,
-                                color: AppColors.textLight,
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-                            
-                            // State/Hub indicator
-                            if (_userState != null || _userHub != null)
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 6,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: AppColors.accentGreen.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      Icons.location_on,
-                                      size: 16,
-                                      color: AppColors.accentGreen,
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      _userState != null 
-                                          ? 'State: $_userState'
-                                          : 'Hub: $_userHub',
-                                      style: GoogleFonts.poppins(
-                                        fontSize: 12,
-                                        color: AppColors.accentGreen,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            const SizedBox(height: 24),
-                            
-                            // Dashboard Cards
-                            if (_isCoordinator)
-                              _buildCoordinatorCards()
-                            else
-                              _buildDataCollectorCards(),
-                          ],
+                              const SizedBox(height: 24),
+                              
+                              // Dashboard Cards
+                              if (_isCoordinator)
+                                _buildCoordinatorCards()
+                              else
+                                _buildDataCollectorCards(),
+
+                              const SizedBox(height: 24),
+
+                              // Location Sharing Card (Data Collectors only)
+                              if (!_isCoordinator) _buildLocationCard(),
+
+                              // Streak & Performance Banner (Data Collectors only)
+                              if (!_isCoordinator && (_streak > 0 || _completionRateDC > 0))
+                                _buildPerformanceBanner(),
+
+                              const SizedBox(height: 24),
+
+                              // Tabs Section
+                              _buildTabsSection(),
+                            ],
+                          ),
                         ),
                       ),
-                    ),
-            ),
-          ],
+              ),
+            ],
+          ),
         ),
-      ),
       ),
     );
   }
@@ -483,7 +658,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 value: _activeOperations.toString(),
                 subtitle: 'In progress now',
                 icon: Icons.people_outline,
-                color: AppColors.primaryBlue.withOpacity(0.8),
+                color: Colors.cyan,
               ),
             ),
             const SizedBox(width: 12),
@@ -522,7 +697,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 title: 'Today',
                 value: _today.toString(),
                 icon: Icons.today_outlined,
-                color: AppColors.accentGreen,
+                color: AppColors.primaryOrange,
               ),
             ),
           ],
@@ -536,7 +711,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 title: 'In Progress',
                 value: _inProgress.toString(),
                 icon: Icons.work_outline,
-                color: AppColors.primaryOrange,
+                color: Colors.cyan,
               ),
             ),
             const SizedBox(width: 12),
@@ -568,7 +743,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 title: 'Earnings',
                 value: _walletService.formatCurrency(_earnings),
                 icon: Icons.account_balance_wallet_outlined,
-                color: AppColors.primaryBlue,
+                color: Colors.purple,
               ),
             ),
           ],
@@ -577,5 +752,1013 @@ class _DashboardScreenState extends State<DashboardScreen> {
     ).animate().fadeIn(duration: 400.ms).slideY(begin: 0.2, end: 0);
   }
 
+  Widget _buildLocationCard() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.blue.shade50,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.blue.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade600,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.location_on, color: Colors.white, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          'Location Sharing',
+                          style: GoogleFonts.poppins(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.blue.shade900,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: _hasLocation ? Colors.green : Colors.red,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                _hasLocation ? Icons.check_circle : Icons.cancel,
+                                size: 12,
+                                color: Colors.white,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                _hasLocation ? 'Enabled' : 'Not Set',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Share your location to appear on the team map and receive nearby site visit assignments.',
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        color: Colors.blue.shade800,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (_hasLocation && _currentLocation != null) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Current Location:',
+                    style: GoogleFonts.poppins(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.blue.shade900,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Lat: ${_currentLocation!['latitude']!.toStringAsFixed(6)}, '
+                    'Lng: ${_currentLocation!['longitude']!.toStringAsFixed(6)}',
+                    style: GoogleFonts.poppins(
+                      fontSize: 11,
+                      color: Colors.blue.shade700,
+                    ),
+                  ),
+                  if (_locationLastUpdated != null) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      'Last Updated: ${DateFormat('MMM dd, yyyy h:mm:ss a').format(DateTime.parse(_locationLastUpdated!))}',
+                      style: GoogleFonts.poppins(
+                        fontSize: 10,
+                        color: Colors.blue.shade600,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: _isUpdatingLocation ? null : _updateLocation,
+              icon: _isUpdatingLocation
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Icon(Icons.refresh),
+              label: Text(_isUpdatingLocation ? 'Updating...' : (_hasLocation ? 'Update Location' : 'Share Location')),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue.shade600,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPerformanceBanner() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Colors.orange.shade50, Colors.amber.shade50],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.orange.shade200),
+      ),
+      child: Row(
+        children: [
+          if (_streak > 0) ...[
+            Row(
+              children: [
+                Icon(Icons.local_fire_department, color: Colors.orange.shade600, size: 24),
+                const SizedBox(width: 8),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '$_streak Day Streak',
+                      style: GoogleFonts.poppins(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.orange.shade900,
+                      ),
+                    ),
+                    Text(
+                      'Keep it up!',
+                      style: GoogleFonts.poppins(
+                        fontSize: 11,
+                        color: Colors.orange.shade700,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(width: 24),
+          ],
+          if (_averageVisitTime != null) ...[
+            Row(
+              children: [
+                Icon(Icons.access_time, color: Colors.blue.shade600, size: 24),
+                const SizedBox(width: 8),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Avg: $_averageVisitTime min',
+                      style: GoogleFonts.poppins(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.blue.shade900,
+                      ),
+                    ),
+                    Text(
+                      'Per visit',
+                      style: GoogleFonts.poppins(
+                        fontSize: 11,
+                        color: Colors.blue.shade700,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(width: 24),
+          ],
+          const Spacer(),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                '${_completionRateDC.toStringAsFixed(0)}%',
+                style: GoogleFonts.poppins(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.orange.shade900,
+                ),
+              ),
+              Text(
+                'Completion Rate',
+                style: GoogleFonts.poppins(
+                  fontSize: 11,
+                  color: Colors.orange.shade700,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTabsSection() {
+    if (_isCoordinator) {
+      return _buildCoordinatorTabs();
+    } else {
+      return _buildDataCollectorTabs();
+    }
+  }
+
+  Widget _buildCoordinatorTabs() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          // Tab Buttons
+          Row(
+            children: [
+              Expanded(child: _buildTabButton('overview', 'Overview', Icons.list_alt)),
+              Expanded(child: _buildTabButton('upcoming', 'Upcoming', Icons.calendar_today)),
+              Expanded(child: _buildTabButton('calendar', 'Calendar', Icons.calendar_month)),
+              Expanded(child: _buildTabButton('costs', 'Costs', Icons.attach_money)),
+            ],
+          ),
+          const Divider(height: 1),
+          // Tab Content
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: _buildCoordinatorTabContent(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDataCollectorTabs() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          // Tab Buttons
+          Row(
+            children: [
+              Expanded(child: _buildTabButton('my-visits', 'Visits', Icons.location_on)),
+              Expanded(child: _buildTabButton('schedule', 'Schedule', Icons.calendar_today)),
+              Expanded(child: _buildTabButton('performance', 'Stats', Icons.trending_up)),
+              Expanded(child: _buildTabButton('wallet', 'Wallet', Icons.account_balance_wallet)),
+              Expanded(child: _buildTabButton('help', 'Help', Icons.help_outline)),
+            ],
+          ),
+          const Divider(height: 1),
+          // Tab Content
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: _buildDataCollectorTabContent(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTabButton(String tab, String label, IconData icon) {
+    final isActive = _isCoordinator 
+        ? _coordinatorTab == tab 
+        : _dataCollectorTab == tab;
+    
+    return InkWell(
+      onTap: () => setState(() {
+        if (_isCoordinator) {
+          _coordinatorTab = tab;
+        } else {
+          _dataCollectorTab = tab;
+        }
+      }),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(
+              color: isActive ? AppColors.primaryBlue : Colors.transparent,
+              width: 2,
+            ),
+          ),
+        ),
+        child: Column(
+          children: [
+            Icon(
+              icon,
+              size: 20,
+              color: isActive ? AppColors.primaryBlue : AppColors.textLight,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.poppins(
+                fontSize: 10,
+                fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
+                color: isActive ? AppColors.primaryBlue : AppColors.textLight,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCoordinatorTabContent() {
+    switch (_coordinatorTab) {
+      case 'overview':
+        return _buildOverviewTab();
+      case 'upcoming':
+        return _buildUpcomingTab();
+      case 'calendar':
+        return _buildCalendarTab();
+      case 'costs':
+        return _buildCostsTab();
+      default:
+        return const SizedBox();
+    }
+  }
+
+  Widget _buildDataCollectorTabContent() {
+    switch (_dataCollectorTab) {
+      case 'my-visits':
+        return _buildMyVisitsTab();
+      case 'schedule':
+        return _buildScheduleTab();
+      case 'performance':
+        return _buildPerformanceTab();
+      case 'wallet':
+        return _buildWalletTab();
+      case 'help':
+        return _buildHelpTab();
+      default:
+        return const SizedBox();
+    }
+  }
+
+  Widget _buildOverviewTab() {
+    // Site visits overview - simplified list
+    if (_coordinatorVisits.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Text(
+            'No site visits found',
+            style: GoogleFonts.poppins(color: AppColors.textLight),
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Site Visits Overview',
+          style: GoogleFonts.poppins(
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 16),
+        ..._coordinatorVisits.take(10).map((visit) => _buildVisitListItem(visit)),
+      ],
+    );
+  }
+
+  Widget _buildUpcomingTab() {
+    final upcoming = _coordinatorVisits
+        .where((v) => v.dueDate != null && v.dueDate!.isAfter(DateTime.now()))
+        .toList()
+      ..sort((a, b) => a.dueDate!.compareTo(b.dueDate!));
+
+    if (upcoming.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Text(
+            'No upcoming visits',
+            style: GoogleFonts.poppins(color: AppColors.textLight),
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Upcoming Site Visits (${upcoming.length})',
+          style: GoogleFonts.poppins(
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 16),
+        ...upcoming.take(20).map((visit) => _buildVisitListItem(visit)),
+      ],
+    );
+  }
+
+  Widget _buildCalendarTab() {
+    // Simplified calendar view - just show upcoming visits by date
+    final upcoming = _coordinatorVisits
+        .where((v) => v.dueDate != null && v.dueDate!.isAfter(DateTime.now()))
+        .toList()
+      ..sort((a, b) => a.dueDate!.compareTo(b.dueDate!));
+
+    final groupedByDate = <DateTime, List<SiteVisit>>{};
+    for (final visit in upcoming) {
+      if (visit.dueDate != null) {
+        final date = DateTime(visit.dueDate!.year, visit.dueDate!.month, visit.dueDate!.day);
+        groupedByDate.putIfAbsent(date, () => []).add(visit);
+      }
+    }
+
+    if (groupedByDate.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Text(
+            'No scheduled visits',
+            style: GoogleFonts.poppins(color: AppColors.textLight),
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Calendar View',
+          style: GoogleFonts.poppins(
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 16),
+        ...groupedByDate.entries.map((entry) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                DateFormat('MMM dd, yyyy').format(entry.key),
+                style: GoogleFonts.poppins(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.primaryBlue,
+                ),
+              ),
+              const SizedBox(height: 8),
+              ...entry.value.map((visit) => _buildVisitListItem(visit)),
+              const SizedBox(height: 16),
+            ],
+          );
+        }),
+      ],
+    );
+  }
+
+  Widget _buildCostsTab() {
+    // Simplified cost summary
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Cost Summary',
+          style: GoogleFonts.poppins(
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 16),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: AppColors.backgroundGray,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(
+            children: [
+              _buildCostRow('Total Operations', _totalOperations.toString(), Icons.assessment),
+              const Divider(),
+              _buildCostRow('Completed', _completedVisits.toString(), Icons.check_circle),
+              const Divider(),
+              _buildCostRow('Active', _activeOperations.toString(), Icons.work),
+              const Divider(),
+              _buildCostRow('Pending', _pendingQueue.toString(), Icons.pending),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCostRow(String label, String value, IconData icon) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: AppColors.primaryBlue),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              label,
+              style: GoogleFonts.poppins(fontSize: 14),
+            ),
+          ),
+          Text(
+            value,
+            style: GoogleFonts.poppins(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMyVisitsTab() {
+    final overdue = _dataCollectorVisits
+        .where((v) {
+          if (v.dueDate == null) return false;
+          final today = DateTime.now();
+          final todayStart = DateTime(today.year, today.month, today.day);
+          return v.dueDate!.isBefore(todayStart) &&
+                 v.status.toLowerCase() != 'completed' &&
+                 v.status.toLowerCase() != 'complete';
+        })
+        .toList();
+
+    final today = DateTime.now();
+    final todaysVisits = _dataCollectorVisits
+        .where((v) {
+          if (v.dueDate == null) return false;
+          return v.dueDate!.year == today.year &&
+                 v.dueDate!.month == today.month &&
+                 v.dueDate!.day == today.day;
+        })
+        .toList();
+
+    final upcoming = _dataCollectorVisits
+        .where((v) => v.dueDate != null && v.dueDate!.isAfter(DateTime.now()))
+        .toList()
+      ..sort((a, b) => a.dueDate!.compareTo(b.dueDate!));
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (overdue.isNotEmpty) ...[
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.red.shade50,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.red.shade200),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.warning, color: Colors.red.shade700),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Overdue Visits (${overdue.length})',
+                      style: GoogleFonts.poppins(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.red.shade900,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                ...overdue.take(5).map((visit) => _buildVisitListItem(visit, isOverdue: true)),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+        ],
+        if (todaysVisits.isNotEmpty) ...[
+          Text(
+            "Today's Visits (${todaysVisits.length})",
+            style: GoogleFonts.poppins(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 12),
+          ...todaysVisits.map((visit) => _buildVisitListItem(visit)),
+          const SizedBox(height: 16),
+        ],
+        if (upcoming.isNotEmpty) ...[
+          Text(
+            'Upcoming Visits (${upcoming.length})',
+            style: GoogleFonts.poppins(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 12),
+          ...upcoming.take(10).map((visit) => _buildVisitListItem(visit)),
+        ],
+        if (overdue.isEmpty && todaysVisits.isEmpty && upcoming.isEmpty)
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                children: [
+                  Icon(Icons.location_off, size: 48, color: AppColors.textLight),
+                  const SizedBox(height: 16),
+                  Text(
+                    'No visits assigned at the moment.',
+                    style: GoogleFonts.poppins(color: AppColors.textLight),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Check back later for new assignments.',
+                    style: GoogleFonts.poppins(
+                      fontSize: 12,
+                      color: AppColors.textLight,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildScheduleTab() {
+    // Simplified schedule - same as calendar for coordinators
+    return _buildCalendarTab();
+  }
+
+  Widget _buildPerformanceTab() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Performance Stats',
+          style: GoogleFonts.poppins(
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 16),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.backgroundGray),
+          ),
+          child: Column(
+            children: [
+              _buildStatRow('Completion Rate', '${_completionRateDC.toStringAsFixed(1)}%', Icons.trending_up),
+              const Divider(),
+              _buildStatRow('Completed', _completed.toString(), Icons.check_circle),
+              const Divider(),
+              _buildStatRow('Total Assigned', _assigned.toString(), Icons.assignment),
+              if (_averageVisitTime != null) ...[
+                const Divider(),
+                _buildStatRow('Avg Visit Time', '$_averageVisitTime min', Icons.access_time),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStatRow(String label, String value, IconData icon) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: AppColors.primaryBlue),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              label,
+              style: GoogleFonts.poppins(fontSize: 14),
+            ),
+          ),
+          Text(
+            value,
+            style: GoogleFonts.poppins(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWalletTab() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Wallet Summary',
+          style: GoogleFonts.poppins(
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 16),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFF3B82F6), Color(0xFF1D4ED8)],
+            ),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Total Earned',
+                style: GoogleFonts.poppins(
+                  fontSize: 14,
+                  color: Colors.white.withOpacity(0.9),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                _walletService.formatCurrency(_earnings),
+                style: GoogleFonts.poppins(
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildHelpTab() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Quick Guide',
+          style: GoogleFonts.poppins(
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 16),
+        _buildHelpCard(
+          'Starting a Visit',
+          [
+            '1. Find your assigned visit',
+            '2. Click "Start" button',
+            '3. Enable location permissions',
+            '4. Complete the visit report',
+          ],
+          Icons.play_arrow,
+        ),
+        const SizedBox(height: 12),
+        _buildHelpCard(
+          'Completing a Visit',
+          [
+            '1. Fill in all required fields',
+            '2. Add photos if needed',
+            '3. Submit the report',
+            '4. Wait for verification',
+          ],
+          Icons.check_circle,
+        ),
+        const SizedBox(height: 16),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: AppColors.backgroundGray,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.phone, color: AppColors.primaryBlue),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Need Help?',
+                    style: GoogleFonts.poppins(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Contact your coordinator or supervisor for assistance with:',
+                style: GoogleFonts.poppins(fontSize: 12, color: AppColors.textLight),
+              ),
+              const SizedBox(height: 8),
+              ...['Visit assignments', 'Technical issues', 'Payment questions', 'Report problems']
+                  .map((item) => Padding(
+                        padding: const EdgeInsets.only(left: 16, top: 4),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.circle, size: 6, color: AppColors.textLight),
+                            const SizedBox(width: 8),
+                            Text(
+                              item,
+                              style: GoogleFonts.poppins(fontSize: 12, color: AppColors.textLight),
+                            ),
+                          ],
+                        ),
+                      )),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildHelpCard(String title, List<String> steps, IconData icon) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.backgroundGray,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 20, color: AppColors.primaryBlue),
+              const SizedBox(width: 8),
+              Text(
+                title,
+                style: GoogleFonts.poppins(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ...steps.map((step) => Padding(
+                padding: const EdgeInsets.only(left: 8, top: 4),
+                child: Text(
+                  step,
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    color: AppColors.textLight,
+                  ),
+                ),
+              )),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildVisitListItem(SiteVisit visit, {bool isOverdue = false}) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: isOverdue ? Colors.red.shade50 : Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: isOverdue ? Colors.red.shade200 : AppColors.backgroundGray,
+        ),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  visit.siteName ?? 'Unknown Site',
+                  style: GoogleFonts.poppins(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${visit.locality ?? ''}, ${visit.state ?? ''}',
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    color: AppColors.textLight,
+                  ),
+                ),
+                if (visit.dueDate != null) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    DateFormat('MMM dd, yyyy').format(visit.dueDate!),
+                    style: GoogleFonts.poppins(
+                      fontSize: 11,
+                      color: AppColors.textLight,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: _getStatusColor(visit.status).withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              visit.status.toUpperCase(),
+              style: GoogleFonts.poppins(
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+                color: _getStatusColor(visit.status),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Color _getStatusColor(String status) {
+    final s = status.toLowerCase();
+    if (s == 'completed' || s == 'complete') return Colors.green;
+    if (s == 'in progress' || s == 'in_progress' || s == 'ongoing') return Colors.blue;
+    if (s == 'pending' || s == 'assigned') return Colors.orange;
+    return AppColors.textLight;
+  }
 }
 
