@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../widgets/reusable_app_bar.dart';
 import '../widgets/dashboard_card.dart';
 import '../widgets/custom_drawer_menu.dart';
+import '../widgets/notifications_panel.dart';
 import '../services/wallet_service.dart';
 import '../models/site_visit.dart';
 import '../theme/app_colors.dart';
@@ -344,6 +345,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ReusableAppBar(
               title: 'Dashboard',
               scaffoldKey: _scaffoldKey,
+              showLanguageSwitcher: true,
+              showNotifications: true,
+              onNotificationTap: () => NotificationsPanel.show(context),
+              showUserAvatar: true,
+              onAvatarTap: () => _scaffoldKey.currentState?.openDrawer(),
             ),
             Expanded(
               child: _isLoading
@@ -566,5 +572,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ],
     ).animate().fadeIn(duration: 400.ms).slideY(begin: 0.2, end: 0);
   }
+
 }
 
