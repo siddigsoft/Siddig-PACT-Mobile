@@ -110,11 +110,9 @@ class _MMPScreenState extends State<MMPScreen> {
       }
 
       // Load data based on role
-      if (_isDataCollector) {
+      // Coordinators should see the same MMP experience as data collectors
+      if (_isDataCollector || _isCoordinator) {
         await _loadDataCollectorData();
-        _setupRealtimeSubscription();
-      } else if (_isCoordinator) {
-        await _loadCoordinatorData();
         _setupRealtimeSubscription();
       }
 
@@ -137,10 +135,8 @@ class _MMPScreenState extends State<MMPScreen> {
             table: 'mmp_site_entries',
             callback: (payload) {
               debugPrint('mmp_site_entries changed, reloading...');
-              if (_isDataCollector) {
+              if (_isDataCollector || _isCoordinator) {
                 _loadDataCollectorData();
-              } else if (_isCoordinator) {
-                _loadCoordinatorData();
               }
             },
           )
@@ -775,11 +771,9 @@ class _MMPScreenState extends State<MMPScreen> {
               Expanded(
                 child: _isLoading
                     ? const Center(child: CircularProgressIndicator())
-                    : _isDataCollector
+                    : (_isDataCollector || _isCoordinator)
                         ? _buildDataCollectorView()
-                        : _isCoordinator
-                            ? _buildCoordinatorView()
-                            : _buildNoAccessView(),
+                        : _buildNoAccessView(),
               ),
             ],
           ),
