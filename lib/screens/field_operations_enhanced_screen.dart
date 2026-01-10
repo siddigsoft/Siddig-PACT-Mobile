@@ -12,7 +12,9 @@ import '../widgets/visit_report_dialog.dart';
 import '../theme/app_colors.dart';
 import '../services/location_service.dart';
 import '../services/photo_upload_service.dart';
+import '../services/advance_request_service.dart';
 import '../models/visit_report.dart';
+import '../widgets/request_advance_dialog.dart';
 
 class FieldOperationsEnhancedScreen extends StatefulWidget {
   const FieldOperationsEnhancedScreen({super.key});
@@ -47,6 +49,10 @@ class _MMPScreenState extends State<MMPScreen> {
   List<Map<String, dynamic>> _mySites = [];
   List<Map<String, dynamic>> _unsyncedCompletedVisits = [];
   List<Map<String, dynamic>> _coordinatorSites = [];
+  
+  // Advance requests map: siteId -> request data
+  Map<String, Map<String, dynamic>> _advanceRequests = {};
+  bool _loadingAdvanceRequests = false;
   
   // Grouped data
   Map<String, List<Map<String, dynamic>>> _groupedByStateLocality = {};
@@ -134,6 +140,18 @@ class _MMPScreenState extends State<MMPScreen> {
               }
             },
           )
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'down_payment_requests',
+            callback: (payload) {
+              debugPrint('down_payment_requests changed, reloading...');
+              if (_isDataCollector || _isCoordinator) {
+                _loadAdvanceRequests();
+                setState(() {});
+              }
+            },
+          )
           .subscribe();
     } catch (e) {
       debugPrint('Error setting up real-time subscription: $e');
@@ -155,6 +173,9 @@ class _MMPScreenState extends State<MMPScreen> {
       
       // Load unsynced completed visits (from offline DB if available)
       await _loadUnsyncedCompletedVisits();
+      
+      // Load advance requests
+      await _loadAdvanceRequests();
       
       // Group available sites by state-locality
       _groupAvailableSites();
@@ -355,6 +376,49 @@ class _MMPScreenState extends State<MMPScreen> {
     }
   }
 
+  Future<void> _loadAdvanceRequests() async {
+    try {
+      if (_userId == null) return;
+
+      setState(() => _loadingAdvanceRequests = true);
+
+      // Load all advance requests for this user
+      final response = await Supabase.instance.client
+          .from('down_payment_requests')
+          .select('*')
+          .eq('requested_by', _userId!)
+          .order('created_at', ascending: false);
+
+      if (response != null) {
+        // Map requests by site ID (keep most recent for each site)
+        final requestsMap = <String, Map<String, dynamic>>{};
+        for (final request in response) {
+          final siteId = (request['mmp_site_entry_id'] as String?) ??
+                         (request['site_visit_id'] as String?);
+          if (siteId != null && !requestsMap.containsKey(siteId)) {
+            requestsMap[siteId] = request as Map<String, dynamic>;
+          }
+        }
+
+        setState(() {
+          _advanceRequests = requestsMap;
+          _loadingAdvanceRequests = false;
+        });
+      } else {
+        setState(() {
+          _advanceRequests = {};
+          _loadingAdvanceRequests = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading advance requests: $e');
+      setState(() {
+        _advanceRequests = {};
+        _loadingAdvanceRequests = false;
+      });
+    }
+  }
+
   void _groupAvailableSites() {
     _groupedByStateLocality = {};
     for (final site in _availableSites) {
@@ -468,6 +532,300 @@ class _MMPScreenState extends State<MMPScreen> {
         );
       }
     }
+  }
+
+  Future<void> _requestAdvance(Map<String, dynamic> site) async {
+    try {
+      if (_userId == null) return;
+
+      final transportFee = (site['transport_fee'] as num?)?.toDouble() ?? 0.0;
+      if (transportFee <= 0) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('This site has no transport fee'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        return;
+      }
+
+      final siteName = site['site_name'] ?? site['siteName'] ?? 'Unknown Site';
+      final hubId = site['hub_id'] ?? site['hubId'];
+      final hubName = site['hub_name'] ?? 
+                      site['hubName'] ?? 
+                      site['hub_office'] ?? 
+                      site['hubOffice'];
+
+      // Show request dialog
+      final result = await showDialog<Map<String, dynamic>>(
+        context: context,
+        builder: (context) => RequestAdvanceDialog(
+          site: site,
+          transportationBudget: transportFee,
+          hubId: hubId,
+          hubName: hubName,
+        ),
+      );
+
+      if (result == null || result['success'] != true) return;
+
+      final requestedAmount = (result['requestedAmount'] as num).toDouble();
+      final paymentType = result['paymentType'] as String;
+      final justification = result['justification'] as String;
+      
+      // Properly convert installmentPlan from List<dynamic> to List<Map<String, dynamic>>
+      List<Map<String, dynamic>> installmentPlan = [];
+      if (result['installmentPlan'] != null) {
+        final planList = result['installmentPlan'] as List?;
+        if (planList != null && planList.isNotEmpty) {
+          installmentPlan = planList
+              .map((e) => e as Map<String, dynamic>)
+              .toList();
+        }
+      }
+
+      // Get user role
+      final profile = await Supabase.instance.client
+          .from('profiles')
+          .select('role, hub_id')
+          .eq('id', _userId!)
+          .maybeSingle();
+
+      final role = (profile?['role'] as String?)?.toLowerCase() ?? '';
+      final requesterRole = (role == 'coordinator' || 
+                            role == 'field_coordinator' || 
+                            role == 'state_coordinator')
+          ? 'coordinator'
+          : 'dataCollector';
+
+      final finalHubId = hubId ?? profile?['hub_id'] as String?;
+
+      // Create advance request
+      final newRequest = await Supabase.instance.client
+          .from('down_payment_requests')
+          .insert({
+            'mmp_site_entry_id': site['id'],
+            'site_name': siteName,
+            'requested_by': _userId,
+            'requester_role': requesterRole,
+            'hub_id': finalHubId,
+            'hub_name': hubName,
+            'total_transportation_budget': transportFee,
+            'requested_amount': requestedAmount,
+            'payment_type': paymentType,
+            'installment_plan': installmentPlan,
+            'justification': justification,
+            'supporting_documents': [],
+            'status': 'pending_supervisor',
+            'supervisor_status': 'pending',
+          })
+          .select()
+          .single();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Advance request submitted successfully. Waiting for supervisor approval.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+
+      // Reload advance requests
+      await _loadAdvanceRequests();
+      setState(() {});
+
+    } catch (e) {
+      debugPrint('Error requesting advance: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  bool _shouldShowRequestAdvance(Map<String, dynamic> site) {
+    // Only show for accepted or in-progress sites owned by current user
+    final status = (site['status'] as String? ?? '').toLowerCase();
+    final isAcceptedOrOngoing = status == 'accepted' || 
+                                status == 'assigned' || 
+                                status == 'in progress' || 
+                                status == 'in_progress' || 
+                                status == 'ongoing';
+    final isOwner = site['accepted_by'] == _userId;
+    final transportFee = (site['transport_fee'] as num?)?.toDouble() ?? 0.0;
+    final hasTransportBudget = transportFee > 0;
+
+    return isAcceptedOrOngoing && isOwner && hasTransportBudget;
+  }
+
+  Widget _buildRequestAdvanceWidget(Map<String, dynamic> site) {
+    final siteId = site['id'] as String? ?? '';
+    final existingRequest = _advanceRequests[siteId];
+
+    // If request exists, show status badge
+    if (existingRequest != null) {
+      return _buildAdvanceStatusBadge(existingRequest);
+    }
+
+    // Show Request Advance button
+    return ElevatedButton.icon(
+      onPressed: () => _requestAdvance(site),
+      icon: const Icon(Icons.payment, size: 18),
+      label: const Text('Request Advance'),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: Colors.purple,
+        foregroundColor: Colors.white,
+        padding: const EdgeInsets.symmetric(vertical: 12),
+      ),
+    );
+  }
+
+  Widget _buildAdvanceStatusBadge(Map<String, dynamic> request) {
+    final status = request['status'] as String? ?? 'pending_supervisor';
+    final badgeInfo = AdvanceRequestService.getStatusBadge(status);
+    final badgeColor = badgeInfo['color'] as Color;
+    final badgeLabel = badgeInfo['label'] as String;
+    final badgeIcon = badgeInfo['icon'] as IconData;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      decoration: BoxDecoration(
+        color: badgeColor.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: badgeColor.withOpacity(0.3)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(badgeIcon, size: 18, color: badgeColor),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              badgeLabel,
+              style: GoogleFonts.poppins(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: badgeColor,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionButtons(
+    Map<String, dynamic> site, {
+    required String status,
+    required bool showClaimButton,
+    required bool showAcknowledgeButton,
+    required bool showVisitActions,
+  }) {
+    final buttons = <Widget>[];
+
+    // Claim Button
+    if (showClaimButton) {
+      buttons.add(
+        Expanded(
+          child: ElevatedButton.icon(
+            onPressed: () => _claimSite(site),
+            icon: const Icon(Icons.handshake, size: 18),
+            label: const Text('Claim Site'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primaryBlue,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+            ),
+          ),
+        ),
+      );
+    }
+
+    // Acknowledge Cost Button
+    if (showAcknowledgeButton) {
+      buttons.add(
+        Expanded(
+          child: ElevatedButton.icon(
+            onPressed: () => _acknowledgeCost(site),
+            icon: const Icon(Icons.check_circle, size: 18),
+            label: const Text('Acknowledge Cost'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+            ),
+          ),
+        ),
+      );
+    }
+
+    // Visit Actions
+    if (showVisitActions) {
+      // Request Advance Button (for accepted/in-progress sites with transport fee)
+      if (_shouldShowRequestAdvance(site)) {
+        buttons.add(
+          Expanded(
+            child: _buildRequestAdvanceWidget(site),
+          ),
+        );
+      }
+
+      // Start Visit Button (for accepted/assigned sites) - now shows even if Request Advance is shown
+      if ((status.toString().toLowerCase() == 'accepted' || 
+           status.toString().toLowerCase() == 'assigned') &&
+          site['accepted_by'] == _userId) {
+        buttons.add(
+          Expanded(
+            child: ElevatedButton.icon(
+              onPressed: () => _startVisit(site),
+              icon: const Icon(Icons.play_arrow, size: 18),
+              label: const Text('Start Visit'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+            ),
+          ),
+        );
+      }
+
+      // Complete Visit Button
+      if ((status.toString().toLowerCase() == 'in progress' || 
+           status.toString().toLowerCase() == 'ongoing') &&
+          site['accepted_by'] == _userId) {
+        buttons.add(
+          Expanded(
+            child: ElevatedButton.icon(
+              onPressed: () => _completeVisit(site),
+              icon: const Icon(Icons.check, size: 18),
+              label: const Text('Complete'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+            ),
+          ),
+        );
+      }
+    }
+
+    if (buttons.isEmpty) return const SizedBox.shrink();
+
+    // Use Row with Expanded widgets - they'll share space equally
+    return Row(
+      children: buttons,
+    );
   }
 
   Future<void> _acknowledgeCost(Map<String, dynamic> site) async {
@@ -1567,67 +1925,12 @@ class _MMPScreenState extends State<MMPScreen> {
           ],
           
           const SizedBox(height: 12),
-          Row(
-            children: [
-              if (showClaimButton)
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: () => _claimSite(site),
-                    icon: const Icon(Icons.handshake, size: 18),
-                    label: const Text('Claim Site'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primaryBlue,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                    ),
-                  ),
-                ),
-              if (showAcknowledgeButton)
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: () => _acknowledgeCost(site),
-                    icon: const Icon(Icons.check_circle, size: 18),
-                    label: const Text('Acknowledge Cost'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.orange,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                    ),
-                  ),
-                ),
-              if (showVisitActions) ...[
-                if ((status.toString().toLowerCase() == 'accepted' || 
-                     status.toString().toLowerCase() == 'assigned') &&
-                    site['accepted_by'] == _userId)
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: () => _startVisit(site),
-                      icon: const Icon(Icons.play_arrow, size: 18),
-                      label: const Text('Start Visit'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                      ),
-                    ),
-                  ),
-                if ((status.toString().toLowerCase() == 'in progress' || 
-                     status.toString().toLowerCase() == 'ongoing') &&
-                    site['accepted_by'] == _userId)
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: () => _completeVisit(site),
-                      icon: const Icon(Icons.check, size: 18),
-                      label: const Text('Complete'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                      ),
-                    ),
-                  ),
-              ],
-            ],
+          _buildActionButtons(
+            site,
+            status: status,
+            showClaimButton: showClaimButton,
+            showAcknowledgeButton: showAcknowledgeButton,
+            showVisitActions: showVisitActions,
           ),
         ],
       ),
