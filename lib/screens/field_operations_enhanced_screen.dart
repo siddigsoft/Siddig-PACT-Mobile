@@ -99,14 +99,8 @@ class _MMPScreenState extends State<MMPScreen> {
         _userStateId = profileResponse['state_id'] as String?;
         _userLocalityId = profileResponse['locality_id'] as String?;
         
-        // Get state and locality names (simplified - you may need to query a states table)
-        if (_userStateId != null) {
-          // This is a placeholder - you'll need to query your states table
-          _userStateName = _userStateId;
-        }
-        if (_userLocalityId != null) {
-          _userLocalityName = _userLocalityId;
-        }
+        // Query actual state and locality names from database
+        await _loadLocationNames();
       }
 
       // Load data based on role
@@ -170,20 +164,77 @@ class _MMPScreenState extends State<MMPScreen> {
     }
   }
 
+  Future<void> _loadLocationNames() async {
+    try {
+      // Load state name from hub_states table
+      if (_userStateId != null) {
+        final hubState = await Supabase.instance.client
+            .from('hub_states')
+            .select('state_name')
+            .eq('state_id', _userStateId!)
+            .maybeSingle();
+        
+        if (hubState != null) {
+          _userStateName = hubState['state_name'] as String?;
+        } else {
+          // Fallback: Try sites_registry if hub_states doesn't have it
+          final registryState = await Supabase.instance.client
+              .from('sites_registry')
+              .select('state_name')
+              .eq('state_id', _userStateId!)
+              .limit(1)
+              .maybeSingle();
+          
+          _userStateName = registryState?['state_name'] as String?;
+        }
+        
+        debugPrint('Loaded state name: $_userStateName for state_id: $_userStateId');
+      }
+      
+      // Load locality name from sites_registry table
+      if (_userLocalityId != null && _userStateId != null) {
+        final locality = await Supabase.instance.client
+            .from('sites_registry')
+            .select('locality_name')
+            .eq('locality_id', _userLocalityId!)
+            .eq('state_id', _userStateId!)
+            .limit(1)
+            .maybeSingle();
+        
+        _userLocalityName = locality?['locality_name'] as String?;
+        debugPrint('Loaded locality name: $_userLocalityName for locality_id: $_userLocalityId');
+      }
+    } catch (e) {
+      debugPrint('Error loading location names: $e');
+      // If lookup fails, we'll show all dispatched sites (fallback behavior)
+    }
+  }
+
   Future<void> _loadAvailableSites() async {
     try {
       if (_userId == null) return;
 
+      debugPrint('Loading available sites...');
+      debugPrint('User state: $_userStateName (ID: $_userStateId)');
+      debugPrint('User locality: $_userLocalityName (ID: $_userLocalityId)');
+
+      // Build query step by step
       var query = Supabase.instance.client
           .from('mmp_site_entries')
           .select('*')
           .ilike('status', 'Dispatched');
 
-      // Filter by location if available (must be before order/limit)
-      if (_userLocalityName != null) {
+      // Filter by location if names are available
+      // Only filter if we have actual names, not IDs
+      if (_userLocalityName != null && _userLocalityName!.isNotEmpty) {
+        debugPrint('Filtering by locality: $_userLocalityName');
         query = query.ilike('locality', _userLocalityName!);
-      } else if (_userStateName != null) {
+      } else if (_userStateName != null && _userStateName!.isNotEmpty) {
+        debugPrint('Filtering by state: $_userStateName');
         query = query.ilike('state', _userStateName!);
+      } else {
+        // If no location info, show all dispatched sites (remove location filter)
+        debugPrint('No location info available - showing all dispatched sites');
       }
 
       final response = await query
@@ -196,9 +247,30 @@ class _MMPScreenState extends State<MMPScreen> {
             .map((e) => e as Map<String, dynamic>)
             .where((site) => site['accepted_by'] == null)
             .toList();
+        
+        debugPrint('Loaded ${_availableSites.length} available sites');
+        
+        // Debug: Print first few sites for verification
+        if (_availableSites.isNotEmpty) {
+          debugPrint('Sample site: ${_availableSites.first['site_name']} - State: ${_availableSites.first['state']} - Locality: ${_availableSites.first['locality']}');
+        }
+      } else {
+        debugPrint('No response from query');
+        _availableSites = [];
       }
     } catch (e) {
       debugPrint('Error loading available sites: $e');
+      _availableSites = [];
+      
+      // Show error to user
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error loading sites: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
