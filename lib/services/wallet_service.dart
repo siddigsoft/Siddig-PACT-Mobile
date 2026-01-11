@@ -38,7 +38,7 @@ class WalletService {
   // Format compact currency (e.g., 1.5K, 2.3M)
   String formatCompactCurrency(double amount, {String currency = 'SDG'}) {
     String symbol = currency == 'SDG' ? 'SDG ' : '\$ ';
-    
+
     if (amount >= 1000000) {
       return '$symbol${(amount / 1000000).toStringAsFixed(1)}M';
     } else if (amount >= 1000) {
@@ -97,15 +97,20 @@ class WalletService {
           .maybeSingle();
 
       if (userClassificationResponse == null) {
-        debugPrint('No active classification found for user $userId, using default fee');
+        debugPrint(
+          'No active classification found for user $userId, using default fee',
+        );
         return 50.0; // Default fallback
       }
 
-      final classificationLevel = userClassificationResponse['classification_level'] as String?;
+      final classificationLevel =
+          userClassificationResponse['classification_level'] as String?;
       final roleScope = userClassificationResponse['role_scope'] as String?;
 
       if (classificationLevel == null || roleScope == null) {
-        debugPrint('Invalid classification data for user $userId, using default fee');
+        debugPrint(
+          'Invalid classification data for user $userId, using default fee',
+        );
         return 50.0;
       }
 
@@ -121,20 +126,28 @@ class WalletService {
           .maybeSingle();
 
       if (feeStructureResponse == null) {
-        debugPrint('No fee structure found for $classificationLevel/$roleScope, using default fee');
+        debugPrint(
+          'No fee structure found for $classificationLevel/$roleScope, using default fee',
+        );
         return 50.0;
       }
 
-      final baseFee = (feeStructureResponse['site_visit_base_fee_cents'] as num?)?.toDouble() ?? 0.0;
-      final storedMultiplier = (feeStructureResponse['complexity_multiplier'] as num?)?.toDouble() ?? 1.0;
+      final baseFee =
+          (feeStructureResponse['site_visit_base_fee_cents'] as num?)
+              ?.toDouble() ??
+          0.0;
+      final storedMultiplier =
+          (feeStructureResponse['complexity_multiplier'] as num?)?.toDouble() ??
+          1.0;
 
       // Calculate fee: base_fee × stored_multiplier × complexity_multiplier
       final calculatedFee = baseFee * storedMultiplier * complexityMultiplier;
 
-      debugPrint('Fee calculated for $classificationLevel/$roleScope: $baseFee × $storedMultiplier × $complexityMultiplier = $calculatedFee SDG');
+      debugPrint(
+        'Fee calculated for $classificationLevel/$roleScope: $baseFee × $storedMultiplier × $complexityMultiplier = $calculatedFee SDG',
+      );
 
       return calculatedFee;
-
     } catch (e) {
       debugPrint('Error calculating classification fee: $e');
       return 50.0; // Error fallback
@@ -162,7 +175,11 @@ class WalletService {
     final baseFee = baseFees[classification] ?? 1000.0;
     final calculatedFee = baseFee * multiplier;
 
-    return calculatedFee + transportCost + mealAllowance + accommodationCost + otherCosts;
+    return calculatedFee +
+        transportCost +
+        mealAllowance +
+        accommodationCost +
+        otherCosts;
   }
 
   // Validate withdrawal amount
@@ -177,12 +194,14 @@ class WalletService {
 
     if (amount < minimumAmount) {
       return ValidationResult.invalid(
-          'Minimum withdrawal amount is ${formatCurrency(minimumAmount)}');
+        'Minimum withdrawal amount is ${formatCurrency(minimumAmount)}',
+      );
     }
 
     if (amount > currentBalance) {
       return ValidationResult.invalid(
-          'Insufficient balance. Available: ${formatCurrency(currentBalance)}');
+        'Insufficient balance. Available: ${formatCurrency(currentBalance)}',
+      );
     }
 
     return ValidationResult.valid();
@@ -252,13 +271,23 @@ class WalletService {
     var filtered = transactions;
 
     if (startDate != null) {
-      filtered = filtered.where((t) => t.createdAt.isAfter(startDate) || 
-          t.createdAt.isAtSameMomentAs(startDate)).toList();
+      filtered = filtered
+          .where(
+            (t) =>
+                t.createdAt.isAfter(startDate) ||
+                t.createdAt.isAtSameMomentAs(startDate),
+          )
+          .toList();
     }
 
     if (endDate != null) {
-      filtered = filtered.where((t) => t.createdAt.isBefore(endDate) || 
-          t.createdAt.isAtSameMomentAs(endDate)).toList();
+      filtered = filtered
+          .where(
+            (t) =>
+                t.createdAt.isBefore(endDate) ||
+                t.createdAt.isAtSameMomentAs(endDate),
+          )
+          .toList();
     }
 
     return filtered;
@@ -364,7 +393,9 @@ class WalletService {
   double calculateApprovalRate(List<WithdrawalRequest> requests) {
     if (requests.isEmpty) return 0;
 
-    final approved = requests.where((r) => r.status == 'approved' || r.status == 'processed').length;
+    final approved = requests
+        .where((r) => r.status == 'approved' || r.status == 'processed')
+        .length;
     return (approved / requests.length) * 100;
   }
 
@@ -454,7 +485,8 @@ class WalletService {
           .range(offset, offset + limit - 1)
           .timeout(
             TRANSACTION_FETCH_TIMEOUT,
-            onTimeout: () => throw TimeoutException('Transactions fetch timeout'),
+            onTimeout: () =>
+                throw TimeoutException('Transactions fetch timeout'),
           );
 
       return (response as List)
@@ -479,7 +511,8 @@ class WalletService {
           .order('created_at', ascending: false)
           .timeout(
             TRANSACTION_FETCH_TIMEOUT,
-            onTimeout: () => throw TimeoutException('All transactions fetch timeout'),
+            onTimeout: () =>
+                throw TimeoutException('All transactions fetch timeout'),
           );
 
       return (response as List)
@@ -515,7 +548,8 @@ class WalletService {
           .range(offset, offset + limit - 1)
           .timeout(
             TRANSACTION_FETCH_TIMEOUT,
-            onTimeout: () => throw TimeoutException('Withdrawal requests fetch timeout'),
+            onTimeout: () =>
+                throw TimeoutException('Withdrawal requests fetch timeout'),
           );
 
       return (response as List)
@@ -540,7 +574,8 @@ class WalletService {
           .order('created_at', ascending: false)
           .timeout(
             TRANSACTION_FETCH_TIMEOUT,
-            onTimeout: () => throw TimeoutException('All withdrawal requests fetch timeout'),
+            onTimeout: () =>
+                throw TimeoutException('All withdrawal requests fetch timeout'),
           );
 
       return (response as List)
@@ -573,14 +608,18 @@ class WalletService {
       }
 
       if (wallet.id.isEmpty) {
-        throw Exception('Invalid wallet configuration. Please contact support.');
+        throw Exception(
+          'Invalid wallet configuration. Please contact support.',
+        );
       }
 
       debugPrint('Creating withdrawal request with wallet ID: ${wallet.id}');
 
       final currentBalance = wallet.currentBalance;
       if (amount > currentBalance) {
-        throw Exception('Insufficient balance. Available: ${formatCurrency(currentBalance)}');
+        throw Exception(
+          'Insufficient balance. Available: ${formatCurrency(currentBalance)}',
+        );
       }
 
       final now = DateTime.now();
@@ -603,7 +642,8 @@ class WalletService {
           .single()
           .timeout(
             TRANSACTION_FETCH_TIMEOUT,
-            onTimeout: () => throw TimeoutException('Create withdrawal timeout'),
+            onTimeout: () =>
+                throw TimeoutException('Create withdrawal timeout'),
           );
 
       return WithdrawalRequest.fromJson(response);
@@ -629,7 +669,8 @@ class WalletService {
           .eq('user_id', userId)
           .timeout(
             TRANSACTION_FETCH_TIMEOUT,
-            onTimeout: () => throw TimeoutException('Cancel withdrawal timeout'),
+            onTimeout: () =>
+                throw TimeoutException('Cancel withdrawal timeout'),
           );
     } catch (e) {
       print('Error cancelling withdrawal request: $e');
@@ -660,7 +701,7 @@ class WalletService {
       final totalWithdrawn = wallet.totalWithdrawn;
       final currentBalance = wallet.currentBalance;
       final totalTransactions = transactions.length;
-      
+
       // Get actual completed site visits count from mmp_site_entries
       int completedSiteVisits = 0;
       try {
@@ -673,8 +714,11 @@ class WalletService {
       } catch (e) {
         // Fallback to transaction-based count
         completedSiteVisits = transactions
-            .where((t) => t.type == TRANSACTION_TYPE_SITE_VISIT_FEE || 
-                         (t.type == TRANSACTION_TYPE_EARNING && t.siteVisitId != null))
+            .where(
+              (t) =>
+                  t.type == TRANSACTION_TYPE_SITE_VISIT_FEE ||
+                  (t.type == TRANSACTION_TYPE_EARNING && t.siteVisitId != null),
+            )
             .length;
       }
 

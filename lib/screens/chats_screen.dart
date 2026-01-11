@@ -45,7 +45,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
       setState(() {
         _chats = cachedChats;
         _unreadCounts = {
-          for (final chat in cachedChats) chat.id: _unreadCounts[chat.id] ?? 0
+          for (final chat in cachedChats) chat.id: _unreadCounts[chat.id] ?? 0,
         };
         _isLoading = false;
       });
@@ -93,9 +93,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
         if (mounted) {
           Navigator.push(
             context,
-            MaterialPageRoute(
-              builder: (context) => ChatScreen(chat: chat),
-            ),
+            MaterialPageRoute(builder: (context) => ChatScreen(chat: chat)),
           );
         }
       }
@@ -142,83 +140,83 @@ class _ChatsScreenState extends State<ChatsScreen> {
                         ),
                       )
                     : _chats.isEmpty
-                        ? _buildEmptyState()
-                        : ListView.builder(
-                            padding: const EdgeInsets.all(16),
-                            itemCount: _chats.length,
-                            itemBuilder: (context, index) {
-                              final chat = _chats[index];
-                              final unreadCount = _unreadCounts[chat.id] ?? 0;
+                    ? _buildEmptyState()
+                    : ListView.builder(
+                        padding: const EdgeInsets.all(16),
+                        itemCount: _chats.length,
+                        itemBuilder: (context, index) {
+                          final chat = _chats[index];
+                          final unreadCount = _unreadCounts[chat.id] ?? 0;
 
-                              final participants = chat.participants;
-                              final currentUserId = _chatService.getCurrentUserId();
+                          final participants = chat.participants;
+                          final currentUserId = _chatService.getCurrentUserId();
 
-                              String chatTitle = chat.name;
-                              String chatSubtitle = '';
+                          String chatTitle = chat.name;
+                          String chatSubtitle = '';
 
-                              if (chat.chatType == 'private') {
-                                String? displayName = chat.otherParticipantName;
-                                String? counterpartId = chat.otherParticipantId;
+                          if (chat.chatType == 'private') {
+                            String? displayName = chat.otherParticipantName;
+                            String? counterpartId = chat.otherParticipantId;
 
-                                if ((displayName == null || displayName.isEmpty) &&
-                                    counterpartId != null) {
-                                  ChatParticipant? participant;
-                                  for (final item in participants) {
-                                    if (item.userId == counterpartId) {
-                                      participant = item;
-                                      break;
-                                    }
-                                  }
-                                  displayName = participant?.userName;
+                            if ((displayName == null || displayName.isEmpty) &&
+                                counterpartId != null) {
+                              ChatParticipant? participant;
+                              for (final item in participants) {
+                                if (item.userId == counterpartId) {
+                                  participant = item;
+                                  break;
                                 }
-
-                                if ((displayName == null || displayName.isEmpty) &&
-                                    counterpartId == null &&
-                                    participants.isNotEmpty) {
-                                  ChatParticipant? other;
-                                  for (final participant in participants) {
-                                    if (participant.userId != currentUserId) {
-                                      other = participant;
-                                      break;
-                                    }
-                                  }
-                                  other ??= participants.first;
-                                  counterpartId = other.userId;
-                                  displayName = other.userName;
-                                }
-
-                                if ((displayName == null || displayName.isEmpty) &&
-                                    chat.createdByName != null &&
-                                    chat.createdByName!.isNotEmpty &&
-                                    chat.createdBy != currentUserId) {
-                                  displayName = chat.createdByName;
-                                  counterpartId ??= chat.createdBy;
-                                }
-
-                                if ((displayName == null || displayName.isEmpty) &&
-                                    counterpartId != null) {
-                                  displayName = _fallbackLabel(counterpartId);
-                                }
-
-                                chatTitle = displayName ?? _fallbackLabel(chat.id);
-                                chatSubtitle = 'Private Chat';
-                              } else if (chat.chatType == 'group') {
-                                chatSubtitle = '${participants.length} members';
-                                if (chatTitle.isEmpty &&
-                                    chat.createdByName != null &&
-                                    chat.createdByName!.isNotEmpty) {
-                                  chatTitle = chat.createdByName!;
-                                }
-                              } else if (chat.createdByName != null &&
-                                  chat.createdByName!.isNotEmpty) {
-                                chatTitle = chat.createdByName!;
                               }
+                              displayName = participant?.userName;
+                            }
 
-                              if (chatTitle.isEmpty) {
-                                chatTitle = _fallbackLabel(chat.id);
+                            if ((displayName == null || displayName.isEmpty) &&
+                                counterpartId == null &&
+                                participants.isNotEmpty) {
+                              ChatParticipant? other;
+                              for (final participant in participants) {
+                                if (participant.userId != currentUserId) {
+                                  other = participant;
+                                  break;
+                                }
                               }
+                              other ??= participants.first;
+                              counterpartId = other.userId;
+                              displayName = other.userName;
+                            }
 
-                              return Container(
+                            if ((displayName == null || displayName.isEmpty) &&
+                                chat.createdByName != null &&
+                                chat.createdByName!.isNotEmpty &&
+                                chat.createdBy != currentUserId) {
+                              displayName = chat.createdByName;
+                              counterpartId ??= chat.createdBy;
+                            }
+
+                            if ((displayName == null || displayName.isEmpty) &&
+                                counterpartId != null) {
+                              displayName = _fallbackLabel(counterpartId);
+                            }
+
+                            chatTitle = displayName ?? _fallbackLabel(chat.id);
+                            chatSubtitle = 'Private Chat';
+                          } else if (chat.chatType == 'group') {
+                            chatSubtitle = '${participants.length} members';
+                            if (chatTitle.isEmpty &&
+                                chat.createdByName != null &&
+                                chat.createdByName!.isNotEmpty) {
+                              chatTitle = chat.createdByName!;
+                            }
+                          } else if (chat.createdByName != null &&
+                              chat.createdByName!.isNotEmpty) {
+                            chatTitle = chat.createdByName!;
+                          }
+
+                          if (chatTitle.isEmpty) {
+                            chatTitle = _fallbackLabel(chat.id);
+                          }
+
+                          return Container(
                                 margin: const EdgeInsets.only(bottom: 12),
                                 decoration: BoxDecoration(
                                   color: Colors.white,
@@ -231,7 +229,9 @@ class _ChatsScreenState extends State<ChatsScreen> {
                                     ),
                                   ],
                                   border: Border.all(
-                                    color: AppColors.primaryOrange.withOpacity(0.1),
+                                    color: AppColors.primaryOrange.withOpacity(
+                                      0.1,
+                                    ),
                                     width: 1,
                                   ),
                                 ),
@@ -241,7 +241,8 @@ class _ChatsScreenState extends State<ChatsScreen> {
                                     Navigator.push(
                                       context,
                                       MaterialPageRoute(
-                                        builder: (context) => ChatScreen(chat: chat),
+                                        builder: (context) =>
+                                            ChatScreen(chat: chat),
                                       ),
                                     ).then((_) => _loadChats());
                                   },
@@ -252,7 +253,9 @@ class _ChatsScreenState extends State<ChatsScreen> {
                                       gradient: LinearGradient(
                                         colors: [
                                           AppColors.primaryOrange,
-                                          AppColors.primaryOrange.withOpacity(0.7),
+                                          AppColors.primaryOrange.withOpacity(
+                                            0.7,
+                                          ),
                                         ],
                                         begin: Alignment.topLeft,
                                         end: Alignment.bottomRight,
@@ -286,7 +289,9 @@ class _ChatsScreenState extends State<ChatsScreen> {
                                       ? Text(
                                           chatSubtitle,
                                           style: TextStyle(
-                                            color: const Color(0xFF263238).withOpacity(0.7),
+                                            color: const Color(
+                                              0xFF263238,
+                                            ).withOpacity(0.7),
                                             fontSize: 14,
                                           ),
                                         )
@@ -301,10 +306,13 @@ class _ChatsScreenState extends State<ChatsScreen> {
                                             gradient: LinearGradient(
                                               colors: [
                                                 AppColors.primaryOrange,
-                                                AppColors.primaryOrange.withOpacity(0.8),
+                                                AppColors.primaryOrange
+                                                    .withOpacity(0.8),
                                               ],
                                             ),
-                                            borderRadius: BorderRadius.circular(12),
+                                            borderRadius: BorderRadius.circular(
+                                              12,
+                                            ),
                                           ),
                                           child: Text(
                                             unreadCount > 99
@@ -320,11 +328,11 @@ class _ChatsScreenState extends State<ChatsScreen> {
                                       : null,
                                 ),
                               )
-                                  .animate()
-                                  .fadeIn(duration: 400.ms, delay: (index * 50).ms)
-                                  .slideX(begin: 0.2, end: 0);
-                            },
-                          ),
+                              .animate()
+                              .fadeIn(duration: 400.ms, delay: (index * 50).ms)
+                              .slideX(begin: 0.2, end: 0);
+                        },
+                      ),
               ),
             ],
           ),
@@ -336,10 +344,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
         icon: const Icon(Icons.add, color: Colors.white),
         label: const Text(
           'New Chat',
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.w600,
-          ),
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
         ),
       ).animate().scale(delay: 500.ms, duration: 400.ms),
     );
@@ -428,7 +433,10 @@ class _ChatsScreenState extends State<ChatsScreen> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.transparent,
                 shadowColor: Colors.transparent,
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
+                ),
               ),
             ),
           ).animate().fadeIn(delay: 400.ms).slideY(begin: 0.3, end: 0),

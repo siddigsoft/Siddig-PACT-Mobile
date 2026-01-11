@@ -55,14 +55,16 @@ class _SupportScreenState extends State<SupportScreen> {
       } else {
         AppSnackBar.show(
           context,
-          message: 'No email app found. Please send email to support@pactorg.org',
+          message:
+              'No email app found. Please send email to support@pactorg.org',
           type: SnackBarType.error,
         );
       }
     } catch (e) {
       AppSnackBar.show(
         context,
-        message: 'Unable to open email app. Please send email to support@pactorg.org',
+        message:
+            'Unable to open email app. Please send email to support@pactorg.org',
         type: SnackBarType.error,
       );
     }
@@ -111,10 +113,7 @@ class _SupportScreenState extends State<SupportScreen> {
         child: SafeArea(
           child: Column(
             children: [
-              ReusableAppBar(
-                title: 'Support',
-                scaffoldKey: _scaffoldKey,
-              ),
+              ReusableAppBar(title: 'Support', scaffoldKey: _scaffoldKey),
               Expanded(
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.all(20),
@@ -154,7 +153,8 @@ class _SupportScreenState extends State<SupportScreen> {
                         icon: Icons.email_rounded,
                         title: 'Email Support',
                         subtitle: 'support@pactorg.org',
-                        description: 'Send us a detailed message about your issue',
+                        description:
+                            'Send us a detailed message about your issue',
                         buttonText: 'Send Email',
                         onTap: _sendEmail,
                       ),
@@ -172,7 +172,8 @@ class _SupportScreenState extends State<SupportScreen> {
                         icon: Icons.schedule_rounded,
                         title: 'Business Hours',
                         subtitle: 'Mon - Fri, 8:00 AM - 5:00 PM',
-                        description: 'Our support team is available during business hours',
+                        description:
+                            'Our support team is available during business hours',
                         buttonText: null,
                         onTap: () {},
                       ),
@@ -262,7 +263,9 @@ class _SupportScreenState extends State<SupportScreen> {
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: AppColors.primaryOrange,
                                   foregroundColor: Colors.white,
-                                  padding: const EdgeInsets.symmetric(vertical: 16),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 16,
+                                  ),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(12),
                                   ),
@@ -341,9 +344,7 @@ class _SupportScreenState extends State<SupportScreen> {
   }) {
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -357,11 +358,7 @@ class _SupportScreenState extends State<SupportScreen> {
                     color: AppColors.primaryOrange.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: Icon(
-                    icon,
-                    color: AppColors.primaryOrange,
-                    size: 24,
-                  ),
+                  child: Icon(icon, color: AppColors.primaryOrange, size: 24),
                 ),
                 const SizedBox(width: 16),
                 Expanded(

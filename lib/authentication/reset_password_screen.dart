@@ -120,14 +120,17 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
 
       AppSnackBar.show(
         context,
-        message: 'Password reset successfully! You can now log in with your new password.',
+        message:
+            'Password reset successfully! You can now log in with your new password.',
         type: SnackBarType.success,
       );
 
       // Navigate back to login after a delay
       Future.delayed(const Duration(seconds: 2), () {
         if (mounted) {
-          Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
+          Navigator.of(
+            context,
+          ).pushNamedAndRemoveUntil('/login', (route) => false);
         }
       });
     } catch (e) {
@@ -279,9 +282,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                           color: AppColors.primaryOrange,
                         ),
                         decoration: BoxDecoration(
-                          border: Border.all(
-                            color: AppColors.primaryOrange,
-                          ),
+                          border: Border.all(color: AppColors.primaryOrange),
                           borderRadius: BorderRadius.circular(12),
                         ),
                       ),
@@ -308,7 +309,9 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                             height: 20,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                Colors.white,
+                              ),
                             ),
                           )
                         : Text(
@@ -465,7 +468,9 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                                   height: 20,
                                   child: CircularProgressIndicator(
                                     strokeWidth: 2,
-                                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                      Colors.white,
+                                    ),
                                   ),
                                 )
                               : Text(
@@ -486,7 +491,9 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                 // Back to Login
                 Center(
                   child: TextButton(
-                    onPressed: () => Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false),
+                    onPressed: () => Navigator.of(
+                      context,
+                    ).pushNamedAndRemoveUntil('/login', (route) => false),
                     child: Text(
                       'Back to Login',
                       style: GoogleFonts.poppins(

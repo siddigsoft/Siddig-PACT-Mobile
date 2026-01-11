@@ -52,7 +52,8 @@ class AuthService {
         // Create new user profile if doesn't exist
         await supabase.from('Users').insert({
           'UID': user.id,
-          'Display name': user.userMetadata?['full_name'] ??
+          'Display name':
+              user.userMetadata?['full_name'] ??
               user.email?.split('@')[0] ??
               'User',
           'Email': user.email,
@@ -65,9 +66,10 @@ class AuthService {
         });
       } else {
         // Update last sign in time
-        await supabase.from('Users').update({
-          'Last sign in at': DateTime.now().toIso8601String(),
-        }).eq('UID', user.id);
+        await supabase
+            .from('Users')
+            .update({'Last sign in at': DateTime.now().toIso8601String()})
+            .eq('UID', user.id);
       }
 
       // Ensure user has worker role
@@ -202,10 +204,7 @@ class AuthService {
   /// Resend verification email
   Future<void> resendVerificationEmail(String email) async {
     try {
-      await supabase.auth.resend(
-        type: OtpType.signup,
-        email: email,
-      );
+      await supabase.auth.resend(type: OtpType.signup, email: email);
     } catch (e) {
       throw AuthException('Failed to resend verification email');
     }
@@ -217,10 +216,7 @@ class AuthService {
       // Call the verify-reset-otp edge function with 'generate' action
       final response = await supabase.functions.invoke(
         'verify-reset-otp',
-        body: {
-          'email': email.toLowerCase(),
-          'action': 'generate'
-        },
+        body: {'email': email.toLowerCase(), 'action': 'generate'},
       );
 
       if (response.status != 200) {
@@ -239,10 +235,7 @@ class AuthService {
     try {
       final response = await supabase.functions.invoke(
         'verify-reset-otp',
-        body: {
-          'email': email.toLowerCase(),
-          'otp': otp,
-        },
+        body: {'email': email.toLowerCase(), 'otp': otp},
       );
 
       if (response.status != 200) {
@@ -261,7 +254,11 @@ class AuthService {
   }
 
   /// Reset password with OTP
-  Future<void> resetPasswordWithOTP(String email, String otp, String newPassword) async {
+  Future<void> resetPasswordWithOTP(
+    String email,
+    String otp,
+    String newPassword,
+  ) async {
     try {
       final response = await supabase.functions.invoke(
         'reset-password-with-otp',
@@ -322,7 +319,9 @@ class AuthService {
       await prefs.setString('user_id', session.user.id);
       await prefs.setString('user_email', session.user.email ?? '');
       await prefs.setString(
-          'user_name', session.user.userMetadata?['full_name'] ?? '');
+        'user_name',
+        session.user.userMetadata?['full_name'] ?? '',
+      );
       await prefs.setBool('is_logged_in', true);
       await prefs.setInt('token_expires_at', session.expiresAt ?? 0);
     } catch (e) {
@@ -403,11 +402,7 @@ class AuthService {
 
       if (userId == null) return null;
 
-      return {
-        'id': userId,
-        'email': userEmail,
-        'name': userName,
-      };
+      return {'id': userId, 'email': userEmail, 'name': userName};
     } catch (e) {
       debugPrint('Error getting local user profile: $e');
       return null;
