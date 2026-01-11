@@ -1,4 +1,6 @@
 /// Export utilities for CSV and PDF generation matching the React TSX implementation
+library;
+
 import 'dart:io';
 import 'package:csv/csv.dart';
 import 'package:pdf/pdf.dart';
@@ -30,16 +32,20 @@ Future<void> exportTransactionsToCSV(
     ];
 
     // Prepare rows
-    final rows = transactions.map((t) => [
-      t.id,
-      t.typeLabel,
-      t.description ?? '-',
-      t.amount.toStringAsFixed(2),
-      t.currency,
-      t.balanceAfter?.toStringAsFixed(2) ?? '-',
-      DateFormat('MMM dd, yyyy HH:mm').format(t.createdAt),
-      t.siteVisitId ?? '-',
-    ]).toList();
+    final rows = transactions
+        .map(
+          (t) => [
+            t.id,
+            t.typeLabel,
+            t.description ?? '-',
+            t.amount.toStringAsFixed(2),
+            t.currency,
+            t.balanceAfter?.toStringAsFixed(2) ?? '-',
+            DateFormat('MMM dd, yyyy HH:mm').format(t.createdAt),
+            t.siteVisitId ?? '-',
+          ],
+        )
+        .toList();
 
     // Create CSV
     String csv = const ListToCsvConverter().convert([headers, ...rows]);
@@ -107,29 +113,38 @@ Future<void> exportTransactionsToPDF(
           pw.Row(
             mainAxisAlignment: pw.MainAxisAlignment.spaceEvenly,
             children: [
-              _buildSummaryBox('Total Income', formatCurrency(totalIncome, currency)),
-              _buildSummaryBox('Total Expenses', formatCurrency(totalExpense, currency)),
-              _buildSummaryBox('Current Balance', formatCurrency(wallet.currentBalance, currency)),
+              _buildSummaryBox(
+                'Total Income',
+                formatCurrency(totalIncome, currency),
+              ),
+              _buildSummaryBox(
+                'Total Expenses',
+                formatCurrency(totalExpense, currency),
+              ),
+              _buildSummaryBox(
+                'Current Balance',
+                formatCurrency(wallet.currentBalance, currency),
+              ),
             ],
           ),
           pw.SizedBox(height: 20),
 
           // Table
           pw.TableHelper.fromTextArray(
-            headers: [
-              'Date',
-              'Type',
-              'Description',
-              'Amount',
-              'Balance',
-            ],
-            data: transactions.map((t) => [
-              DateFormat('MMM dd, yyyy').format(t.createdAt),
-              t.typeLabel,
-              t.description ?? '-',
-              formatCurrency(t.amount, t.currency),
-              t.balanceAfter != null ? formatCurrency(t.balanceAfter!, t.currency) : '-',
-            ]).toList(),
+            headers: ['Date', 'Type', 'Description', 'Amount', 'Balance'],
+            data: transactions
+                .map(
+                  (t) => [
+                    DateFormat('MMM dd, yyyy').format(t.createdAt),
+                    t.typeLabel,
+                    t.description ?? '-',
+                    formatCurrency(t.amount, t.currency),
+                    t.balanceAfter != null
+                        ? formatCurrency(t.balanceAfter!, t.currency)
+                        : '-',
+                  ],
+                )
+                .toList(),
             cellStyle: const pw.TextStyle(fontSize: 10),
             headerStyle: pw.TextStyle(
               fontSize: 10,
@@ -175,16 +190,22 @@ Future<void> exportWithdrawalsToCSV(
     ];
 
     // Prepare rows
-    final rows = withdrawals.map((w) => [
-      w.id,
-      w.statusLabel,
-      w.amount.toStringAsFixed(2),
-      w.currency,
-      w.paymentMethod ?? '-',
-      w.requestReason ?? '-',
-      DateFormat('MMM dd, yyyy HH:mm').format(w.createdAt),
-      w.processedAt != null ? DateFormat('MMM dd, yyyy HH:mm').format(w.processedAt!) : '-',
-    ]).toList();
+    final rows = withdrawals
+        .map(
+          (w) => [
+            w.id,
+            w.statusLabel,
+            w.amount.toStringAsFixed(2),
+            w.currency,
+            w.paymentMethod ?? '-',
+            w.requestReason ?? '-',
+            DateFormat('MMM dd, yyyy HH:mm').format(w.createdAt),
+            w.processedAt != null
+                ? DateFormat('MMM dd, yyyy HH:mm').format(w.processedAt!)
+                : '-',
+          ],
+        )
+        .toList();
 
     // Create CSV
     String csv = const ListToCsvConverter().convert([headers, ...rows]);
@@ -254,29 +275,36 @@ Future<void> exportWithdrawalsToPDF(
           pw.Row(
             mainAxisAlignment: pw.MainAxisAlignment.spaceEvenly,
             children: [
-              _buildSummaryBox('Approved', formatCurrency(approvedTotal, DEFAULT_CURRENCY)),
-              _buildSummaryBox('Pending', formatCurrency(pendingTotal, DEFAULT_CURRENCY)),
-              _buildSummaryBox('Rejected', formatCurrency(rejectedTotal, DEFAULT_CURRENCY)),
+              _buildSummaryBox(
+                'Approved',
+                formatCurrency(approvedTotal, DEFAULT_CURRENCY),
+              ),
+              _buildSummaryBox(
+                'Pending',
+                formatCurrency(pendingTotal, DEFAULT_CURRENCY),
+              ),
+              _buildSummaryBox(
+                'Rejected',
+                formatCurrency(rejectedTotal, DEFAULT_CURRENCY),
+              ),
             ],
           ),
           pw.SizedBox(height: 20),
 
           // Table
           pw.TableHelper.fromTextArray(
-            headers: [
-              'Date',
-              'Status',
-              'Amount',
-              'Method',
-              'Reason',
-            ],
-            data: withdrawals.map((w) => [
-              DateFormat('MMM dd, yyyy').format(w.createdAt),
-              w.statusLabel,
-              formatCurrency(w.amount, w.currency),
-              w.paymentMethod ?? '-',
-              w.requestReason ?? '-',
-            ]).toList(),
+            headers: ['Date', 'Status', 'Amount', 'Method', 'Reason'],
+            data: withdrawals
+                .map(
+                  (w) => [
+                    DateFormat('MMM dd, yyyy').format(w.createdAt),
+                    w.statusLabel,
+                    formatCurrency(w.amount, w.currency),
+                    w.paymentMethod ?? '-',
+                    w.requestReason ?? '-',
+                  ],
+                )
+                .toList(),
             cellStyle: const pw.TextStyle(fontSize: 10),
             headerStyle: pw.TextStyle(
               fontSize: 10,
@@ -307,17 +335,11 @@ Future<void> exportWithdrawalsToPDF(
 pw.Widget _buildSummaryBox(String label, String value) {
   return pw.Column(
     children: [
-      pw.Text(
-        label,
-        style: const pw.TextStyle(fontSize: 10),
-      ),
+      pw.Text(label, style: const pw.TextStyle(fontSize: 10)),
       pw.SizedBox(height: 4),
       pw.Text(
         value,
-        style: pw.TextStyle(
-          fontSize: 14,
-          fontWeight: pw.FontWeight.bold,
-        ),
+        style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
       ),
     ],
   );
@@ -331,10 +353,7 @@ Future<void> _saveAndShareFile(String filename, String content) async {
     await file.writeAsString(content);
 
     // Share file
-    await Share.shareXFiles(
-      [XFile(file.path)],
-      subject: filename,
-    );
+    await Share.shareXFiles([XFile(file.path)], subject: filename);
   } catch (e) {
     print('Error saving and sharing file: $e');
     rethrow;
@@ -349,10 +368,7 @@ Future<void> _savePdfAndShare(String filename, pw.Document pdf) async {
     await file.writeAsBytes(await pdf.save());
 
     // Share file
-    await Share.shareXFiles(
-      [XFile(file.path)],
-      subject: filename,
-    );
+    await Share.shareXFiles([XFile(file.path)], subject: filename);
   } catch (e) {
     print('Error saving and sharing PDF: $e');
     rethrow;

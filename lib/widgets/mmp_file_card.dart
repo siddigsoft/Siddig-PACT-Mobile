@@ -1,18 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/mmp_file.dart';
-import '../theme/app_colors.dart';
 import 'package:intl/intl.dart';
 
 class MMPFileCard extends StatelessWidget {
   final MMPFile file;
   final VoidCallback? onTap;
 
-  const MMPFileCard({
-    super.key,
-    required this.file,
-    this.onTap,
-  });
+  const MMPFileCard({super.key, required this.file, this.onTap});
 
   Future<void> _openFile() async {
     if (file.fileUrl != null) {
@@ -76,18 +71,17 @@ class MMPFileCard extends StatelessWidget {
                     ),
                     decoration: BoxDecoration(
                       color: Color(
-                        int.parse(_getStatusColor().substring(1, 7),
-                                radix: 16) +
+                        int.parse(
+                              _getStatusColor().substring(1, 7),
+                              radix: 16,
+                            ) +
                             0xFF000000,
                       ),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
                       file.status?.toUpperCase() ?? 'N/A',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                      ),
+                      style: const TextStyle(color: Colors.white, fontSize: 12),
                     ),
                   ),
                 ],
@@ -144,9 +138,7 @@ class MMPFileCard extends StatelessWidget {
           Expanded(
             child: Text(
               value,
-              style: const TextStyle(
-                fontWeight: FontWeight.w500,
-              ),
+              style: const TextStyle(fontWeight: FontWeight.w500),
             ),
           ),
         ],

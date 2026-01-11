@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../models/wallet_models.dart';
-import '../models/payment_method_models.dart';
 import '../providers/wallet_provider.dart';
 import '../providers/profile_provider.dart';
 import '../providers/payment_method_provider.dart';
@@ -14,10 +12,12 @@ class WithdrawalRequestScreen extends ConsumerStatefulWidget {
   const WithdrawalRequestScreen({super.key});
 
   @override
-  ConsumerState<WithdrawalRequestScreen> createState() => _WithdrawalRequestScreenState();
+  ConsumerState<WithdrawalRequestScreen> createState() =>
+      _WithdrawalRequestScreenState();
 }
 
-class _WithdrawalRequestScreenState extends ConsumerState<WithdrawalRequestScreen> {
+class _WithdrawalRequestScreenState
+    extends ConsumerState<WithdrawalRequestScreen> {
   final _formKey = GlobalKey<FormState>();
   final _amountController = TextEditingController();
   final _reasonController = TextEditingController();
@@ -56,10 +56,10 @@ class _WithdrawalRequestScreenState extends ConsumerState<WithdrawalRequestScree
     // CONSTRAINT: Check role-based minimum withdrawal amounts
     final profile = ref.read(currentUserProfileProvider);
     final userRole = profile?.role ?? 'dataCollector';
-    
+
     double minimumAmount = 0;
     String roleName = 'your role';
-    
+
     switch (userRole.toLowerCase()) {
       case 'datacollector':
       case 'data collector':
@@ -84,7 +84,7 @@ class _WithdrawalRequestScreenState extends ConsumerState<WithdrawalRequestScree
         minimumAmount = 500; // Default minimum
         roleName = 'users';
     }
-    
+
     if (amount < minimumAmount) {
       _showError(
         'Minimum withdrawal for $roleName is ${minimumAmount.toStringAsFixed(0)} ${wallet.currency}',
@@ -103,10 +103,13 @@ class _WithdrawalRequestScreenState extends ConsumerState<WithdrawalRequestScree
     setState(() => _isSubmitting = true);
 
     try {
-      await ref.read(walletServiceProvider).createWithdrawalRequest(
+      await ref
+          .read(walletServiceProvider)
+          .createWithdrawalRequest(
             amount: amount,
             requestReason: _reasonController.text.trim(),
-            paymentMethod: _selectedPaymentMethodId!, // Pass the payment method ID
+            paymentMethod:
+                _selectedPaymentMethodId!, // Pass the payment method ID
           );
 
       if (mounted) {
@@ -234,13 +237,20 @@ class _WithdrawalRequestScreenState extends ConsumerState<WithdrawalRequestScree
                   const SizedBox(height: 8),
                   TextFormField(
                     controller: _amountController,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
                     inputFormatters: [
-                      FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
+                      FilteringTextInputFormatter.allow(
+                        RegExp(r'^\d+\.?\d{0,2}'),
+                      ),
                     ],
                     decoration: InputDecoration(
                       hintText: 'Enter amount',
-                      prefixIcon: const Icon(Icons.attach_money, color: Color(0xFF1976D2)),
+                      prefixIcon: const Icon(
+                        Icons.attach_money,
+                        color: Color(0xFF1976D2),
+                      ),
                       suffixText: wallet.currency,
                       filled: true,
                       fillColor: Colors.white,
@@ -254,7 +264,10 @@ class _WithdrawalRequestScreenState extends ConsumerState<WithdrawalRequestScree
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: Color(0xFF1976D2), width: 2),
+                        borderSide: const BorderSide(
+                          color: Color(0xFF1976D2),
+                          width: 2,
+                        ),
                       ),
                     ),
                     validator: (value) {
@@ -271,16 +284,16 @@ class _WithdrawalRequestScreenState extends ConsumerState<WithdrawalRequestScree
                       return null;
                     },
                   ),
-                  
+
                   // Minimum amount helper text
                   Builder(
                     builder: (context) {
                       final profile = ref.watch(currentUserProfileProvider);
                       final userRole = profile?.role ?? 'dataCollector';
-                      
+
                       double minimumAmount = 500;
                       String roleName = 'your role';
-                      
+
                       switch (userRole.toLowerCase()) {
                         case 'datacollector':
                         case 'data collector':
@@ -290,7 +303,9 @@ class _WithdrawalRequestScreenState extends ConsumerState<WithdrawalRequestScree
                         case 'supervisor':
                         case 'coordinator':
                           minimumAmount = 1500;
-                          roleName = userRole.toLowerCase() == 'supervisor' ? 'Supervisors' : 'Coordinators';
+                          roleName = userRole.toLowerCase() == 'supervisor'
+                              ? 'Supervisors'
+                              : 'Coordinators';
                           break;
                         case 'admin':
                         case 'financeadmin':
@@ -300,7 +315,7 @@ class _WithdrawalRequestScreenState extends ConsumerState<WithdrawalRequestScree
                         default:
                           minimumAmount = 500;
                       }
-                      
+
                       return Padding(
                         padding: const EdgeInsets.only(top: 8, left: 4),
                         child: Text(
@@ -358,7 +373,10 @@ class _WithdrawalRequestScreenState extends ConsumerState<WithdrawalRequestScree
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: Color(0xFF1976D2), width: 2),
+                        borderSide: const BorderSide(
+                          color: Color(0xFF1976D2),
+                          width: 2,
+                        ),
                       ),
                     ),
                   ),
@@ -371,11 +389,16 @@ class _WithdrawalRequestScreenState extends ConsumerState<WithdrawalRequestScree
                     decoration: BoxDecoration(
                       color: const Color(0xFFE3F2FD),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFF1976D2).withOpacity(0.3)),
+                      border: Border.all(
+                        color: const Color(0xFF1976D2).withOpacity(0.3),
+                      ),
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.info_outline, color: Color(0xFF1976D2)),
+                        const Icon(
+                          Icons.info_outline,
+                          color: Color(0xFF1976D2),
+                        ),
                         const SizedBox(width: 12),
                         Expanded(
                           child: Column(
@@ -412,7 +435,9 @@ class _WithdrawalRequestScreenState extends ConsumerState<WithdrawalRequestScree
                     width: double.infinity,
                     height: 56,
                     child: ElevatedButton(
-                      onPressed: _isSubmitting ? null : _submitWithdrawalRequest,
+                      onPressed: _isSubmitting
+                          ? null
+                          : _submitWithdrawalRequest,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFFFF9800),
                         foregroundColor: Colors.white,
@@ -428,7 +453,9 @@ class _WithdrawalRequestScreenState extends ConsumerState<WithdrawalRequestScree
                               width: 24,
                               child: CircularProgressIndicator(
                                 strokeWidth: 2,
-                                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  Colors.white,
+                                ),
                               ),
                             )
                           : const Text(
@@ -472,7 +499,9 @@ class _WithdrawalRequestScreenState extends ConsumerState<WithdrawalRequestScree
             decoration: BoxDecoration(
               color: const Color(0xFFFFF3E0),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFFFF9800).withOpacity(0.3)),
+              border: Border.all(
+                color: const Color(0xFFFF9800).withOpacity(0.3),
+              ),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -503,91 +532,100 @@ class _WithdrawalRequestScreenState extends ConsumerState<WithdrawalRequestScree
         }
 
         return Column(
-          children: methods
-              .map((method) {
-                final isSelected = _selectedPaymentMethodId == method.id;
-                return GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      _selectedPaymentMethodId = method.id;
-                    });
-                  },
-                  child: Container(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: isSelected ? const Color(0xFF1976D2) : Colors.grey.shade300,
-                        width: isSelected ? 2 : 1,
-                      ),
-                      boxShadow: isSelected
-                          ? [
-                              BoxShadow(
-                                color: const Color(0xFF1976D2).withOpacity(0.2),
-                                blurRadius: 8,
-                                offset: const Offset(0, 2),
-                              ),
-                            ]
-                          : null,
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          method.paymentType.icon,
-                          color: isSelected ? const Color(0xFF1976D2) : Colors.grey[600],
-                          size: 24,
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                method.name,
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                                  color: isSelected ? const Color(0xFF1976D2) : const Color(0xFF263238),
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                method.maskedDetails,
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  color: Colors.grey[600],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        if (method.isDefault)
-                          Container(
-                            margin: const EdgeInsets.only(left: 8, right: 8),
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF4CAF50).withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: const Text(
-                              'Default',
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                color: Color(0xFF4CAF50),
-                              ),
-                            ),
-                          ),
-                        if (isSelected)
-                          const Icon(Icons.check_circle, color: Color(0xFF1976D2)),
-                      ],
-                    ),
+          children: methods.map((method) {
+            final isSelected = _selectedPaymentMethodId == method.id;
+            return GestureDetector(
+              onTap: () {
+                setState(() {
+                  _selectedPaymentMethodId = method.id;
+                });
+              },
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: isSelected
+                        ? const Color(0xFF1976D2)
+                        : Colors.grey.shade300,
+                    width: isSelected ? 2 : 1,
                   ),
-                );
-              })
-              .toList(),
+                  boxShadow: isSelected
+                      ? [
+                          BoxShadow(
+                            color: const Color(0xFF1976D2).withOpacity(0.2),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ]
+                      : null,
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      method.paymentType.icon,
+                      color: isSelected
+                          ? const Color(0xFF1976D2)
+                          : Colors.grey[600],
+                      size: 24,
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            method.name,
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: isSelected
+                                  ? FontWeight.w600
+                                  : FontWeight.normal,
+                              color: isSelected
+                                  ? const Color(0xFF1976D2)
+                                  : const Color(0xFF263238),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            method.maskedDetails,
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (method.isDefault)
+                      Container(
+                        margin: const EdgeInsets.only(left: 8, right: 8),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF4CAF50).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: const Text(
+                          'Default',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF4CAF50),
+                          ),
+                        ),
+                      ),
+                    if (isSelected)
+                      const Icon(Icons.check_circle, color: Color(0xFF1976D2)),
+                  ],
+                ),
+              ),
+            );
+          }).toList(),
         );
       },
       loading: () => const Padding(

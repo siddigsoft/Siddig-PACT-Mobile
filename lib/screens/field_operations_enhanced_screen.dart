@@ -29,7 +29,7 @@ typedef MMPScreen = FieldOperationsEnhancedScreen;
 
 class _MMPScreenState extends State<MMPScreen> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
-  
+
   bool _isLoading = true;
   bool _isCoordinator = false;
   bool _isDataCollector = false;
@@ -38,30 +38,30 @@ class _MMPScreenState extends State<MMPScreen> {
   String? _userLocalityId;
   String? _userStateName;
   String? _userLocalityName;
-  
+
   // Tab states
-  String _activeTab = 'my-assignments';
+  final String _activeTab = 'my-assignments';
   String _enumeratorSubTab = 'claimable';
   String _mySitesSubTab = 'pending';
-  
+
   // Site entries
   List<Map<String, dynamic>> _availableSites = [];
   List<Map<String, dynamic>> _smartAssignedSites = [];
   List<Map<String, dynamic>> _mySites = [];
   List<Map<String, dynamic>> _unsyncedCompletedVisits = [];
   List<Map<String, dynamic>> _coordinatorSites = [];
-  
+
   // Advance requests map: siteId -> request data
   Map<String, Map<String, dynamic>> _advanceRequests = {};
   bool _loadingAdvanceRequests = false;
-  
+
   // Grouped data
   Map<String, List<Map<String, dynamic>>> _groupedByStateLocality = {};
-  
+
   // Search
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
-  
+
   RealtimeChannel? _realtimeChannel;
 
   @override
@@ -97,16 +97,18 @@ class _MMPScreenState extends State<MMPScreen> {
 
       if (profileResponse != null) {
         final role = (profileResponse['role'] as String?)?.toLowerCase() ?? '';
-        _isCoordinator = role == 'coordinator' || 
-                        role == 'field_coordinator' ||
-                        role == 'state_coordinator';
-        _isDataCollector = role == 'datacollector' || 
-                          role == 'enumerator' ||
-                          role == 'data_collector';
-        
+        _isCoordinator =
+            role == 'coordinator' ||
+            role == 'field_coordinator' ||
+            role == 'state_coordinator';
+        _isDataCollector =
+            role == 'datacollector' ||
+            role == 'enumerator' ||
+            role == 'data_collector';
+
         _userStateId = profileResponse['state_id'] as String?;
         _userLocalityId = profileResponse['locality_id'] as String?;
-        
+
         // Query actual state and locality names from database
         await _loadLocationNames();
       }
@@ -130,7 +132,7 @@ class _MMPScreenState extends State<MMPScreen> {
   void _setupRealtimeSubscription() {
     try {
       _realtimeChannel?.unsubscribe();
-      
+
       _realtimeChannel = Supabase.instance.client
           .channel('mmp_realtime')
           .onPostgresChanges(
@@ -163,9 +165,11 @@ class _MMPScreenState extends State<MMPScreen> {
     }
   }
 
-  Future<void> _loadDataCollectorData({bool preserveExistingData = false}) async {
+  Future<void> _loadDataCollectorData({
+    bool preserveExistingData = false,
+  }) async {
     final supabase = Supabase.instance.client;
-    
+
     try {
       // Validate session before starting reload
       var session = supabase.auth.currentSession;
@@ -175,7 +179,9 @@ class _MMPScreenState extends State<MMPScreen> {
           await supabase.auth.refreshSession();
           session = supabase.auth.currentSession;
           if (session == null) {
-            debugPrint('[_loadDataCollectorData] Session refresh failed - aborting reload');
+            debugPrint(
+              '[_loadDataCollectorData] Session refresh failed - aborting reload',
+            );
             return;
           }
           // Update _userId if it changed
@@ -184,21 +190,27 @@ class _MMPScreenState extends State<MMPScreen> {
             _userId = currentUserId;
           }
         } catch (refreshError) {
-          debugPrint('[_loadDataCollectorData] Session refresh error: $refreshError');
+          debugPrint(
+            '[_loadDataCollectorData] Session refresh error: $refreshError',
+          );
           return;
         }
       }
-      
+
       // Re-validate _userId from current session
       final currentUserId = supabase.auth.currentUser?.id;
       if (currentUserId == null) {
-        debugPrint('[_loadDataCollectorData] User ID is null - aborting reload');
+        debugPrint(
+          '[_loadDataCollectorData] User ID is null - aborting reload',
+        );
         return;
       }
       _userId = currentUserId;
 
-      debugPrint('[_loadDataCollectorData] Starting reload with userId: $_userId (preserveExistingData: $preserveExistingData)');
-      
+      debugPrint(
+        '[_loadDataCollectorData] Starting reload with userId: $_userId (preserveExistingData: $preserveExistingData)',
+      );
+
       // If preserving data, don't clear existing lists - they'll be updated with new data
       if (!preserveExistingData) {
         // Only clear if this is a fresh load, not a background refresh
@@ -206,58 +218,73 @@ class _MMPScreenState extends State<MMPScreen> {
 
       // Load available sites (Dispatched, not accepted, in collector's area)
       await _loadAvailableSites();
-      
+
       // Verify session after each major operation
       session = supabase.auth.currentSession;
       if (session == null || session.isExpired) {
-        debugPrint('[_loadDataCollectorData] Session expired after _loadAvailableSites, refreshing...');
+        debugPrint(
+          '[_loadDataCollectorData] Session expired after _loadAvailableSites, refreshing...',
+        );
         await supabase.auth.refreshSession();
       }
-      
+
       // Load smart assigned sites (status = 'Assigned', accepted_by = currentUser, not cost-acknowledged)
       await _loadSmartAssignedSites();
-      
+
       // Verify session
       session = supabase.auth.currentSession;
       if (session == null || session.isExpired) {
-        debugPrint('[_loadDataCollectorData] Session expired after _loadSmartAssignedSites, refreshing...');
+        debugPrint(
+          '[_loadDataCollectorData] Session expired after _loadSmartAssignedSites, refreshing...',
+        );
         await supabase.auth.refreshSession();
       }
-      
+
       // Load my sites (all sites accepted by this collector)
       await _loadMySites();
-      
+
       // Verify session
       session = supabase.auth.currentSession;
       if (session == null || session.isExpired) {
-        debugPrint('[_loadDataCollectorData] Session expired after _loadMySites, refreshing...');
+        debugPrint(
+          '[_loadDataCollectorData] Session expired after _loadMySites, refreshing...',
+        );
         await supabase.auth.refreshSession();
       }
-      
+
       // Load unsynced completed visits (from offline DB if available)
       await _loadUnsyncedCompletedVisits();
-      
+
       // Load advance requests
       await _loadAdvanceRequests();
-      
+
       // Group available sites by state-locality
       _groupAvailableSites();
-      
+
       debugPrint('[_loadDataCollectorData] Reload completed successfully');
-      
     } catch (e) {
-      debugPrint('[_loadDataCollectorData] Error loading data collector data: $e');
-      
+      debugPrint(
+        '[_loadDataCollectorData] Error loading data collector data: $e',
+      );
+
       // Check if it's an auth error
       final errorStr = e.toString().toLowerCase();
-      if (errorStr.contains('auth') || errorStr.contains('unauthorized') || 
-          errorStr.contains('jwt') || errorStr.contains('token')) {
-        debugPrint('[_loadDataCollectorData] Auth error during reload - attempting recovery');
+      if (errorStr.contains('auth') ||
+          errorStr.contains('unauthorized') ||
+          errorStr.contains('jwt') ||
+          errorStr.contains('token')) {
+        debugPrint(
+          '[_loadDataCollectorData] Auth error during reload - attempting recovery',
+        );
         try {
           await supabase.auth.refreshSession();
-          debugPrint('[_loadDataCollectorData] Session refreshed after auth error');
+          debugPrint(
+            '[_loadDataCollectorData] Session refreshed after auth error',
+          );
         } catch (refreshError) {
-          debugPrint('[_loadDataCollectorData] Session refresh after error failed: $refreshError');
+          debugPrint(
+            '[_loadDataCollectorData] Session refresh after error failed: $refreshError',
+          );
           // Don't throw - just log and return, don't trigger logout
         }
       }
@@ -274,7 +301,7 @@ class _MMPScreenState extends State<MMPScreen> {
             .select('state_name')
             .eq('state_id', _userStateId!)
             .maybeSingle();
-        
+
         if (hubState != null) {
           _userStateName = hubState['state_name'] as String?;
         } else {
@@ -285,13 +312,15 @@ class _MMPScreenState extends State<MMPScreen> {
               .eq('state_id', _userStateId!)
               .limit(1)
               .maybeSingle();
-          
+
           _userStateName = registryState?['state_name'] as String?;
         }
-        
-        debugPrint('Loaded state name: $_userStateName for state_id: $_userStateId');
+
+        debugPrint(
+          'Loaded state name: $_userStateName for state_id: $_userStateId',
+        );
       }
-      
+
       // Load locality name from sites_registry table
       if (_userLocalityId != null && _userStateId != null) {
         final locality = await Supabase.instance.client
@@ -301,9 +330,11 @@ class _MMPScreenState extends State<MMPScreen> {
             .eq('state_id', _userStateId!)
             .limit(1)
             .maybeSingle();
-        
+
         _userLocalityName = locality?['locality_name'] as String?;
-        debugPrint('Loaded locality name: $_userLocalityName for locality_id: $_userLocalityId');
+        debugPrint(
+          'Loaded locality name: $_userLocalityName for locality_id: $_userLocalityId',
+        );
       }
     } catch (e) {
       debugPrint('Error loading location names: $e');
@@ -313,7 +344,7 @@ class _MMPScreenState extends State<MMPScreen> {
 
   Future<void> _loadAvailableSites() async {
     final supabase = Supabase.instance.client;
-    
+
     try {
       if (_userId == null) return;
 
@@ -351,48 +382,51 @@ class _MMPScreenState extends State<MMPScreen> {
           .order('created_at', ascending: false)
           .limit(1000);
 
-      if (response != null) {
-        // Filter out sites that have been accepted (accepted_by is not null)
-        _availableSites = (response as List)
-            .map((e) => e as Map<String, dynamic>)
-            .where((site) => site['accepted_by'] == null)
-            .toList();
-        
-        debugPrint('Loaded ${_availableSites.length} available sites');
-        
-        // Debug: Print first few sites for verification
-        if (_availableSites.isNotEmpty) {
-          debugPrint('Sample site: ${_availableSites.first['site_name']} - State: ${_availableSites.first['state']} - Locality: ${_availableSites.first['locality']}');
-        }
-      } else {
-        debugPrint('No response from query');
-        _availableSites = [];
+      // Filter out sites that have been accepted (accepted_by is not null)
+      _availableSites = (response as List)
+          .map((e) => e as Map<String, dynamic>)
+          .where((site) => site['accepted_by'] == null)
+          .toList();
+
+      debugPrint('Loaded ${_availableSites.length} available sites');
+
+      // Debug: Print first few sites for verification
+      if (_availableSites.isNotEmpty) {
+        debugPrint(
+          'Sample site: ${_availableSites.first['site_name']} - State: ${_availableSites.first['state']} - Locality: ${_availableSites.first['locality']}',
+        );
       }
     } catch (e) {
       debugPrint('[_loadAvailableSites] Error loading available sites: $e');
-      
+
       // Check if it's an auth error
       final errorStr = e.toString().toLowerCase();
-      if (errorStr.contains('auth') || errorStr.contains('unauthorized') || 
-          errorStr.contains('jwt') || errorStr.contains('token')) {
-        debugPrint('[_loadAvailableSites] Auth error - attempting session refresh');
+      if (errorStr.contains('auth') ||
+          errorStr.contains('unauthorized') ||
+          errorStr.contains('jwt') ||
+          errorStr.contains('token')) {
+        debugPrint(
+          '[_loadAvailableSites] Auth error - attempting session refresh',
+        );
         try {
           await supabase.auth.refreshSession();
           // Don't retry automatically - just log and set empty list
         } catch (refreshError) {
-          debugPrint('[_loadAvailableSites] Session refresh failed: $refreshError');
+          debugPrint(
+            '[_loadAvailableSites] Session refresh failed: $refreshError',
+          );
         }
       }
-      
+
       _availableSites = [];
-      
+
       // Don't show error to user for reload operations - it's not critical
     }
   }
 
   Future<void> _loadSmartAssignedSites() async {
     final supabase = Supabase.instance.client;
-    
+
     try {
       if (_userId == null) return;
 
@@ -411,32 +445,39 @@ class _MMPScreenState extends State<MMPScreen> {
           .order('created_at', ascending: false)
           .limit(1000);
 
-      if (response != null) {
-        final allSites = (response as List)
-            .map((e) => e as Map<String, dynamic>)
-            .toList();
-        
-        // Filter out cost-acknowledged sites
-        _smartAssignedSites = allSites.where((site) {
-          final additionalData = site['additional_data'] as Map<String, dynamic>?;
-          final costAcknowledged = site['cost_acknowledged'] ?? 
-                                   additionalData?['cost_acknowledged'] ?? 
-                                   false;
-          return !costAcknowledged;
-        }).toList();
-      }
+      final allSites = (response as List)
+          .map((e) => e as Map<String, dynamic>)
+          .toList();
+
+      // Filter out cost-acknowledged sites
+      _smartAssignedSites = allSites.where((site) {
+        final additionalData = site['additional_data'] as Map<String, dynamic>?;
+        final costAcknowledged =
+            site['cost_acknowledged'] ??
+            additionalData?['cost_acknowledged'] ??
+            false;
+        return !costAcknowledged;
+      }).toList();
     } catch (e) {
-      debugPrint('[_loadSmartAssignedSites] Error loading smart assigned sites: $e');
-      
+      debugPrint(
+        '[_loadSmartAssignedSites] Error loading smart assigned sites: $e',
+      );
+
       // Check if it's an auth error
       final errorStr = e.toString().toLowerCase();
-      if (errorStr.contains('auth') || errorStr.contains('unauthorized') || 
-          errorStr.contains('jwt') || errorStr.contains('token')) {
-        debugPrint('[_loadSmartAssignedSites] Auth error - attempting session refresh');
+      if (errorStr.contains('auth') ||
+          errorStr.contains('unauthorized') ||
+          errorStr.contains('jwt') ||
+          errorStr.contains('token')) {
+        debugPrint(
+          '[_loadSmartAssignedSites] Auth error - attempting session refresh',
+        );
         try {
           await supabase.auth.refreshSession();
         } catch (refreshError) {
-          debugPrint('[_loadSmartAssignedSites] Session refresh failed: $refreshError');
+          debugPrint(
+            '[_loadSmartAssignedSites] Session refresh failed: $refreshError',
+          );
         }
       }
     }
@@ -444,7 +485,7 @@ class _MMPScreenState extends State<MMPScreen> {
 
   Future<void> _loadMySites() async {
     final supabase = Supabase.instance.client;
-    
+
     try {
       if (_userId == null) return;
 
@@ -462,18 +503,18 @@ class _MMPScreenState extends State<MMPScreen> {
           .order('created_at', ascending: false)
           .limit(1000);
 
-      if (response != null) {
-        _mySites = (response as List)
-            .map((e) => e as Map<String, dynamic>)
-            .toList();
-      }
+      _mySites = (response as List)
+          .map((e) => e as Map<String, dynamic>)
+          .toList();
     } catch (e) {
       debugPrint('[_loadMySites] Error loading my sites: $e');
-      
+
       // Check if it's an auth error
       final errorStr = e.toString().toLowerCase();
-      if (errorStr.contains('auth') || errorStr.contains('unauthorized') || 
-          errorStr.contains('jwt') || errorStr.contains('token')) {
+      if (errorStr.contains('auth') ||
+          errorStr.contains('unauthorized') ||
+          errorStr.contains('jwt') ||
+          errorStr.contains('token')) {
         debugPrint('[_loadMySites] Auth error - attempting session refresh');
         try {
           await supabase.auth.refreshSession();
@@ -498,16 +539,14 @@ class _MMPScreenState extends State<MMPScreen> {
           .order('created_at', ascending: false)
           .limit(100);
 
-      if (response != null) {
-        // Filter for potentially unsynced visits (you may need additional logic)
-        _unsyncedCompletedVisits = (response as List)
-            .map((e) => e as Map<String, dynamic>)
-            .where((site) {
-              // Add logic to determine if unsynced
-              return true; // Placeholder
-            })
-            .toList();
-      }
+      // Filter for potentially unsynced visits (you may need additional logic)
+      _unsyncedCompletedVisits = (response as List)
+          .map((e) => e as Map<String, dynamic>)
+          .where((site) {
+            // Add logic to determine if unsynced
+            return true; // Placeholder
+          })
+          .toList();
     } catch (e) {
       debugPrint('Error loading unsynced completed visits: $e');
     }
@@ -527,29 +566,22 @@ class _MMPScreenState extends State<MMPScreen> {
           .eq('requested_by', _userId!)
           .order('created_at', ascending: false);
 
-      if (response != null) {
-        // Map requests by site ID (keep most recent for each site)
-        final requestsMap = <String, Map<String, dynamic>>{};
-        for (final request in response) {
-          final siteId = (request['mmp_site_entry_id'] as String?) ?? 
-                         (request['site_visit_id'] as String?);
-          if (siteId != null && !requestsMap.containsKey(siteId)) {
-            requestsMap[siteId] = request as Map<String, dynamic>;
-          }
+      // Map requests by site ID (keep most recent for each site)
+      final requestsMap = <String, Map<String, dynamic>>{};
+      for (final request in response) {
+        final siteId =
+            (request['mmp_site_entry_id'] as String?) ??
+            (request['site_visit_id'] as String?);
+        if (siteId != null && !requestsMap.containsKey(siteId)) {
+          requestsMap[siteId] = request as Map<String, dynamic>;
         }
-
-        if (!mounted) return;
-        setState(() {
-          _advanceRequests = requestsMap;
-          _loadingAdvanceRequests = false;
-        });
-      } else {
-        if (!mounted) return;
-        setState(() {
-          _advanceRequests = {};
-          _loadingAdvanceRequests = false;
-        });
       }
+
+      if (!mounted) return;
+      setState(() {
+        _advanceRequests = requestsMap;
+        _loadingAdvanceRequests = false;
+      });
     } catch (e) {
       debugPrint('Error loading advance requests: $e');
       if (!mounted) return;
@@ -582,11 +614,9 @@ class _MMPScreenState extends State<MMPScreen> {
           .order('created_at', ascending: false)
           .limit(1000);
 
-      if (response != null) {
-        _coordinatorSites = (response as List)
-            .map((e) => e as Map<String, dynamic>)
-            .toList();
-      }
+      _coordinatorSites = (response as List)
+          .map((e) => e as Map<String, dynamic>)
+          .toList();
     } catch (e) {
       debugPrint('Error loading coordinator data: $e');
     }
@@ -598,29 +628,28 @@ class _MMPScreenState extends State<MMPScreen> {
 
       // Use atomic claim RPC for dispatched sites (first-claim system)
       try {
-        final result = await Supabase.instance.client
-            .rpc('claim_site_visit', params: {
-              'p_site_id': site['id'],
-              'p_user_id': _userId!,
-            });
+        final result = await Supabase.instance.client.rpc(
+          'claim_site_visit',
+          params: {'p_site_id': site['id'], 'p_user_id': _userId!},
+        );
 
         final claimResult = result as Map<String, dynamic>?;
-        
+
         if (claimResult == null || (claimResult['success'] as bool?) != true) {
-          String description = claimResult?['message'] as String? ?? 'Could not claim site';
-          
+          String description =
+              claimResult?['message'] as String? ?? 'Could not claim site';
+
           if (claimResult?['error'] == 'ALREADY_CLAIMED') {
-            description = 'Another enumerator claimed this site first. Try a different site.';
+            description =
+                'Another enumerator claimed this site first. Try a different site.';
           } else if (claimResult?['error'] == 'CLAIM_IN_PROGRESS') {
-            description = 'Someone else is claiming this site right now. Try again in a moment.';
+            description =
+                'Someone else is claiming this site right now. Try again in a moment.';
           }
-          
+
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(description),
-                backgroundColor: Colors.red,
-              ),
+              SnackBar(content: Text(description), backgroundColor: Colors.red),
             );
           }
           return;
@@ -640,9 +669,11 @@ class _MMPScreenState extends State<MMPScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(e.toString().contains('already') 
-                  ? 'Could not claim this site. It may have been claimed by another enumerator.'
-                  : 'Error claiming site: ${e.toString()}'),
+              content: Text(
+                e.toString().contains('already')
+                    ? 'Could not claim this site. It may have been claimed by another enumerator.'
+                    : 'Error claiming site: ${e.toString()}',
+              ),
               backgroundColor: Colors.red,
             ),
           );
@@ -695,10 +726,11 @@ class _MMPScreenState extends State<MMPScreen> {
 
       final siteName = site['site_name'] ?? site['siteName'] ?? 'Unknown Site';
       final hubId = site['hub_id'] ?? site['hubId'];
-      final hubName = site['hub_name'] ?? 
-                      site['hubName'] ?? 
-                      site['hub_office'] ?? 
-                      site['hubOffice'];
+      final hubName =
+          site['hub_name'] ??
+          site['hubName'] ??
+          site['hub_office'] ??
+          site['hubOffice'];
 
       // Show request dialog
       final result = await showDialog<Map<String, dynamic>>(
@@ -716,7 +748,7 @@ class _MMPScreenState extends State<MMPScreen> {
       final requestedAmount = (result['requestedAmount'] as num).toDouble();
       final paymentType = result['paymentType'] as String;
       final justification = result['justification'] as String;
-      
+
       // Properly convert installmentPlan from List<dynamic> to List<Map<String, dynamic>>
       List<Map<String, dynamic>> installmentPlan = [];
       if (result['installmentPlan'] != null) {
@@ -736,9 +768,10 @@ class _MMPScreenState extends State<MMPScreen> {
           .maybeSingle();
 
       final role = (profile?['role'] as String?)?.toLowerCase() ?? '';
-      final requesterRole = (role == 'coordinator' || 
-                            role == 'field_coordinator' || 
-                            role == 'state_coordinator')
+      final requesterRole =
+          (role == 'coordinator' ||
+              role == 'field_coordinator' ||
+              role == 'state_coordinator')
           ? 'coordinator'
           : 'dataCollector';
 
@@ -769,7 +802,9 @@ class _MMPScreenState extends State<MMPScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Advance request submitted successfully. Waiting for supervisor approval.'),
+            content: Text(
+              'Advance request submitted successfully. Waiting for supervisor approval.',
+            ),
             backgroundColor: Colors.green,
           ),
         );
@@ -779,7 +814,6 @@ class _MMPScreenState extends State<MMPScreen> {
       await _loadAdvanceRequests();
       if (!mounted) return;
       setState(() {});
-
     } catch (e) {
       debugPrint('Error requesting advance: $e');
       if (mounted) {
@@ -796,11 +830,12 @@ class _MMPScreenState extends State<MMPScreen> {
   bool _shouldShowRequestAdvance(Map<String, dynamic> site) {
     // Only show for accepted or in-progress sites owned by current user
     final status = (site['status'] as String? ?? '').toLowerCase();
-    final isAcceptedOrOngoing = status == 'accepted' || 
-                                status == 'assigned' || 
-                                status == 'in progress' || 
-                                status == 'in_progress' || 
-                                status == 'ongoing';
+    final isAcceptedOrOngoing =
+        status == 'accepted' ||
+        status == 'assigned' ||
+        status == 'in progress' ||
+        status == 'in_progress' ||
+        status == 'ongoing';
     final isOwner = site['accepted_by'] == _userId;
     final transportFee = (site['transport_fee'] as num?)?.toDouble() ?? 0.0;
     final hasTransportBudget = transportFee > 0;
@@ -915,16 +950,12 @@ class _MMPScreenState extends State<MMPScreen> {
     if (showVisitActions) {
       // Request Advance Button (for accepted/in-progress sites with transport fee)
       if (_shouldShowRequestAdvance(site)) {
-        buttons.add(
-          Expanded(
-            child: _buildRequestAdvanceWidget(site),
-          ),
-        );
+        buttons.add(Expanded(child: _buildRequestAdvanceWidget(site)));
       }
 
       // Start Visit Button (for accepted/assigned sites) - now shows even if Request Advance is shown
-      if ((status.toString().toLowerCase() == 'accepted' || 
-           status.toString().toLowerCase() == 'assigned') &&
+      if ((status.toString().toLowerCase() == 'accepted' ||
+              status.toString().toLowerCase() == 'assigned') &&
           site['accepted_by'] == _userId) {
         buttons.add(
           Expanded(
@@ -943,8 +974,8 @@ class _MMPScreenState extends State<MMPScreen> {
       }
 
       // Complete Visit Button
-      if ((status.toString().toLowerCase() == 'in progress' || 
-           status.toString().toLowerCase() == 'ongoing') &&
+      if ((status.toString().toLowerCase() == 'in progress' ||
+              status.toString().toLowerCase() == 'ongoing') &&
           site['accepted_by'] == _userId) {
         buttons.add(
           Expanded(
@@ -966,9 +997,7 @@ class _MMPScreenState extends State<MMPScreen> {
     if (buttons.isEmpty) return const SizedBox.shrink();
 
     // Use Row with Expanded widgets - they'll share space equally
-    return Row(
-      children: buttons,
-    );
+    return Row(children: buttons);
   }
 
   Future<void> _acknowledgeCost(Map<String, dynamic> site) async {
@@ -982,7 +1011,7 @@ class _MMPScreenState extends State<MMPScreen> {
 
     try {
       final now = DateTime.now().toIso8601String();
-      
+
       await Supabase.instance.client
           .from('mmp_site_entries')
           .update({
@@ -1029,15 +1058,19 @@ class _MMPScreenState extends State<MMPScreen> {
 
   Future<void> _startVisit(Map<String, dynamic> site) async {
     final supabase = Supabase.instance.client;
-    
+
     try {
       // Validate and refresh session before starting operation
       final session = supabase.auth.currentSession;
-      
-      debugPrint('[_startVisit] Session check - valid: ${session != null}, expired: ${session?.isExpired ?? true}');
-      
+
+      debugPrint(
+        '[_startVisit] Session check - valid: ${session != null}, expired: ${session?.isExpired ?? true}',
+      );
+
       if (session == null || session.isExpired) {
-        debugPrint('[_startVisit] Session expired or missing, attempting refresh...');
+        debugPrint(
+          '[_startVisit] Session expired or missing, attempting refresh...',
+        );
         try {
           await supabase.auth.refreshSession();
           debugPrint('[_startVisit] Session refreshed successfully');
@@ -1076,7 +1109,9 @@ class _MMPScreenState extends State<MMPScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Location permission is required to start a visit.'),
+              content: Text(
+                'Location permission is required to start a visit.',
+              ),
               backgroundColor: Colors.red,
             ),
           );
@@ -1087,9 +1122,7 @@ class _MMPScreenState extends State<MMPScreen> {
       // Show confirmation dialog
       final confirmed = await showDialog<bool>(
         context: context,
-        builder: (context) => StartVisitDialog(
-          site: site,
-        ),
+        builder: (context) => StartVisitDialog(site: site),
       );
 
       if (confirmed != true) return;
@@ -1100,7 +1133,9 @@ class _MMPScreenState extends State<MMPScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Could not get location. Visit will start without location.'),
+              content: Text(
+                'Could not get location. Visit will start without location.',
+              ),
               backgroundColor: Colors.orange,
             ),
           );
@@ -1109,7 +1144,8 @@ class _MMPScreenState extends State<MMPScreen> {
 
       final now = DateTime.now().toIso8601String();
       final siteStatus = (site['status'] as String? ?? '').toLowerCase();
-      final isAssigned = siteStatus == 'assigned' && site['accepted_by'] == null;
+      final isAssigned =
+          siteStatus == 'assigned' && site['accepted_by'] == null;
 
       // Build update data
       final updateData = <String, dynamic>{
@@ -1121,7 +1157,8 @@ class _MMPScreenState extends State<MMPScreen> {
 
       // Add location to additional_data if available
       if (position != null) {
-        final additionalData = site['additional_data'] as Map<String, dynamic>? ?? {};
+        final additionalData =
+            site['additional_data'] as Map<String, dynamic>? ?? {};
         additionalData['start_location'] = {
           'latitude': position.latitude,
           'longitude': position.longitude,
@@ -1144,9 +1181,12 @@ class _MMPScreenState extends State<MMPScreen> {
             .maybeSingle();
 
         // Calculate fees if missing
-        var enumeratorFee = (freshSite?['enumerator_fee'] as num?)?.toDouble() ?? 0.0;
-        final transportFee = (freshSite?['transport_fee'] as num?)?.toDouble() ?? 
-                            (site['transport_fee'] as num?)?.toDouble() ?? 0.0;
+        var enumeratorFee =
+            (freshSite?['enumerator_fee'] as num?)?.toDouble() ?? 0.0;
+        final transportFee =
+            (freshSite?['transport_fee'] as num?)?.toDouble() ??
+            (site['transport_fee'] as num?)?.toDouble() ??
+            0.0;
 
         // Calculate total cost
         final calculatedCost = enumeratorFee + transportFee;
@@ -1161,11 +1201,15 @@ class _MMPScreenState extends State<MMPScreen> {
       // Verify session is still valid before database operation
       final currentSession = supabase.auth.currentSession;
       if (currentSession == null || currentSession.isExpired) {
-        debugPrint('[_startVisit] Session expired during operation, refreshing...');
+        debugPrint(
+          '[_startVisit] Session expired during operation, refreshing...',
+        );
         try {
           await supabase.auth.refreshSession();
         } catch (refreshError) {
-          debugPrint('[_startVisit] Session refresh failed during operation: $refreshError');
+          debugPrint(
+            '[_startVisit] Session refresh failed during operation: $refreshError',
+          );
           throw Exception('Session expired. Please try again.');
         }
       }
@@ -1181,8 +1225,10 @@ class _MMPScreenState extends State<MMPScreen> {
         debugPrint('[_startVisit] Database error: $dbError');
         // Check if it's an auth-related error
         final errorStr = dbError.toString().toLowerCase();
-        if (errorStr.contains('auth') || errorStr.contains('unauthorized') || 
-            errorStr.contains('jwt') || errorStr.contains('token')) {
+        if (errorStr.contains('auth') ||
+            errorStr.contains('unauthorized') ||
+            errorStr.contains('jwt') ||
+            errorStr.contains('token')) {
           debugPrint('[_startVisit] Auth-related database error detected');
           // Try to refresh session and retry once
           try {
@@ -1214,25 +1260,24 @@ class _MMPScreenState extends State<MMPScreen> {
       await _loadDataCollectorData();
       if (!mounted) return;
       if (mounted) setState(() {});
-
     } catch (e) {
       debugPrint('[_startVisit] Error starting visit: $e');
-      
+
       // Check session state after error
       final sessionAfterError = supabase.auth.currentSession;
-      debugPrint('[_startVisit] Session after error - valid: ${sessionAfterError != null}');
-      
+      debugPrint(
+        '[_startVisit] Session after error - valid: ${sessionAfterError != null}',
+      );
+
       if (mounted) {
-        final errorMessage = e.toString().contains('Authentication') || 
-                            e.toString().contains('Session expired')
+        final errorMessage =
+            e.toString().contains('Authentication') ||
+                e.toString().contains('Session expired')
             ? 'Authentication error. Please log in again.'
             : 'Error: ${e.toString()}';
-        
+
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(errorMessage),
-            backgroundColor: Colors.red,
-          ),
+          SnackBar(content: Text(errorMessage), backgroundColor: Colors.red),
         );
       }
     }
@@ -1240,16 +1285,22 @@ class _MMPScreenState extends State<MMPScreen> {
 
   Future<void> _completeVisit(Map<String, dynamic> site) async {
     final supabase = Supabase.instance.client;
-    
+
     try {
-      debugPrint('[_completeVisit] Starting completion for site: ${site['id']}');
-      
+      debugPrint(
+        '[_completeVisit] Starting completion for site: ${site['id']}',
+      );
+
       // Validate and refresh session before starting operation
       final session = supabase.auth.currentSession;
-      debugPrint('[_completeVisit] Session check - valid: ${session != null}, expired: ${session?.isExpired ?? true}');
-      
+      debugPrint(
+        '[_completeVisit] Session check - valid: ${session != null}, expired: ${session?.isExpired ?? true}',
+      );
+
       if (session == null || session.isExpired) {
-        debugPrint('[_completeVisit] Session expired or missing, attempting refresh...');
+        debugPrint(
+          '[_completeVisit] Session expired or missing, attempting refresh...',
+        );
         try {
           await supabase.auth.refreshSession();
           debugPrint('[_completeVisit] Session refreshed successfully');
@@ -1285,9 +1336,7 @@ class _MMPScreenState extends State<MMPScreen> {
       // Show visit report dialog
       final reportData = await showDialog<VisitReportData>(
         context: context,
-        builder: (context) => VisitReportDialog(
-          site: site,
-        ),
+        builder: (context) => VisitReportDialog(site: site),
       );
 
       if (reportData == null) return;
@@ -1295,63 +1344,85 @@ class _MMPScreenState extends State<MMPScreen> {
       // Verify session is still valid after dialog (user may have been idle)
       var currentSession = supabase.auth.currentSession;
       if (currentSession == null || currentSession.isExpired) {
-        debugPrint('[_completeVisit] Session expired after dialog, refreshing...');
+        debugPrint(
+          '[_completeVisit] Session expired after dialog, refreshing...',
+        );
         try {
           await supabase.auth.refreshSession();
           currentSession = supabase.auth.currentSession;
         } catch (refreshError) {
-          debugPrint('[_completeVisit] Session refresh failed after dialog: $refreshError');
+          debugPrint(
+            '[_completeVisit] Session refresh failed after dialog: $refreshError',
+          );
           throw Exception('Session expired. Please try again.');
         }
       }
 
       // Get final location
-      final position = reportData.coordinates ?? 
-                       await LocationService.getCurrentLocation();
+      final position =
+          reportData.coordinates ?? await LocationService.getCurrentLocation();
 
       final now = DateTime.now().toIso8601String();
 
       // Upload photos with session refresh during long operation
       List<String> photoUrls = [];
       if (reportData.photos.isNotEmpty) {
-        debugPrint('[_completeVisit] Starting photo upload (${reportData.photos.length} photos)');
-        
+        debugPrint(
+          '[_completeVisit] Starting photo upload (${reportData.photos.length} photos)',
+        );
+
         // Refresh session before photo uploads if needed
         currentSession = supabase.auth.currentSession;
         if (currentSession == null || currentSession.isExpired) {
-          debugPrint('[_completeVisit] Refreshing session before photo uploads...');
+          debugPrint(
+            '[_completeVisit] Refreshing session before photo uploads...',
+          );
           try {
             await supabase.auth.refreshSession();
           } catch (refreshError) {
-            debugPrint('[_completeVisit] Session refresh before uploads failed: $refreshError');
-            throw Exception('Session expired during photo upload. Please try again.');
+            debugPrint(
+              '[_completeVisit] Session refresh before uploads failed: $refreshError',
+            );
+            throw Exception(
+              'Session expired during photo upload. Please try again.',
+            );
           }
         }
-        
+
         try {
           photoUrls = await PhotoUploadService.uploadPhotos(
             site['id'].toString(),
             reportData.photos,
           );
-          debugPrint('[_completeVisit] Photo uploads completed (${photoUrls.length} URLs)');
-          
+          debugPrint(
+            '[_completeVisit] Photo uploads completed (${photoUrls.length} URLs)',
+          );
+
           // Verify session after photo uploads (they can take a while)
           currentSession = supabase.auth.currentSession;
           if (currentSession == null || currentSession.isExpired) {
-            debugPrint('[_completeVisit] Session expired after photo uploads, refreshing...');
+            debugPrint(
+              '[_completeVisit] Session expired after photo uploads, refreshing...',
+            );
             try {
               await supabase.auth.refreshSession();
             } catch (refreshError) {
-              debugPrint('[_completeVisit] Session refresh after uploads failed: $refreshError');
-              throw Exception('Session expired during upload. Please try again.');
+              debugPrint(
+                '[_completeVisit] Session refresh after uploads failed: $refreshError',
+              );
+              throw Exception(
+                'Session expired during upload. Please try again.',
+              );
             }
           }
         } catch (uploadError) {
           debugPrint('[_completeVisit] Photo upload error: $uploadError');
           // Check if it's an auth error
           final errorStr = uploadError.toString().toLowerCase();
-          if (errorStr.contains('auth') || errorStr.contains('unauthorized') || 
-              errorStr.contains('jwt') || errorStr.contains('token')) {
+          if (errorStr.contains('auth') ||
+              errorStr.contains('unauthorized') ||
+              errorStr.contains('jwt') ||
+              errorStr.contains('token')) {
             debugPrint('[_completeVisit] Auth-related photo upload error');
             // Try refreshing session and retry
             try {
@@ -1360,10 +1431,16 @@ class _MMPScreenState extends State<MMPScreen> {
                 site['id'].toString(),
                 reportData.photos,
               );
-              debugPrint('[_completeVisit] Photo upload retry after refresh successful');
+              debugPrint(
+                '[_completeVisit] Photo upload retry after refresh successful',
+              );
             } catch (retryError) {
-              debugPrint('[_completeVisit] Photo upload retry failed: $retryError');
-              throw Exception('Authentication error during photo upload. Please log in again.');
+              debugPrint(
+                '[_completeVisit] Photo upload retry failed: $retryError',
+              );
+              throw Exception(
+                'Authentication error during photo upload. Please log in again.',
+              );
             }
           } else {
             rethrow;
@@ -1397,11 +1474,15 @@ class _MMPScreenState extends State<MMPScreen> {
       // Verify session before database operations
       currentSession = supabase.auth.currentSession;
       if (currentSession == null || currentSession.isExpired) {
-        debugPrint('[_completeVisit] Session expired before report insert, refreshing...');
+        debugPrint(
+          '[_completeVisit] Session expired before report insert, refreshing...',
+        );
         try {
           await supabase.auth.refreshSession();
         } catch (refreshError) {
-          debugPrint('[_completeVisit] Session refresh before report insert failed: $refreshError');
+          debugPrint(
+            '[_completeVisit] Session refresh before report insert failed: $refreshError',
+          );
           throw Exception('Session expired. Please try again.');
         }
       }
@@ -1415,12 +1496,16 @@ class _MMPScreenState extends State<MMPScreen> {
             .insert(reportInsert)
             .select()
             .single();
-        debugPrint('[_completeVisit] Report inserted with id: ${savedReport['id']}');
+        debugPrint(
+          '[_completeVisit] Report inserted with id: ${savedReport['id']}',
+        );
       } catch (dbError) {
         debugPrint('[_completeVisit] Report insert error: $dbError');
         final errorStr = dbError.toString().toLowerCase();
-        if (errorStr.contains('auth') || errorStr.contains('unauthorized') || 
-            errorStr.contains('jwt') || errorStr.contains('token')) {
+        if (errorStr.contains('auth') ||
+            errorStr.contains('unauthorized') ||
+            errorStr.contains('jwt') ||
+            errorStr.contains('token')) {
           debugPrint('[_completeVisit] Auth-related report insert error');
           try {
             await supabase.auth.refreshSession();
@@ -1429,9 +1514,13 @@ class _MMPScreenState extends State<MMPScreen> {
                 .insert(reportInsert)
                 .select()
                 .single();
-            debugPrint('[_completeVisit] Report insert retry after refresh successful');
+            debugPrint(
+              '[_completeVisit] Report insert retry after refresh successful',
+            );
           } catch (retryError) {
-            debugPrint('[_completeVisit] Report insert retry failed: $retryError');
+            debugPrint(
+              '[_completeVisit] Report insert retry failed: $retryError',
+            );
             throw Exception('Authentication error. Please log in again.');
           }
         } else {
@@ -1441,34 +1530,43 @@ class _MMPScreenState extends State<MMPScreen> {
 
       // Link photos to report
       if (photoUrls.isNotEmpty && savedReport != null) {
-        final reportPhotos = photoUrls.map((url) => {
-          'report_id': savedReport['id'],
-          'photo_url': url,
-          'storage_path': url, // Use URL as storage path if separate path not available
-        }).toList();
+        final reportPhotos = photoUrls
+            .map(
+              (url) => {
+                'report_id': savedReport['id'],
+                'photo_url': url,
+                'storage_path':
+                    url, // Use URL as storage path if separate path not available
+              },
+            )
+            .toList();
 
-        debugPrint('[_completeVisit] Inserting ${reportPhotos.length} report photos');
+        debugPrint(
+          '[_completeVisit] Inserting ${reportPhotos.length} report photos',
+        );
         // Verify session before inserting photos
         currentSession = supabase.auth.currentSession;
         if (currentSession == null || currentSession.isExpired) {
-          debugPrint('[_completeVisit] Refreshing session before report_photos insert...');
+          debugPrint(
+            '[_completeVisit] Refreshing session before report_photos insert...',
+          );
           await supabase.auth.refreshSession();
         }
-        
+
         try {
-          await supabase
-              .from('report_photos')
-              .insert(reportPhotos);
+          await supabase.from('report_photos').insert(reportPhotos);
         } catch (photoError) {
-          debugPrint('[_completeVisit] Report photos insert error: $photoError');
+          debugPrint(
+            '[_completeVisit] Report photos insert error: $photoError',
+          );
           final errorStr = photoError.toString().toLowerCase();
-          if (errorStr.contains('auth') || errorStr.contains('unauthorized') || 
-              errorStr.contains('jwt') || errorStr.contains('token')) {
+          if (errorStr.contains('auth') ||
+              errorStr.contains('unauthorized') ||
+              errorStr.contains('jwt') ||
+              errorStr.contains('token')) {
             debugPrint('[_completeVisit] Auth-related report photos error');
             await supabase.auth.refreshSession();
-            await supabase
-                .from('report_photos')
-                .insert(reportPhotos);
+            await supabase.from('report_photos').insert(reportPhotos);
           } else {
             rethrow;
           }
@@ -1478,7 +1576,9 @@ class _MMPScreenState extends State<MMPScreen> {
       // Verify session before updating site status
       currentSession = supabase.auth.currentSession;
       if (currentSession == null || currentSession.isExpired) {
-        debugPrint('[_completeVisit] Refreshing session before site status update...');
+        debugPrint(
+          '[_completeVisit] Refreshing session before site status update...',
+        );
         await supabase.auth.refreshSession();
       }
 
@@ -1486,7 +1586,7 @@ class _MMPScreenState extends State<MMPScreen> {
       final updateData = <String, dynamic>{
         'status': 'Completed',
         'visit_completed_at': now,
-            'visit_completed_by': userId,
+        'visit_completed_by': userId,
         'updated_at': now,
         'additional_data': {
           ...(site['additional_data'] as Map<String, dynamic>? ?? {}),
@@ -1516,7 +1616,9 @@ class _MMPScreenState extends State<MMPScreen> {
         updateData['visit_completed_by'] = userId;
       }
 
-      debugPrint('[_completeVisit] Updating mmp_site_entries for site: ${site['id']}');
+      debugPrint(
+        '[_completeVisit] Updating mmp_site_entries for site: ${site['id']}',
+      );
       try {
         await supabase
             .from('mmp_site_entries')
@@ -1525,8 +1627,10 @@ class _MMPScreenState extends State<MMPScreen> {
       } catch (updateError) {
         debugPrint('[_completeVisit] Site status update error: $updateError');
         final errorStr = updateError.toString().toLowerCase();
-        if (errorStr.contains('auth') || errorStr.contains('unauthorized') || 
-            errorStr.contains('jwt') || errorStr.contains('token')) {
+        if (errorStr.contains('auth') ||
+            errorStr.contains('unauthorized') ||
+            errorStr.contains('jwt') ||
+            errorStr.contains('token')) {
           debugPrint('[_completeVisit] Auth-related site update error');
           await supabase.auth.refreshSession();
           await supabase
@@ -1540,68 +1644,73 @@ class _MMPScreenState extends State<MMPScreen> {
 
       // Save GPS to site_locations table
       if (position != null) {
-        debugPrint('[_completeVisit] Inserting final location for site: ${site['id']}');
+        debugPrint(
+          '[_completeVisit] Inserting final location for site: ${site['id']}',
+        );
         // Verify session before location insert
         currentSession = supabase.auth.currentSession;
         if (currentSession == null || currentSession.isExpired) {
-          debugPrint('[_completeVisit] Refreshing session before location insert...');
+          debugPrint(
+            '[_completeVisit] Refreshing session before location insert...',
+          );
           await supabase.auth.refreshSession();
         }
-        
+
         try {
-          await supabase
-              .from('site_locations')
-              .insert({
-                'site_id': site['id'],
-                'user_id': userId,
-                'latitude': position.latitude,
-                'longitude': position.longitude,
-                'accuracy': position.accuracy ?? 10,
-                'notes': 'Visit end location',
-                'recorded_at': now,
-              });
+          await supabase.from('site_locations').insert({
+            'site_id': site['id'],
+            'user_id': userId,
+            'latitude': position.latitude,
+            'longitude': position.longitude,
+            'accuracy': position.accuracy ?? 10,
+            'notes': 'Visit end location',
+            'recorded_at': now,
+          });
         } catch (locationError) {
           debugPrint('[_completeVisit] Location insert error: $locationError');
           final errorStr = locationError.toString().toLowerCase();
-          if (errorStr.contains('auth') || errorStr.contains('unauthorized') || 
-              errorStr.contains('jwt') || errorStr.contains('token')) {
+          if (errorStr.contains('auth') ||
+              errorStr.contains('unauthorized') ||
+              errorStr.contains('jwt') ||
+              errorStr.contains('token')) {
             debugPrint('[_completeVisit] Auth-related location insert error');
             await supabase.auth.refreshSession();
-            await supabase
-                .from('site_locations')
-                .insert({
-                  'site_id': site['id'],
-                  'user_id': userId,
-                  'latitude': position.latitude,
-                  'longitude': position.longitude,
-                  'accuracy': position.accuracy ?? 10,
-                  'notes': 'Visit end location',
-                  'recorded_at': now,
-                });
+            await supabase.from('site_locations').insert({
+              'site_id': site['id'],
+              'user_id': userId,
+              'latitude': position.latitude,
+              'longitude': position.longitude,
+              'accuracy': position.accuracy ?? 10,
+              'notes': 'Visit end location',
+              'recorded_at': now,
+            });
           } else {
             // Location insert failure is not critical, log and continue
-            debugPrint('[_completeVisit] Location insert failed but continuing: $locationError');
+            debugPrint(
+              '[_completeVisit] Location insert failed but continuing: $locationError',
+            );
           }
         }
       }
 
       // Create wallet transaction (optional - you may need to implement this)
-      try {
-        
-      } catch (e) {
+      try {} catch (e) {
         debugPrint('Error creating wallet transaction: $e');
-        
       }
 
       // Verify session is still valid before reloading data
       currentSession = supabase.auth.currentSession;
       if (currentSession == null || currentSession.isExpired) {
-        debugPrint('[_completeVisit] Session expired before reload, refreshing...');
+        debugPrint(
+          '[_completeVisit] Session expired before reload, refreshing...',
+        );
         try {
           await supabase.auth.refreshSession();
           debugPrint('[_completeVisit] Session refreshed before reload');
         } catch (refreshError) {
-          debugPrint('[_completeVisit] Session refresh before reload failed: $refreshError');
+          debugPrint(
+            '[_completeVisit] Session refresh before reload failed: $refreshError',
+          );
           // Don't throw - just log and continue, the reload might still work
         }
       }
@@ -1619,8 +1728,10 @@ class _MMPScreenState extends State<MMPScreen> {
       // Don't reload immediately - let the user see the success message and stay on the page
       // The realtime subscription will automatically update the UI when the database changes
       // If realtime is not working, we can reload in the background after a delay
-      debugPrint('[_completeVisit] Completion successful - UI will update via realtime subscription');
-      
+      debugPrint(
+        '[_completeVisit] Completion successful - UI will update via realtime subscription',
+      );
+
       // Optionally reload in background after a longer delay to ensure UI stays responsive
       // Only reload if realtime updates don't work
       final finalSessionCheck = supabase.auth.currentSession;
@@ -1628,9 +1739,11 @@ class _MMPScreenState extends State<MMPScreen> {
         // Reload after 2 seconds in the background - this gives realtime a chance to update first
         Future.delayed(const Duration(seconds: 2), () async {
           if (!mounted) return;
-          
+
           try {
-            debugPrint('[_completeVisit] Starting background refresh (realtime may have already updated)...');
+            debugPrint(
+              '[_completeVisit] Starting background refresh (realtime may have already updated)...',
+            );
             // Only reload specific data, not everything
             await _loadAvailableSites();
             await _loadMySites();
@@ -1640,39 +1753,45 @@ class _MMPScreenState extends State<MMPScreen> {
               debugPrint('[_completeVisit] Background refresh completed');
             }
           } catch (reloadError) {
-            debugPrint('[_completeVisit] Error during background refresh (non-critical): $reloadError');
+            debugPrint(
+              '[_completeVisit] Error during background refresh (non-critical): $reloadError',
+            );
             // Silently fail - realtime should handle updates
           }
         });
       }
-
     } catch (e, stack) {
       debugPrint('[_completeVisit] Error completing visit: $e');
       debugPrint('[_completeVisit] Stack trace: $stack');
-      
+
       // Check session state after error
       final sessionAfterError = supabase.auth.currentSession;
-      debugPrint('[_completeVisit] Session after error - valid: ${sessionAfterError != null}, expired: ${sessionAfterError?.isExpired ?? true}');
-      
+      debugPrint(
+        '[_completeVisit] Session after error - valid: ${sessionAfterError != null}, expired: ${sessionAfterError?.isExpired ?? true}',
+      );
+
       // Check if error is auth-related
       final errorStr = e.toString().toLowerCase();
-      final isAuthError = errorStr.contains('auth') || 
-                         errorStr.contains('unauthorized') || 
-                         errorStr.contains('jwt') || 
-                         errorStr.contains('token') ||
-                         errorStr.contains('session expired');
-      
+      final isAuthError =
+          errorStr.contains('auth') ||
+          errorStr.contains('unauthorized') ||
+          errorStr.contains('jwt') ||
+          errorStr.contains('token') ||
+          errorStr.contains('session expired');
+
       if (isAuthError) {
-        debugPrint('[_completeVisit] ⚠️ AUTH ERROR detected during completion: $e');
+        debugPrint(
+          '[_completeVisit] ⚠️ AUTH ERROR detected during completion: $e',
+        );
         // Don't let auth errors trigger logout - user might still be valid
         // Only show error message
       }
-      
+
       if (mounted) {
         final errorMessage = isAuthError
             ? 'Authentication error occurred. Please try again or log in again if the problem persists.'
             : 'Error: ${e.toString()}';
-        
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error: ${e.toString()}'),
@@ -1683,20 +1802,26 @@ class _MMPScreenState extends State<MMPScreen> {
     }
   }
 
-  List<Map<String, dynamic>> _getFilteredSites(List<Map<String, dynamic>> sites) {
+  List<Map<String, dynamic>> _getFilteredSites(
+    List<Map<String, dynamic>> sites,
+  ) {
     if (_searchQuery.isEmpty) return sites;
-    
+
     final query = _searchQuery.toLowerCase();
     return sites.where((site) {
-      final siteName = (site['site_name'] ?? site['siteName'] ?? '').toString().toLowerCase();
-      final siteCode = (site['site_code'] ?? site['siteCode'] ?? '').toString().toLowerCase();
+      final siteName = (site['site_name'] ?? site['siteName'] ?? '')
+          .toString()
+          .toLowerCase();
+      final siteCode = (site['site_code'] ?? site['siteCode'] ?? '')
+          .toString()
+          .toLowerCase();
       final state = (site['state'] ?? '').toString().toLowerCase();
       final locality = (site['locality'] ?? '').toString().toLowerCase();
-      
+
       return siteName.contains(query) ||
-             siteCode.contains(query) ||
-             state.contains(query) ||
-             locality.contains(query);
+          siteCode.contains(query) ||
+          state.contains(query) ||
+          locality.contains(query);
     }).toList();
   }
 
@@ -1726,8 +1851,8 @@ class _MMPScreenState extends State<MMPScreen> {
                 child: _isLoading
                     ? const Center(child: CircularProgressIndicator())
                     : (_isDataCollector || _isCoordinator)
-                        ? _buildDataCollectorView()
-                        : _buildNoAccessView(),
+                    ? _buildDataCollectorView()
+                    : _buildNoAccessView(),
               ),
             ],
           ),
@@ -1799,7 +1924,11 @@ class _MMPScreenState extends State<MMPScreen> {
                       color: Colors.white.withOpacity(0.2),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: const Icon(Icons.assignment, color: Colors.white, size: 24),
+                    child: const Icon(
+                      Icons.assignment,
+                      color: Colors.white,
+                      size: 24,
+                    ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -1829,7 +1958,7 @@ class _MMPScreenState extends State<MMPScreen> {
             ],
           ),
         ),
-        
+
         // Search Bar
         Padding(
           padding: const EdgeInsets.all(16),
@@ -1858,7 +1987,7 @@ class _MMPScreenState extends State<MMPScreen> {
             ),
           ),
         ),
-        
+
         // Tabs
         Container(
           color: Colors.white,
@@ -1897,16 +2026,32 @@ class _MMPScreenState extends State<MMPScreen> {
                 Row(
                   children: [
                     Expanded(
-                      child: _buildSubTabButton('pending', 'Inbox', _getPendingCount()),
+                      child: _buildSubTabButton(
+                        'pending',
+                        'Inbox',
+                        _getPendingCount(),
+                      ),
                     ),
                     Expanded(
-                      child: _buildSubTabButton('drafts', 'Drafts', _getDraftsCount()),
+                      child: _buildSubTabButton(
+                        'drafts',
+                        'Drafts',
+                        _getDraftsCount(),
+                      ),
                     ),
                     Expanded(
-                      child: _buildSubTabButton('outbox', 'Outbox', _unsyncedCompletedVisits.length),
+                      child: _buildSubTabButton(
+                        'outbox',
+                        'Outbox',
+                        _unsyncedCompletedVisits.length,
+                      ),
                     ),
                     Expanded(
-                      child: _buildSubTabButton('sent', 'Sent', _getSentCount()),
+                      child: _buildSubTabButton(
+                        'sent',
+                        'Sent',
+                        _getSentCount(),
+                      ),
                     ),
                   ],
                 ),
@@ -1914,11 +2059,9 @@ class _MMPScreenState extends State<MMPScreen> {
             ],
           ),
         ),
-        
+
         // Content
-        Expanded(
-          child: _buildDataCollectorContent(),
-        ),
+        Expanded(child: _buildDataCollectorContent()),
       ],
     );
   }
@@ -1942,14 +2085,20 @@ class _MMPScreenState extends State<MMPScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(icon, size: 18, color: isActive ? AppColors.primaryBlue : AppColors.textLight),
+                Icon(
+                  icon,
+                  size: 18,
+                  color: isActive ? AppColors.primaryBlue : AppColors.textLight,
+                ),
                 const SizedBox(width: 4),
                 Text(
                   label,
                   style: GoogleFonts.poppins(
                     fontSize: 12,
                     fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
-                    color: isActive ? AppColors.primaryBlue : AppColors.textLight,
+                    color: isActive
+                        ? AppColors.primaryBlue
+                        : AppColors.textLight,
                   ),
                 ),
               ],
@@ -1958,7 +2107,9 @@ class _MMPScreenState extends State<MMPScreen> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
               decoration: BoxDecoration(
-                color: isActive ? AppColors.primaryBlue.withOpacity(0.1) : AppColors.backgroundGray,
+                color: isActive
+                    ? AppColors.primaryBlue.withOpacity(0.1)
+                    : AppColors.backgroundGray,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Text(
@@ -1983,7 +2134,9 @@ class _MMPScreenState extends State<MMPScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 8),
         decoration: BoxDecoration(
-          color: isActive ? AppColors.primaryBlue.withOpacity(0.1) : Colors.transparent,
+          color: isActive
+              ? AppColors.primaryBlue.withOpacity(0.1)
+              : Colors.transparent,
           border: Border(
             bottom: BorderSide(
               color: isActive ? AppColors.primaryBlue : Colors.transparent,
@@ -2030,7 +2183,7 @@ class _MMPScreenState extends State<MMPScreen> {
 
   Widget _buildClaimableSites() {
     final filtered = _getFilteredSites(_availableSites);
-    
+
     if (filtered.isEmpty) {
       return Center(
         child: Padding(
@@ -2114,9 +2267,11 @@ class _MMPScreenState extends State<MMPScreen> {
           ),
         ),
         const SizedBox(height: 16),
-        
+
         // Grouped sites
-        ...grouped.entries.map((entry) => _buildSiteGroup(entry.key, entry.value)),
+        ...grouped.entries.map(
+          (entry) => _buildSiteGroup(entry.key, entry.value),
+        ),
       ],
     );
   }
@@ -2125,25 +2280,21 @@ class _MMPScreenState extends State<MMPScreen> {
     return ExpansionTile(
       title: Text(
         title,
-        style: GoogleFonts.poppins(
-          fontSize: 16,
-          fontWeight: FontWeight.w600,
-        ),
+        style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w600),
       ),
       subtitle: Text(
         '${sites.length} site${sites.length != 1 ? 's' : ''}',
-        style: GoogleFonts.poppins(
-          fontSize: 12,
-          color: AppColors.textLight,
-        ),
+        style: GoogleFonts.poppins(fontSize: 12, color: AppColors.textLight),
       ),
-      children: sites.map((site) => _buildSiteCard(site, showClaimButton: true)).toList(),
+      children: sites
+          .map((site) => _buildSiteCard(site, showClaimButton: true))
+          .toList(),
     );
   }
 
   Widget _buildSmartAssignedSites() {
     final filtered = _getFilteredSites(_smartAssignedSites);
-    
+
     if (filtered.isEmpty) {
       return Center(
         child: Padding(
@@ -2151,7 +2302,11 @@ class _MMPScreenState extends State<MMPScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.assignment_outlined, size: 64, color: AppColors.textLight),
+              Icon(
+                Icons.assignment_outlined,
+                size: 64,
+                color: AppColors.textLight,
+              ),
               const SizedBox(height: 16),
               Text(
                 'No assigned sites',
@@ -2203,48 +2358,55 @@ class _MMPScreenState extends State<MMPScreen> {
           ),
         ),
         const SizedBox(height: 16),
-        ...filtered.map((site) => _buildSiteCard(site, showAcknowledgeButton: true)),
+        ...filtered.map(
+          (site) => _buildSiteCard(site, showAcknowledgeButton: true),
+        ),
       ],
     );
   }
 
   Widget _buildMySitesContent() {
     List<Map<String, dynamic>> sitesToShow = [];
-    
+
     switch (_mySitesSubTab) {
       case 'pending':
         sitesToShow = _mySites.where((site) {
           final status = (site['status'] as String? ?? '').toLowerCase();
-          return status == 'accepted' || 
-                 status == 'assigned' || 
-                 status == 'dispatched' ||
-                 status == 'pending';
+          return status == 'accepted' ||
+              status == 'assigned' ||
+              status == 'dispatched' ||
+              status == 'pending';
         }).toList();
         break;
       case 'drafts':
         sitesToShow = _mySites.where((site) {
           final status = (site['status'] as String? ?? '').toLowerCase();
-          return status == 'in progress' || 
-                 status == 'in_progress' || 
-                 status == 'ongoing';
+          return status == 'in progress' ||
+              status == 'in_progress' ||
+              status == 'ongoing';
         }).toList();
         break;
       case 'outbox':
         sitesToShow = _unsyncedCompletedVisits;
         break;
       case 'sent':
-        sitesToShow = _mySites.where((site) {
-          final status = (site['status'] as String? ?? '').toLowerCase();
-          return status == 'completed' || status == 'complete';
-        }).where((site) {
-          // Exclude unsynced
-          return !_unsyncedCompletedVisits.any((uv) => uv['id'] == site['id']);
-        }).toList();
+        sitesToShow = _mySites
+            .where((site) {
+              final status = (site['status'] as String? ?? '').toLowerCase();
+              return status == 'completed' || status == 'complete';
+            })
+            .where((site) {
+              // Exclude unsynced
+              return !_unsyncedCompletedVisits.any(
+                (uv) => uv['id'] == site['id'],
+              );
+            })
+            .toList();
         break;
     }
 
     final filtered = _getFilteredSites(sitesToShow);
-    
+
     if (filtered.isEmpty) {
       String message = 'No sites found';
       switch (_mySitesSubTab) {
@@ -2252,16 +2414,18 @@ class _MMPScreenState extends State<MMPScreen> {
           message = 'No pending visits found.';
           break;
         case 'drafts':
-          message = 'No in-progress or ongoing site visits found. Start a visit to see it here.';
+          message =
+              'No in-progress or ongoing site visits found. Start a visit to see it here.';
           break;
         case 'outbox':
-          message = 'No completed visits waiting to sync. All visits have been submitted.';
+          message =
+              'No completed visits waiting to sync. All visits have been submitted.';
           break;
         case 'sent':
           message = 'No completed sites found.';
           break;
       }
-      
+
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(32),
@@ -2279,10 +2443,9 @@ class _MMPScreenState extends State<MMPScreen> {
 
     return ListView(
       padding: const EdgeInsets.all(16),
-      children: filtered.map((site) => _buildSiteCard(
-        site,
-        showVisitActions: true,
-      )).toList(),
+      children: filtered
+          .map((site) => _buildSiteCard(site, showVisitActions: true))
+          .toList(),
     );
   }
 
@@ -2300,7 +2463,7 @@ class _MMPScreenState extends State<MMPScreen> {
     final enumeratorFee = site['enumerator_fee'] ?? 0;
     final transportFee = site['transport_fee'] ?? 0;
     final cost = site['cost'] ?? (enumeratorFee + transportFee);
-    
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
@@ -2371,7 +2534,7 @@ class _MMPScreenState extends State<MMPScreen> {
               ),
             ],
           ),
-          
+
           if (cost > 0 || enumeratorFee > 0 || transportFee > 0) ...[
             const SizedBox(height: 12),
             Container(
@@ -2447,7 +2610,7 @@ class _MMPScreenState extends State<MMPScreen> {
               ),
             ),
           ],
-          
+
           const SizedBox(height: 12),
           _buildActionButtons(
             site,
@@ -2463,7 +2626,7 @@ class _MMPScreenState extends State<MMPScreen> {
 
   Widget _buildCoordinatorView() {
     final filtered = _getFilteredSites(_coordinatorSites);
-    
+
     return Column(
       children: [
         // Header
@@ -2494,7 +2657,11 @@ class _MMPScreenState extends State<MMPScreen> {
                       color: Colors.white.withOpacity(0.2),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: const Icon(Icons.verified_user, color: Colors.white, size: 24),
+                    child: const Icon(
+                      Icons.verified_user,
+                      color: Colors.white,
+                      size: 24,
+                    ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -2524,7 +2691,7 @@ class _MMPScreenState extends State<MMPScreen> {
             ],
           ),
         ),
-        
+
         // Search
         Padding(
           padding: const EdgeInsets.all(16),
@@ -2544,7 +2711,7 @@ class _MMPScreenState extends State<MMPScreen> {
             ),
           ),
         ),
-        
+
         // Sites list
         Expanded(
           child: filtered.isEmpty
@@ -2554,7 +2721,11 @@ class _MMPScreenState extends State<MMPScreen> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.assignment_outlined, size: 64, color: AppColors.textLight),
+                        Icon(
+                          Icons.assignment_outlined,
+                          size: 64,
+                          color: AppColors.textLight,
+                        ),
                         const SizedBox(height: 16),
                         Text(
                           'No sites found',
@@ -2579,7 +2750,9 @@ class _MMPScreenState extends State<MMPScreen> {
                 )
               : ListView(
                   padding: const EdgeInsets.all(16),
-                  children: filtered.map((site) => _buildCoordinatorSiteCard(site)).toList(),
+                  children: filtered
+                      .map((site) => _buildCoordinatorSiteCard(site))
+                      .toList(),
                 ),
         ),
       ],
@@ -2592,7 +2765,7 @@ class _MMPScreenState extends State<MMPScreen> {
     final state = site['state'] ?? '';
     final locality = site['locality'] ?? '';
     final status = site['status'] ?? 'Pending';
-    
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
@@ -2663,8 +2836,10 @@ class _MMPScreenState extends State<MMPScreen> {
   Color _getStatusColor(String status) {
     final s = status.toLowerCase();
     if (s == 'completed' || s == 'complete') return Colors.green;
-    if (s == 'in progress' || s == 'in_progress' || s == 'ongoing') return Colors.blue;
-    if (s == 'pending' || s == 'assigned' || s == 'dispatched') return Colors.orange;
+    if (s == 'in progress' || s == 'in_progress' || s == 'ongoing')
+      return Colors.blue;
+    if (s == 'pending' || s == 'assigned' || s == 'dispatched')
+      return Colors.orange;
     if (s == 'verified') return Colors.purple;
     if (s == 'rejected') return Colors.red;
     return AppColors.textLight;
@@ -2673,29 +2848,32 @@ class _MMPScreenState extends State<MMPScreen> {
   int _getPendingCount() {
     return _mySites.where((site) {
       final status = (site['status'] as String? ?? '').toLowerCase();
-      return status == 'accepted' || 
-             status == 'assigned' || 
-             status == 'dispatched' ||
-             status == 'pending';
+      return status == 'accepted' ||
+          status == 'assigned' ||
+          status == 'dispatched' ||
+          status == 'pending';
     }).length;
   }
 
   int _getDraftsCount() {
     return _mySites.where((site) {
       final status = (site['status'] as String? ?? '').toLowerCase();
-      return status == 'in progress' || 
-             status == 'in_progress' || 
-             status == 'ongoing';
+      return status == 'in progress' ||
+          status == 'in_progress' ||
+          status == 'ongoing';
     }).length;
   }
 
   int _getSentCount() {
-    return _mySites.where((site) {
-      final status = (site['status'] as String? ?? '').toLowerCase();
-      return status == 'completed' || status == 'complete';
-    }).where((site) {
-      return !_unsyncedCompletedVisits.any((uv) => uv['id'] == site['id']);
-    }).length;
+    return _mySites
+        .where((site) {
+          final status = (site['status'] as String? ?? '').toLowerCase();
+          return status == 'completed' || status == 'complete';
+        })
+        .where((site) {
+          return !_unsyncedCompletedVisits.any((uv) => uv['id'] == site['id']);
+        })
+        .length;
   }
 }
 
@@ -2706,7 +2884,8 @@ class _CostAcknowledgmentDialog extends StatefulWidget {
   const _CostAcknowledgmentDialog({required this.site});
 
   @override
-  State<_CostAcknowledgmentDialog> createState() => _CostAcknowledgmentDialogState();
+  State<_CostAcknowledgmentDialog> createState() =>
+      _CostAcknowledgmentDialogState();
 }
 
 class _CostAcknowledgmentDialogState extends State<_CostAcknowledgmentDialog> {
@@ -2718,7 +2897,7 @@ class _CostAcknowledgmentDialogState extends State<_CostAcknowledgmentDialog> {
     final enumeratorFee = site['enumerator_fee'] ?? 0;
     final transportFee = site['transport_fee'] ?? 0;
     final totalCost = site['cost'] ?? (enumeratorFee + transportFee);
-    
+
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
@@ -2737,7 +2916,10 @@ class _CostAcknowledgmentDialogState extends State<_CostAcknowledgmentDialog> {
             const SizedBox(height: 16),
             Text(
               'Site: ${site['site_name'] ?? site['siteName'] ?? 'Unknown'}',
-              style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600),
+              style: GoogleFonts.poppins(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
             ),
             const SizedBox(height: 16),
             Container(
@@ -2759,7 +2941,8 @@ class _CostAcknowledgmentDialogState extends State<_CostAcknowledgmentDialog> {
             const SizedBox(height: 16),
             CheckboxListTile(
               value: _acknowledged,
-              onChanged: (value) => setState(() => _acknowledged = value ?? false),
+              onChanged: (value) =>
+                  setState(() => _acknowledged = value ?? false),
               title: Text(
                 'I acknowledge receipt of the cost details',
                 style: GoogleFonts.poppins(fontSize: 12),
@@ -2775,7 +2958,9 @@ class _CostAcknowledgmentDialogState extends State<_CostAcknowledgmentDialog> {
                 ),
                 const SizedBox(width: 8),
                 ElevatedButton(
-                  onPressed: _acknowledged ? () => Navigator.of(context).pop(true) : null,
+                  onPressed: _acknowledged
+                      ? () => Navigator.of(context).pop(true)
+                      : null,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.green,
                     foregroundColor: Colors.white,
@@ -2816,4 +3001,3 @@ class _CostAcknowledgmentDialogState extends State<_CostAcknowledgmentDialog> {
     );
   }
 }
-

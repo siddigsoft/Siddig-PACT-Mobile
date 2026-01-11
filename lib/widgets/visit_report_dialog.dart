@@ -11,10 +11,7 @@ import '../services/location_service.dart';
 
 class VisitReportDialog extends StatefulWidget {
   final Map<String, dynamic> site;
-  const VisitReportDialog({
-    super.key,
-    required this.site,
-  });
+  const VisitReportDialog({super.key, required this.site});
 
   @override
   State<VisitReportDialog> createState() => _VisitReportDialogState();
@@ -24,15 +21,15 @@ class _VisitReportDialogState extends State<VisitReportDialog> {
   final _formKey = GlobalKey<FormState>();
   final _activitiesController = TextEditingController();
   final _notesController = TextEditingController();
-  
-  List<String> _photoPaths = [];
+
+  final List<String> _photoPaths = [];
   int _durationMinutes = 0;
   Position? _coordinates;
   bool _isGettingLocation = false;
   bool _locationEnabled = false;
   String? _locationError;
   bool _isSubmitting = false;
-  
+
   DateTime? _visitStartTime;
   StreamSubscription<Position>? _positionStream;
 
@@ -53,14 +50,16 @@ class _VisitReportDialogState extends State<VisitReportDialog> {
   }
 
   void _loadDraftData() {
-    final additionalData = widget.site['additional_data'] as Map<String, dynamic>?;
+    final additionalData =
+        widget.site['additional_data'] as Map<String, dynamic>?;
     if (additionalData != null) {
       _activitiesController.text = additionalData['draft_activities'] ?? '';
       _notesController.text = additionalData['draft_notes'] ?? '';
       _durationMinutes = additionalData['draft_visit_duration'] ?? 0;
-      
+
       if (additionalData['draft_coordinates'] != null) {
-        final coords = additionalData['draft_coordinates'] as Map<String, dynamic>;
+        final coords =
+            additionalData['draft_coordinates'] as Map<String, dynamic>;
         _coordinates = Position(
           latitude: coords['latitude'] ?? 0.0,
           longitude: coords['longitude'] ?? 0.0,
@@ -75,7 +74,7 @@ class _VisitReportDialogState extends State<VisitReportDialog> {
         );
         _locationEnabled = true;
       }
-      
+
       // Note: Draft photo URLs are not loaded here as they are URLs, not file paths
       // We only load file paths from image picker, not URLs from draft data
       // If you need to display draft photos, handle them separately
@@ -98,7 +97,7 @@ class _VisitReportDialogState extends State<VisitReportDialog> {
       setState(() {
         _durationMinutes = duration.inMinutes;
       });
-      
+
       // Update duration every minute
       Future.delayed(const Duration(minutes: 1), () {
         if (mounted) {
@@ -134,17 +133,18 @@ class _VisitReportDialogState extends State<VisitReportDialog> {
       }
 
       // Start location stream for continuous updates
-      _positionStream = Geolocator.getPositionStream(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-          distanceFilter: 10, // Update every 10 meters
-        ),
-      ).listen((position) {
-        setState(() {
-          _coordinates = position;
-          _locationEnabled = true;
-        });
-      });
+      _positionStream =
+          Geolocator.getPositionStream(
+            locationSettings: const LocationSettings(
+              accuracy: LocationAccuracy.high,
+              distanceFilter: 10, // Update every 10 meters
+            ),
+          ).listen((position) {
+            setState(() {
+              _coordinates = position;
+              _locationEnabled = true;
+            });
+          });
     } catch (e) {
       setState(() {
         _isGettingLocation = false;
@@ -179,7 +179,7 @@ class _VisitReportDialogState extends State<VisitReportDialog> {
 
   Future<void> _addPhoto() async {
     final ImagePicker picker = ImagePicker();
-    
+
     // Show options
     final source = await showModalBottomSheet<ImageSource>(
       context: context,
@@ -249,7 +249,9 @@ class _VisitReportDialogState extends State<VisitReportDialog> {
     if (!_locationEnabled || _coordinates == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Location access is required to complete the site visit.'),
+          content: Text(
+            'Location access is required to complete the site visit.',
+          ),
           backgroundColor: Colors.red,
         ),
       );
@@ -259,7 +261,9 @@ class _VisitReportDialogState extends State<VisitReportDialog> {
     if (_activitiesController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please describe the activities performed during the visit.'),
+          content: Text(
+            'Please describe the activities performed during the visit.',
+          ),
           backgroundColor: Colors.red,
         ),
       );
@@ -269,7 +273,9 @@ class _VisitReportDialogState extends State<VisitReportDialog> {
     if (_photoPaths.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('At least one photo is required to complete the site visit.'),
+          content: Text(
+            'At least one photo is required to complete the site visit.',
+          ),
           backgroundColor: Colors.red,
         ),
       );
@@ -306,8 +312,13 @@ class _VisitReportDialogState extends State<VisitReportDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final siteName = widget.site['site_name'] ?? widget.site['siteName'] ?? 'Unknown Site';
-    final siteCode = widget.site['site_code'] ?? widget.site['siteCode'] ?? widget.site['id']?.toString().substring(0, 8) ?? '';
+    final siteName =
+        widget.site['site_name'] ?? widget.site['siteName'] ?? 'Unknown Site';
+    final siteCode =
+        widget.site['site_code'] ??
+        widget.site['siteCode'] ??
+        widget.site['id']?.toString().substring(0, 8) ??
+        '';
     final locality = widget.site['locality'] ?? '';
     final state = widget.site['state'] ?? '';
 
@@ -340,7 +351,11 @@ class _VisitReportDialogState extends State<VisitReportDialog> {
                       color: Colors.white,
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.directions_car, color: Colors.black, size: 20),
+                    child: const Icon(
+                      Icons.directions_car,
+                      color: Colors.black,
+                      size: 20,
+                    ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -380,22 +395,22 @@ class _VisitReportDialogState extends State<VisitReportDialog> {
                     children: [
                       // Location Status Card
                       _buildLocationStatusCard(),
-                      
+
                       const SizedBox(height: 20),
 
                       // Site Information Card
                       _buildSiteInfoCard(siteCode, locality, state),
-                      
+
                       const SizedBox(height: 20),
 
                       // Activities Field
                       _buildActivitiesField(),
-                      
+
                       const SizedBox(height: 20),
 
                       // Notes Field
                       _buildNotesField(),
-                      
+
                       const SizedBox(height: 20),
 
                       // Photos Section
@@ -410,13 +425,17 @@ class _VisitReportDialogState extends State<VisitReportDialog> {
             Container(
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
-                border: Border(top: BorderSide(color: AppColors.backgroundGray)),
+                border: Border(
+                  top: BorderSide(color: AppColors.backgroundGray),
+                ),
               ),
               child: Row(
                 children: [
                   Expanded(
                     child: OutlinedButton(
-                      onPressed: _isSubmitting ? null : () => Navigator.of(context).pop(),
+                      onPressed: _isSubmitting
+                          ? null
+                          : () => Navigator.of(context).pop(),
                       style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(
@@ -445,7 +464,9 @@ class _VisitReportDialogState extends State<VisitReportDialog> {
                               height: 20,
                               child: CircularProgressIndicator(
                                 strokeWidth: 2,
-                                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  Colors.white,
+                                ),
                               ),
                             )
                           : Row(
@@ -499,14 +520,17 @@ class _VisitReportDialogState extends State<VisitReportDialog> {
                     width: 48,
                     height: 48,
                     decoration: BoxDecoration(
-                      color: _coordinates != null && (_coordinates!.accuracy <= 10)
+                      color:
+                          _coordinates != null && (_coordinates!.accuracy <= 10)
                           ? Colors.black
                           : Colors.black.withOpacity(0.3),
                       shape: BoxShape.circle,
                     ),
                     child: Icon(
                       Icons.navigation,
-                      color: _coordinates != null ? Colors.white : Colors.white.withOpacity(0.5),
+                      color: _coordinates != null
+                          ? Colors.white
+                          : Colors.white.withOpacity(0.5),
                       size: 24,
                     ),
                   ),
@@ -525,8 +549,8 @@ class _VisitReportDialogState extends State<VisitReportDialog> {
                         _coordinates == null
                             ? 'Acquiring location...'
                             : _coordinates!.accuracy <= 10
-                                ? 'Excellent accuracy'
-                                : 'Improving accuracy...',
+                            ? 'Excellent accuracy'
+                            : 'Improving accuracy...',
                         style: GoogleFonts.poppins(
                           fontSize: 12,
                           color: AppColors.textLight,
@@ -550,7 +574,9 @@ class _VisitReportDialogState extends State<VisitReportDialog> {
                   child: TextButton.icon(
                     onPressed: _isGettingLocation ? null : _refreshLocation,
                     icon: const Icon(Icons.refresh, size: 18),
-                    label: Text(_isGettingLocation ? 'Refreshing...' : 'Refresh'),
+                    label: Text(
+                      _isGettingLocation ? 'Refreshing...' : 'Refresh',
+                    ),
                   ),
                 ),
             ],
@@ -675,7 +701,10 @@ class _VisitReportDialogState extends State<VisitReportDialog> {
                       ),
                     ),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.black,
                         borderRadius: BorderRadius.circular(8),
@@ -730,7 +759,10 @@ class _VisitReportDialogState extends State<VisitReportDialog> {
                       ),
                     ),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.black.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(8),
@@ -776,10 +808,7 @@ class _VisitReportDialogState extends State<VisitReportDialog> {
               ),
             ),
             const SizedBox(width: 4),
-            const Text(
-              '*',
-              style: TextStyle(color: Colors.red, fontSize: 14),
-            ),
+            const Text('*', style: TextStyle(color: Colors.red, fontSize: 14)),
           ],
         ),
         const SizedBox(height: 12),
@@ -787,7 +816,8 @@ class _VisitReportDialogState extends State<VisitReportDialog> {
           controller: _activitiesController,
           maxLines: 4,
           decoration: InputDecoration(
-            hintText: 'Describe the activities performed during the site visit...',
+            hintText:
+                'Describe the activities performed during the site visit...',
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide.none,
@@ -824,7 +854,8 @@ class _VisitReportDialogState extends State<VisitReportDialog> {
           controller: _notesController,
           maxLines: 3,
           decoration: InputDecoration(
-            hintText: 'Any additional observations, issues, or recommendations...',
+            hintText:
+                'Any additional observations, issues, or recommendations...',
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide.none,
@@ -908,12 +939,13 @@ class _VisitReportDialogState extends State<VisitReportDialog> {
               itemCount: _photoPaths.length,
               itemBuilder: (context, index) {
                 final photoPath = _photoPaths[index];
-                
+
                 // Skip if path is a URL (not a local file path)
-                if (photoPath.startsWith('http://') || photoPath.startsWith('https://')) {
+                if (photoPath.startsWith('http://') ||
+                    photoPath.startsWith('https://')) {
                   return const SizedBox.shrink();
                 }
-                
+
                 // On web, dart:io File is not supported. Show a simple placeholder
                 if (kIsWeb) {
                   return Container(
@@ -969,7 +1001,10 @@ class _VisitReportDialogState extends State<VisitReportDialog> {
                       bottom: 4,
                       left: 4,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
                         decoration: BoxDecoration(
                           color: Colors.black,
                           borderRadius: BorderRadius.circular(8),
@@ -1008,4 +1043,3 @@ class _VisitReportDialogState extends State<VisitReportDialog> {
     );
   }
 }
-

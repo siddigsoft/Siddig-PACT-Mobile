@@ -16,7 +16,6 @@ import '../providers/active_visit_provider.dart';
 import '../providers/site_visit_provider.dart';
 import '../providers/offline_provider.dart';
 import '../models/site_visit.dart';
-import '../services/offline/offline_db.dart';
 import '../services/offline/models.dart';
 
 class CompleteVisitScreen extends ConsumerStatefulWidget {
@@ -30,7 +29,8 @@ class CompleteVisitScreen extends ConsumerStatefulWidget {
   });
 
   @override
-  ConsumerState<CompleteVisitScreen> createState() => _CompleteVisitScreenState();
+  ConsumerState<CompleteVisitScreen> createState() =>
+      _CompleteVisitScreenState();
 }
 
 class _CompleteVisitScreenState extends ConsumerState<CompleteVisitScreen> {
@@ -70,13 +70,14 @@ class _CompleteVisitScreenState extends ConsumerState<CompleteVisitScreen> {
     setState(() {
       _isOnline = connectivity.first != ConnectivityResult.none;
     });
-    
+
     // Listen for connectivity changes
     _connectivityStream = Connectivity().onConnectivityChanged;
     _connectivityStream.listen((results) {
       if (mounted) {
         setState(() {
-          _isOnline = results.isNotEmpty && results.first != ConnectivityResult.none;
+          _isOnline =
+              results.isNotEmpty && results.first != ConnectivityResult.none;
         });
       }
     });
@@ -86,10 +87,11 @@ class _CompleteVisitScreenState extends ConsumerState<CompleteVisitScreen> {
   Future<void> _loadDraftData() async {
     try {
       final db = ref.read(offlineDbProvider);
-      final drafts = db.getAllSiteVisits().where(
-        (v) => v.siteEntryId == widget.visit.id && v.status == 'draft'
-      ).toList();
-      
+      final drafts = db
+          .getAllSiteVisits()
+          .where((v) => v.siteEntryId == widget.visit.id && v.status == 'draft')
+          .toList();
+
       if (drafts.isNotEmpty) {
         final draft = drafts.first;
         setState(() {
@@ -98,7 +100,7 @@ class _CompleteVisitScreenState extends ConsumerState<CompleteVisitScreen> {
           }
           // Photos will be restored from draft.photos if needed
         });
-        
+
         if (mounted) {
           AppSnackBar.show(
             context,
@@ -138,24 +140,32 @@ class _CompleteVisitScreenState extends ConsumerState<CompleteVisitScreen> {
         lastKnown = await Geolocator.getLastKnownPosition();
       }
 
-      final timeout = kIsWeb ? const Duration(seconds: 60) : const Duration(seconds: 20);
+      final timeout = kIsWeb
+          ? const Duration(seconds: 60)
+          : const Duration(seconds: 20);
 
       Position position;
       if (lastKnown != null) {
         position = lastKnown;
       } else {
         // On web, getCurrentPosition can hang; use a short stream fallback.
-        position = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.high,
-        ).timeout(timeout, onTimeout: () async {
-          final streamTimeout = kIsWeb ? const Duration(seconds: 15) : const Duration(seconds: 10);
-          return await Geolocator.getPositionStream(
-            locationSettings: const LocationSettings(
-              accuracy: LocationAccuracy.high,
-              distanceFilter: 0,
-            ),
-          ).first.timeout(streamTimeout);
-        });
+        position =
+            await Geolocator.getCurrentPosition(
+              desiredAccuracy: LocationAccuracy.high,
+            ).timeout(
+              timeout,
+              onTimeout: () async {
+                final streamTimeout = kIsWeb
+                    ? const Duration(seconds: 15)
+                    : const Duration(seconds: 10);
+                return await Geolocator.getPositionStream(
+                  locationSettings: const LocationSettings(
+                    accuracy: LocationAccuracy.high,
+                    distanceFilter: 0,
+                  ),
+                ).first.timeout(streamTimeout);
+              },
+            );
       }
 
       if (!mounted) return;
@@ -179,7 +189,7 @@ class _CompleteVisitScreenState extends ConsumerState<CompleteVisitScreen> {
         maxWidth: 1920,
         maxHeight: 1080,
       );
-      
+
       if (images.isNotEmpty && mounted) {
         setState(() {
           _photos.addAll(images);
@@ -205,7 +215,7 @@ class _CompleteVisitScreenState extends ConsumerState<CompleteVisitScreen> {
         maxWidth: 1920,
         maxHeight: 1080,
       );
-      
+
       if (image != null && mounted) {
         setState(() {
           _photos.add(image);
@@ -246,7 +256,8 @@ class _CompleteVisitScreenState extends ConsumerState<CompleteVisitScreen> {
     if (_currentLocation == null) {
       AppSnackBar.show(
         context,
-        message: 'Final location is required. Please tap Retry to capture location.',
+        message:
+            'Final location is required. Please tap Retry to capture location.',
         type: SnackBarType.warning,
       );
       return;
@@ -259,7 +270,7 @@ class _CompleteVisitScreenState extends ConsumerState<CompleteVisitScreen> {
     try {
       final supabase = Supabase.instance.client;
       final userId = supabase.auth.currentUser?.id;
-      
+
       if (userId == null) {
         throw Exception('User not authenticated');
       }
@@ -282,8 +293,8 @@ class _CompleteVisitScreenState extends ConsumerState<CompleteVisitScreen> {
       // Calculate visit duration
       final activeVisitState = ref.read(activeVisitProvider);
       final startTime = activeVisitState.startedAt;
-      final durationMinutes = startTime != null 
-          ? DateTime.now().difference(startTime).inMinutes 
+      final durationMinutes = startTime != null
+          ? DateTime.now().difference(startTime).inMinutes
           : null;
 
       // 1. Create the report
@@ -300,8 +311,8 @@ class _CompleteVisitScreenState extends ConsumerState<CompleteVisitScreen> {
           .insert({
             'site_visit_id': widget.visit.id,
             'notes': _notesController.text.trim(),
-            'activities': _activitiesController.text.trim().isEmpty 
-                ? null 
+            'activities': _activitiesController.text.trim().isEmpty
+                ? null
                 : _activitiesController.text.trim(),
             'duration_minutes': durationMinutes,
             'coordinates': coordinates,
@@ -318,7 +329,8 @@ class _CompleteVisitScreenState extends ConsumerState<CompleteVisitScreen> {
         final photo = _photos[i];
         // Keep folder layout consistent with web app docs:
         // reports/{site_id}/...
-        final fileName = '${DateTime.now().millisecondsSinceEpoch}-$i-${photo.name}';
+        final fileName =
+            '${DateTime.now().millisecondsSinceEpoch}-$i-${photo.name}';
         final storagePath = 'reports/${widget.visit.id}/$fileName';
 
         // Upload to storage
@@ -342,7 +354,8 @@ class _CompleteVisitScreenState extends ConsumerState<CompleteVisitScreen> {
               );
         } on StorageException catch (e) {
           // Make the bucket setup issue crystal clear.
-          if (e.statusCode == 404 || e.message.toLowerCase().contains('bucket not found')) {
+          if (e.statusCode == 404 ||
+              e.message.toLowerCase().contains('bucket not found')) {
             throw Exception(
               'Storage bucket "$_reportPhotosBucket" not found in Supabase. Create it (Storage → Buckets) or run the migration that adds it, then retry.',
             );
@@ -352,8 +365,8 @@ class _CompleteVisitScreenState extends ConsumerState<CompleteVisitScreen> {
 
         // Get public URL
         final photoUrl = supabase.storage
-          .from(_reportPhotosBucket)
-          .getPublicUrl(storagePath);
+            .from(_reportPhotosBucket)
+            .getPublicUrl(storagePath);
 
         // Create report_photos entry
         await supabase.from('report_photos').insert({
@@ -391,10 +404,12 @@ class _CompleteVisitScreenState extends ConsumerState<CompleteVisitScreen> {
           .single();
 
       // 5. Stop active visit tracking
-      await ref.read(activeVisitProvider.notifier).completeVisit(
-        notes: _notesController.text,
-        photos: _photos.map((p) => p.path).toList(),
-      );
+      await ref
+          .read(activeVisitProvider.notifier)
+          .completeVisit(
+            notes: _notesController.text,
+            photos: _photos.map((p) => p.path).toList(),
+          );
 
       widget.onCompleteSuccess?.call();
 
@@ -441,15 +456,15 @@ class _CompleteVisitScreenState extends ConsumerState<CompleteVisitScreen> {
       // Calculate visit duration
       final activeVisitState = ref.read(activeVisitProvider);
       final startTime = activeVisitState.startedAt;
-      final durationMinutes = startTime != null 
-          ? now.difference(startTime).inMinutes 
+      final durationMinutes = startTime != null
+          ? now.difference(startTime).inMinutes
           : null;
 
       // Convert photos to base64 for local storage
       final List<String> photoDataList = [];
       for (final photo in _photos) {
         try {
-          final bytes = kIsWeb 
+          final bytes = kIsWeb
               ? await photo.readAsBytes()
               : await File(photo.path).readAsBytes();
           final base64 = base64Encode(bytes);
@@ -465,10 +480,10 @@ class _CompleteVisitScreenState extends ConsumerState<CompleteVisitScreen> {
 
       // Create offline site visit record
       // Use first location in history as start location
-      final startLocation = activeVisitState.locationHistory.isNotEmpty 
-          ? activeVisitState.locationHistory.first 
+      final startLocation = activeVisitState.locationHistory.isNotEmpty
+          ? activeVisitState.locationHistory.first
           : null;
-      
+
       final offlineVisit = OfflineSiteVisit(
         id: uuid.v4(),
         siteEntryId: widget.visit.id,
@@ -507,8 +522,8 @@ class _CompleteVisitScreenState extends ConsumerState<CompleteVisitScreen> {
         payload: {
           'site_visit_id': widget.visit.id,
           'notes': _notesController.text.trim(),
-          'activities': _activitiesController.text.trim().isEmpty 
-              ? null 
+          'activities': _activitiesController.text.trim().isEmpty
+              ? null
               : _activitiesController.text.trim(),
           'duration_minutes': durationMinutes,
           'coordinates': _currentLocation != null
@@ -528,10 +543,12 @@ class _CompleteVisitScreenState extends ConsumerState<CompleteVisitScreen> {
       await db.addPendingSync(syncAction);
 
       // Stop active visit tracking
-      await ref.read(activeVisitProvider.notifier).completeVisit(
-        notes: _notesController.text,
-        photos: _photos.map((p) => p.path).toList(),
-      );
+      await ref
+          .read(activeVisitProvider.notifier)
+          .completeVisit(
+            notes: _notesController.text,
+            photos: _photos.map((p) => p.path).toList(),
+          );
 
       widget.onCompleteSuccess?.call();
 
@@ -583,10 +600,11 @@ class _CompleteVisitScreenState extends ConsumerState<CompleteVisitScreen> {
 
       // Get or create draft ID - reuse existing draft if present
       String draftId;
-      final existingDrafts = db.getAllSiteVisits().where(
-        (v) => v.siteEntryId == widget.visit.id && v.status == 'draft'
-      ).toList();
-      
+      final existingDrafts = db
+          .getAllSiteVisits()
+          .where((v) => v.siteEntryId == widget.visit.id && v.status == 'draft')
+          .toList();
+
       if (existingDrafts.isNotEmpty) {
         draftId = existingDrafts.first.id;
       } else {
@@ -597,7 +615,7 @@ class _CompleteVisitScreenState extends ConsumerState<CompleteVisitScreen> {
       final List<String> photoDataList = [];
       for (final photo in _photos) {
         try {
-          final bytes = kIsWeb 
+          final bytes = kIsWeb
               ? await photo.readAsBytes()
               : await File(photo.path).readAsBytes();
           final base64Data = base64Encode(bytes);
@@ -614,8 +632,8 @@ class _CompleteVisitScreenState extends ConsumerState<CompleteVisitScreen> {
       // Get location info from active visit
       final activeVisitState = ref.read(activeVisitProvider);
       final startTime = activeVisitState.startedAt;
-      final startLocation = activeVisitState.locationHistory.isNotEmpty 
-          ? activeVisitState.locationHistory.first 
+      final startLocation = activeVisitState.locationHistory.isNotEmpty
+          ? activeVisitState.locationHistory.first
           : null;
 
       // Create draft record
@@ -721,24 +739,22 @@ class _CompleteVisitScreenState extends ConsumerState<CompleteVisitScreen> {
                 ),
               ),
             ),
-            
+
             const SizedBox(height: 24),
 
             // Location status
             _buildLocationStatus(),
-            
+
             const SizedBox(height: 24),
 
             // Notes field
-            Text(
-              'Visit Notes *',
-              style: AppTextStyles.titleMedium,
-            ),
+            Text('Visit Notes *', style: AppTextStyles.titleMedium),
             const SizedBox(height: 8),
             TextField(
               controller: _notesController,
               decoration: InputDecoration(
-                hintText: 'Describe what you observed and did during the visit...',
+                hintText:
+                    'Describe what you observed and did during the visit...',
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
@@ -748,7 +764,7 @@ class _CompleteVisitScreenState extends ConsumerState<CompleteVisitScreen> {
               maxLines: 5,
               textInputAction: TextInputAction.newline,
             ),
-            
+
             const SizedBox(height: 16),
 
             // Activities field
@@ -770,7 +786,7 @@ class _CompleteVisitScreenState extends ConsumerState<CompleteVisitScreen> {
               maxLines: 3,
               textInputAction: TextInputAction.newline,
             ),
-            
+
             const SizedBox(height: 24),
 
             // Photos section
@@ -801,13 +817,16 @@ class _CompleteVisitScreenState extends ConsumerState<CompleteVisitScreen> {
               ],
             ),
             const SizedBox(height: 8),
-            
+
             if (_photos.isEmpty)
               Container(
                 height: 120,
                 width: double.infinity,
                 decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey.shade300, style: BorderStyle.solid),
+                  border: Border.all(
+                    color: Colors.grey.shade300,
+                    style: BorderStyle.solid,
+                  ),
                   borderRadius: BorderRadius.circular(12),
                   color: Colors.grey.shade50,
                 ),
@@ -870,7 +889,7 @@ class _CompleteVisitScreenState extends ConsumerState<CompleteVisitScreen> {
                         ),
                       );
                     }
-                    
+
                     return Stack(
                       children: [
                         Container(
@@ -880,7 +899,8 @@ class _CompleteVisitScreenState extends ConsumerState<CompleteVisitScreen> {
                             borderRadius: BorderRadius.circular(12),
                             image: DecorationImage(
                               image: kIsWeb
-                                  ? NetworkImage(_photos[index].path) as ImageProvider
+                                  ? NetworkImage(_photos[index].path)
+                                        as ImageProvider
                                   : FileImage(File(_photos[index].path)),
                               fit: BoxFit.cover,
                             ),
@@ -910,7 +930,7 @@ class _CompleteVisitScreenState extends ConsumerState<CompleteVisitScreen> {
                   },
                 ),
               ),
-            
+
             const SizedBox(height: 32),
 
             // Offline indicator
@@ -947,17 +967,19 @@ class _CompleteVisitScreenState extends ConsumerState<CompleteVisitScreen> {
                 width: double.infinity,
                 height: 50,
                 child: OutlinedButton.icon(
-                  onPressed: (_isSavingDraft || _isSubmitting) ? null : _saveDraft,
+                  onPressed: (_isSavingDraft || _isSubmitting)
+                      ? null
+                      : _saveDraft,
                   icon: _isSavingDraft
                       ? const SizedBox(
                           width: 20,
                           height: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                          ),
+                          child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Icon(Icons.save_outlined),
-                  label: Text(_isSavingDraft ? 'Saving Draft...' : 'Save as Draft'),
+                  label: Text(
+                    _isSavingDraft ? 'Saving Draft...' : 'Save as Draft',
+                  ),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: AppColors.primaryBlue,
                     side: BorderSide(color: AppColors.primaryBlue, width: 2),
@@ -975,20 +997,24 @@ class _CompleteVisitScreenState extends ConsumerState<CompleteVisitScreen> {
               width: double.infinity,
               height: 50,
               child: ElevatedButton.icon(
-                onPressed: (_isSubmitting || _isSavingDraft) ? null : _submitReport,
+                onPressed: (_isSubmitting || _isSavingDraft)
+                    ? null
+                    : _submitReport,
                 icon: _isSubmitting
                     ? const SizedBox(
                         width: 20,
                         height: 20,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            Colors.white,
+                          ),
                         ),
                       )
                     : const Icon(Icons.check_circle),
                 label: Text(
-                  _isSubmitting 
-                      ? 'Submitting...' 
+                  _isSubmitting
+                      ? 'Submitting...'
                       : (_isOnline ? 'Submit Report' : 'Complete (Sync Later)'),
                 ),
                 style: ElevatedButton.styleFrom(
@@ -1000,7 +1026,7 @@ class _CompleteVisitScreenState extends ConsumerState<CompleteVisitScreen> {
                 ),
               ),
             ),
-            
+
             const SizedBox(height: 16),
           ],
         ),
@@ -1018,30 +1044,29 @@ class _CompleteVisitScreenState extends ConsumerState<CompleteVisitScreen> {
               _currentLocation != null
                   ? Icons.location_on
                   : _locationError != null
-                      ? Icons.location_off
-                      : Icons.location_searching,
+                  ? Icons.location_off
+                  : Icons.location_searching,
               color: _currentLocation != null
                   ? AppColors.success
                   : _locationError != null
-                      ? Colors.red
-                      : AppColors.primaryOrange,
+                  ? Colors.red
+                  : AppColors.primaryOrange,
             ),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'Final Location',
-                    style: AppTextStyles.titleSmall,
-                  ),
+                  Text('Final Location', style: AppTextStyles.titleSmall),
                   const SizedBox(height: 2),
                   Text(
                     _currentLocation != null
                         ? 'Lat: ${_currentLocation!.latitude.toStringAsFixed(6)}, Lon: ${_currentLocation!.longitude.toStringAsFixed(6)}'
                         : _locationError ?? 'Getting location...',
                     style: AppTextStyles.bodySmall.copyWith(
-                      color: _locationError != null ? Colors.red : AppColors.textSecondary,
+                      color: _locationError != null
+                          ? Colors.red
+                          : AppColors.textSecondary,
                     ),
                   ),
                   if (_currentLocation != null)

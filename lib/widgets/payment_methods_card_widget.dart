@@ -10,10 +10,12 @@ class PaymentMethodsCardWidget extends ConsumerStatefulWidget {
   const PaymentMethodsCardWidget({super.key});
 
   @override
-  ConsumerState<PaymentMethodsCardWidget> createState() => _PaymentMethodsCardWidgetState();
+  ConsumerState<PaymentMethodsCardWidget> createState() =>
+      _PaymentMethodsCardWidgetState();
 }
 
-class _PaymentMethodsCardWidgetState extends ConsumerState<PaymentMethodsCardWidget> {
+class _PaymentMethodsCardWidgetState
+    extends ConsumerState<PaymentMethodsCardWidget> {
   bool _showAddDialog = false;
   String _selectedType = 'bank';
   final _formKey = GlobalKey<FormState>();
@@ -64,15 +66,29 @@ class _PaymentMethodsCardWidgetState extends ConsumerState<PaymentMethodsCardWid
       final request = CreatePaymentMethodRequest(
         type: paymentType,
         // Map provider name or cardholder name to 'name' field based on type
-        name: _selectedType == 'bank' 
-            ? (_nameController.text.trim().isNotEmpty ? _nameController.text.trim() : _bankNameController.text.trim())
+        name: _selectedType == 'bank'
+            ? (_nameController.text.trim().isNotEmpty
+                  ? _nameController.text.trim()
+                  : _bankNameController.text.trim())
             : _selectedType == 'mobile_money'
-                ? (_nameController.text.trim().isNotEmpty ? _nameController.text.trim() : _providerNameController.text.trim())
-                : (_nameController.text.trim().isNotEmpty ? _nameController.text.trim() : _cardholderNameController.text.trim()),
-        bankName: _selectedType == 'bank' ? _bankNameController.text.trim() : null,
-        accountNumber: _selectedType == 'bank' ? _accountNumberController.text.trim() : null,
-        phoneNumber: _selectedType == 'mobile_money' ? _phoneNumberController.text.trim() : null,
-        cardNumber: _selectedType == 'card' ? _cardNumberController.text.trim() : null,
+            ? (_nameController.text.trim().isNotEmpty
+                  ? _nameController.text.trim()
+                  : _providerNameController.text.trim())
+            : (_nameController.text.trim().isNotEmpty
+                  ? _nameController.text.trim()
+                  : _cardholderNameController.text.trim()),
+        bankName: _selectedType == 'bank'
+            ? _bankNameController.text.trim()
+            : null,
+        accountNumber: _selectedType == 'bank'
+            ? _accountNumberController.text.trim()
+            : null,
+        phoneNumber: _selectedType == 'mobile_money'
+            ? _phoneNumberController.text.trim()
+            : null,
+        cardNumber: _selectedType == 'card'
+            ? _cardNumberController.text.trim()
+            : null,
       );
 
       await ref.read(paymentMethodsProvider.notifier).addPaymentMethod(request);
@@ -80,7 +96,7 @@ class _PaymentMethodsCardWidgetState extends ConsumerState<PaymentMethodsCardWid
       if (mounted) {
         _clearForm();
         setState(() => _showAddDialog = false);
-        
+
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Payment method added successfully'),
@@ -112,7 +128,9 @@ class _PaymentMethodsCardWidgetState extends ConsumerState<PaymentMethodsCardWid
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Remove Payment Method'),
-        content: const Text('Are you sure you want to remove this payment method?'),
+        content: const Text(
+          'Are you sure you want to remove this payment method?',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -130,7 +148,7 @@ class _PaymentMethodsCardWidgetState extends ConsumerState<PaymentMethodsCardWid
     if (confirmed == true && mounted) {
       try {
         await ref.read(paymentMethodsProvider.notifier).removePaymentMethod(id);
-        
+
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Payment method removed'),
@@ -152,8 +170,10 @@ class _PaymentMethodsCardWidgetState extends ConsumerState<PaymentMethodsCardWid
   /// Handle setting default payment method
   Future<void> _handleSetDefault(String id) async {
     try {
-      await ref.read(paymentMethodsProvider.notifier).setDefaultPaymentMethod(id);
-      
+      await ref
+          .read(paymentMethodsProvider.notifier)
+          .setDefaultPaymentMethod(id);
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Default payment method updated'),
@@ -185,10 +205,7 @@ class _PaymentMethodsCardWidgetState extends ConsumerState<PaymentMethodsCardWid
             padding: const EdgeInsets.all(16),
             child: Row(
               children: [
-                Icon(
-                  Icons.account_balance_wallet,
-                  color: Colors.grey[600],
-                ),
+                Icon(Icons.account_balance_wallet, color: Colors.grey[600]),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -205,10 +222,7 @@ class _PaymentMethodsCardWidgetState extends ConsumerState<PaymentMethodsCardWid
                       const SizedBox(height: 4),
                       Text(
                         'Preferred withdrawal methods',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: Colors.grey[600],
-                        ),
+                        style: TextStyle(fontSize: 13, color: Colors.grey[600]),
                       ),
                     ],
                   ),
@@ -243,7 +257,8 @@ class _PaymentMethodsCardWidgetState extends ConsumerState<PaymentMethodsCardWid
                         ),
                         const SizedBox(height: 16),
                         ElevatedButton.icon(
-                          onPressed: () => setState(() => _showAddDialog = true),
+                          onPressed: () =>
+                              setState(() => _showAddDialog = true),
                           icon: const Icon(Icons.add),
                           label: const Text('Add First Method'),
                           style: ElevatedButton.styleFrom(
@@ -256,22 +271,18 @@ class _PaymentMethodsCardWidgetState extends ConsumerState<PaymentMethodsCardWid
                 }
 
                 return Column(
-                  children: methods
-                      .asMap()
-                      .entries
-                      .map((entry) {
-                        final index = entry.key;
-                        final method = entry.value;
-                        final isLast = index == methods.length - 1;
+                  children: methods.asMap().entries.map((entry) {
+                    final index = entry.key;
+                    final method = entry.value;
+                    final isLast = index == methods.length - 1;
 
-                        return Column(
-                          children: [
-                            _buildPaymentMethodItem(method),
-                            if (!isLast) const Divider(height: 24),
-                          ],
-                        );
-                      })
-                      .toList(),
+                    return Column(
+                      children: [
+                        _buildPaymentMethodItem(method),
+                        if (!isLast) const Divider(height: 24),
+                      ],
+                    );
+                  }).toList(),
                 );
               },
               loading: () => const SizedBox(
@@ -283,14 +294,19 @@ class _PaymentMethodsCardWidgetState extends ConsumerState<PaymentMethodsCardWid
                 decoration: BoxDecoration(
                   color: const Color(0xFFFFEBEE),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: const Color(0xFFE53935).withOpacity(0.3)),
+                  border: Border.all(
+                    color: const Color(0xFFE53935).withOpacity(0.3),
+                  ),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
                       children: [
-                        const Icon(Icons.error_outline, color: Color(0xFFE53935)),
+                        const Icon(
+                          Icons.error_outline,
+                          color: Color(0xFFE53935),
+                        ),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
@@ -306,7 +322,10 @@ class _PaymentMethodsCardWidgetState extends ConsumerState<PaymentMethodsCardWid
                     const SizedBox(height: 8),
                     Text(
                       error.toString(),
-                      style: const TextStyle(fontSize: 12, color: Color(0xFF263238)),
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFF263238),
+                      ),
                     ),
                   ],
                 ),
@@ -389,18 +408,12 @@ class _PaymentMethodsCardWidgetState extends ConsumerState<PaymentMethodsCardWid
                   const SizedBox(height: 4),
                   Text(
                     method.maskedDetails,
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: Colors.grey[600],
-                    ),
+                    style: TextStyle(fontSize: 13, color: Colors.grey[600]),
                   ),
                   const SizedBox(height: 8),
                   Text(
                     'Added ${_formatDate(method.createdAt)}',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey[500],
-                    ),
+                    style: TextStyle(fontSize: 12, color: Colors.grey[500]),
                   ),
                 ],
               ),
@@ -570,7 +583,9 @@ class _PaymentMethodsCardWidgetState extends ConsumerState<PaymentMethodsCardWid
                   ),
                   const SizedBox(height: 8),
                   DropdownButtonFormField<String>(
-                    value: _providerNameController.text.isEmpty ? null : _providerNameController.text,
+                    initialValue: _providerNameController.text.isEmpty
+                        ? null
+                        : _providerNameController.text,
                     items: const [
                       DropdownMenuItem(value: 'Zain', child: Text('Zain')),
                       DropdownMenuItem(value: 'MTN', child: Text('MTN')),

@@ -8,10 +8,7 @@ import '../services/offline/models.dart';
 class SyncStatusBar extends ConsumerWidget {
   final VoidCallback? onSyncPressed;
 
-  const SyncStatusBar({
-    Key? key,
-    this.onSyncPressed,
-  }) : super(key: key);
+  const SyncStatusBar({super.key, this.onSyncPressed});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -46,16 +43,15 @@ class SyncStatusBar extends ConsumerWidget {
                       isOffline ? 'Offline Mode' : 'Online',
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
-                        color: isOffline ? Colors.orange[900] : Colors.green[900],
+                        color: isOffline
+                            ? Colors.orange[900]
+                            : Colors.green[900],
                       ),
                     ),
                     if (hasPending)
                       Text(
                         '${stats.totalPending} pending sync',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey[600],
-                        ),
+                        style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                       ),
                   ],
                 ),
@@ -111,7 +107,7 @@ class SyncStatusBar extends ConsumerWidget {
 
 /// Toast-style progress indicator for ongoing syncs
 class SyncProgressToast extends ConsumerWidget {
-  const SyncProgressToast({Key? key}) : super(key: key);
+  const SyncProgressToast({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -186,10 +182,7 @@ class SyncProgressToast extends ConsumerWidget {
                   const SizedBox(height: 8),
                   Text(
                     '${progress.percentage}% (${progress.current}/${progress.total})',
-                    style: TextStyle(
-                      color: Colors.grey[400],
-                      fontSize: 11,
-                    ),
+                    style: TextStyle(color: Colors.grey[400], fontSize: 11),
                   ),
                 ],
               ),
@@ -207,10 +200,7 @@ class SyncProgressToast extends ConsumerWidget {
 class UberSyncIndicator extends ConsumerWidget {
   final VoidCallback? onPressed;
 
-  const UberSyncIndicator({
-    Key? key,
-    this.onPressed,
-  }) : super(key: key);
+  const UberSyncIndicator({super.key, this.onPressed});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -274,7 +264,7 @@ class UberSyncIndicator extends ConsumerWidget {
 
 /// Badge showing number of queued requests
 class OfflineQueueBadge extends ConsumerWidget {
-  const OfflineQueueBadge({Key? key}) : super(key: key);
+  const OfflineQueueBadge({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -296,10 +286,7 @@ class OfflineQueueBadge extends ConsumerWidget {
               color: Colors.red,
               borderRadius: BorderRadius.circular(10),
             ),
-            constraints: const BoxConstraints(
-              minWidth: 20,
-              minHeight: 20,
-            ),
+            constraints: const BoxConstraints(minWidth: 20, minHeight: 20),
             child: Text(
               pending > 99 ? '99+' : '$pending',
               style: const TextStyle(
@@ -320,7 +307,7 @@ class OfflineQueueBadge extends ConsumerWidget {
 
 /// Banner showing offline status
 class OfflineBanner extends ConsumerWidget {
-  const OfflineBanner({Key? key}) : super(key: key);
+  const OfflineBanner({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -337,9 +324,7 @@ class OfflineBanner extends ConsumerWidget {
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
             color: Colors.orange[400],
-            border: Border(
-              bottom: BorderSide(color: Colors.orange[600]!),
-            ),
+            border: Border(bottom: BorderSide(color: Colors.orange[600]!)),
           ),
           child: Row(
             children: [

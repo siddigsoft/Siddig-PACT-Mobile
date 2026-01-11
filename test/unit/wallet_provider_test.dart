@@ -1,4 +1,6 @@
 /// Unit tests for wallet provider and business logic
+library;
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pact_mobile/config/wallet_constants.dart';
 import 'package:pact_mobile/models/wallet_models.dart';
@@ -53,10 +55,7 @@ void main() {
         type: TRANSACTION_TYPE_EARNING,
       );
 
-      final updated = filters.copyWith(
-        searchTerm: 'updated',
-        minAmount: 100,
-      );
+      final updated = filters.copyWith(searchTerm: 'updated', minAmount: 100);
 
       expect(updated.searchTerm, 'updated');
       expect(updated.type, TRANSACTION_TYPE_EARNING);
@@ -142,10 +141,8 @@ void main() {
     ];
 
     test('Filter by transaction type', () {
-      final filters = TransactionSearchFilters(
-        type: TRANSACTION_TYPE_EARNING,
-      );
-      
+      final filters = TransactionSearchFilters(type: TRANSACTION_TYPE_EARNING);
+
       // Simulate filtering logic from provider
       final filtered = transactions
           .where((t) => t.type == filters.type)
@@ -156,15 +153,14 @@ void main() {
     });
 
     test('Filter by amount range', () {
-      final filters = TransactionSearchFilters(
-        minAmount: 100,
-        maxAmount: 1000,
-      );
+      final filters = TransactionSearchFilters(minAmount: 100, maxAmount: 1000);
 
       final filtered = transactions
-          .where((t) =>
-              t.amount.abs() >= (filters.minAmount ?? 0) &&
-              t.amount.abs() <= (filters.maxAmount ?? double.infinity))
+          .where(
+            (t) =>
+                t.amount.abs() >= (filters.minAmount ?? 0) &&
+                t.amount.abs() <= (filters.maxAmount ?? double.infinity),
+          )
           .toList();
 
       expect(filtered.length, 1);
@@ -172,15 +168,16 @@ void main() {
     });
 
     test('Search by description', () {
-      final filters = TransactionSearchFilters(
-        searchTerm: 'Site visit',
-      );
+      final filters = TransactionSearchFilters(searchTerm: 'Site visit');
 
       final filtered = transactions
-          .where((t) =>
-              (t.description?.toLowerCase().contains(
-                      filters.searchTerm?.toLowerCase() ?? '') ??
-                  false))
+          .where(
+            (t) =>
+                (t.description?.toLowerCase().contains(
+                  filters.searchTerm?.toLowerCase() ?? '',
+                ) ??
+                false),
+          )
           .toList();
 
       expect(filtered.length, 1);
@@ -197,9 +194,11 @@ void main() {
       );
 
       final filtered = transactions
-          .where((t) =>
-              t.createdAt.isAfter(filters.startDate!) &&
-              t.createdAt.isBefore(filters.endDate!))
+          .where(
+            (t) =>
+                t.createdAt.isAfter(filters.startDate!) &&
+                t.createdAt.isBefore(filters.endDate!),
+          )
           .toList();
 
       expect(filtered.length, 1);
@@ -261,7 +260,7 @@ void main() {
       final approved = withdrawals
           .where((r) => r.status == WITHDRAWAL_STATUS_APPROVED)
           .toList();
-      
+
       final total = approved.fold<double>(0, (sum, r) => sum + r.amount);
       expect(total, 1000);
     });
@@ -270,7 +269,7 @@ void main() {
       final completed = withdrawals
           .where((r) => r.status == WITHDRAWAL_STATUS_APPROVED)
           .length;
-      
+
       final rate = (completed / withdrawals.length) * 100;
       expect(rate, isCloseTo(33.33, 0.01));
     });
@@ -312,14 +311,16 @@ void main() {
       final monthlyData = <String, double>{};
 
       transactions
-          .where((t) =>
-              t.type == TRANSACTION_TYPE_EARNING ||
-              t.type == TRANSACTION_TYPE_SITE_VISIT_FEE)
+          .where(
+            (t) =>
+                t.type == TRANSACTION_TYPE_EARNING ||
+                t.type == TRANSACTION_TYPE_SITE_VISIT_FEE,
+          )
           .forEach((t) {
-        // Mock month parsing - in real code uses DateFormat
-        final month = '${t.createdAt.month}/${t.createdAt.year}';
-        monthlyData[month] = (monthlyData[month] ?? 0) + t.amount;
-      });
+            // Mock month parsing - in real code uses DateFormat
+            final month = '${t.createdAt.month}/${t.createdAt.year}';
+            monthlyData[month] = (monthlyData[month] ?? 0) + t.amount;
+          });
 
       expect(monthlyData.length, 2);
       expect(monthlyData.values.reduce((a, b) => a + b), 2300);

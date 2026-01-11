@@ -23,17 +23,25 @@ class AuthenticationService {
     // Listen for auth state changes
     supabase.auth.onAuthStateChange.listen((data) {
       // Debug logging to help trace unexpected sign-outs
-      debugPrint('[AuthenticationService] Auth state changed: ${data.event} at ${DateTime.now().toIso8601String()}');
+      debugPrint(
+        '[AuthenticationService] Auth state changed: ${data.event} at ${DateTime.now().toIso8601String()}',
+      );
       if (kDebugMode) {
-        final userId = data.session?.user?.id;
+        final userId = data.session?.user.id;
         final session = data.session;
-        debugPrint('[AuthenticationService] Auth user for event ${data.event}: ${userId ?? 'null'}');
+        debugPrint(
+          '[AuthenticationService] Auth user for event ${data.event}: ${userId ?? 'null'}',
+        );
         if (session != null) {
-          debugPrint('[AuthenticationService] Session expired: ${session.isExpired}');
-          debugPrint('[AuthenticationService] Session expires at: ${session.expiresAt}');
+          debugPrint(
+            '[AuthenticationService] Session expired: ${session.isExpired}',
+          );
+          debugPrint(
+            '[AuthenticationService] Session expires at: ${session.expiresAt}',
+          );
         }
       }
-      
+
       if (data.event == AuthChangeEvent.signedIn) {
         _handleSignIn(data.session?.user);
       } else if (data.event == AuthChangeEvent.signedOut) {
@@ -41,15 +49,19 @@ class AuthenticationService {
         // Check if this is a user-initiated sign out or a token refresh failure
         final currentSession = supabase.auth.currentSession;
         final hasLocalAuthData = _hasLocalAuthData();
-        
-        debugPrint('[AuthenticationService] Sign out detected - current session: ${currentSession != null}, has local auth: $hasLocalAuthData');
-        
+
+        debugPrint(
+          '[AuthenticationService] Sign out detected - current session: ${currentSession != null}, has local auth: $hasLocalAuthData',
+        );
+
         // If we have local auth data but no session, this might be a transient error
         // Don't clear local data immediately - user might still be able to recover
         // Only clear if it's been a while or if explicitly requested
         // Also check if we had a previous session - if not, this might be a false alarm
         if (hasLocalAuthData && currentSession == null) {
-          debugPrint('[AuthenticationService] Detected potential transient auth error - delaying local data clear');
+          debugPrint(
+            '[AuthenticationService] Detected potential transient auth error - delaying local data clear',
+          );
           // Delay clearing to allow for potential recovery
           // Give it more time (5 seconds) for long operations like photo uploads
           Future.delayed(const Duration(seconds: 5), () async {
@@ -57,33 +69,45 @@ class AuthenticationService {
             try {
               final refreshedSession = await supabase.auth.refreshSession();
               if (refreshedSession.session != null) {
-                debugPrint('[AuthenticationService] Session recovered after delay - not clearing local data');
+                debugPrint(
+                  '[AuthenticationService] Session recovered after delay - not clearing local data',
+                );
                 // Update local auth data with refreshed session
                 _storeAuthDataLocally(refreshedSession.session!);
                 return;
               }
             } catch (refreshError) {
-              debugPrint('[AuthenticationService] Session refresh after delay failed: $refreshError');
+              debugPrint(
+                '[AuthenticationService] Session refresh after delay failed: $refreshError',
+              );
             }
-            
+
             // Final check - is session still null?
             final finalSessionCheck = supabase.auth.currentSession;
             if (finalSessionCheck == null) {
-              debugPrint('[AuthenticationService] Session still null after delay - clearing local data');
+              debugPrint(
+                '[AuthenticationService] Session still null after delay - clearing local data',
+              );
               _handleSignOut();
             } else {
-              debugPrint('[AuthenticationService] Session exists after delay - not clearing local data');
+              debugPrint(
+                '[AuthenticationService] Session exists after delay - not clearing local data',
+              );
               // Update local auth data with current session
               _storeAuthDataLocally(finalSessionCheck);
             }
           });
         } else if (!hasLocalAuthData) {
           // No local auth data means this is likely a clean sign out or already cleared
-          debugPrint('[AuthenticationService] No local auth data - normal sign out flow');
+          debugPrint(
+            '[AuthenticationService] No local auth data - normal sign out flow',
+          );
           _handleSignOut();
         } else {
           // Session exists but sign-out event fired - might be a false alarm during refresh
-          debugPrint('[AuthenticationService] Session exists but sign-out event fired - likely false alarm, ignoring');
+          debugPrint(
+            '[AuthenticationService] Session exists but sign-out event fired - likely false alarm, ignoring',
+          );
         }
       } else if (data.event == AuthChangeEvent.tokenRefreshed) {
         debugPrint('[AuthenticationService] Token refreshed successfully');
@@ -129,12 +153,15 @@ class AuthenticationService {
 
       // Update user's last_active timestamp (if column exists)
       try {
-        await supabase.from('profiles').update({
-          'last_active': DateTime.now().toIso8601String(),
-        }).eq('id', user.id);
+        await supabase
+            .from('profiles')
+            .update({'last_active': DateTime.now().toIso8601String()})
+            .eq('id', user.id);
       } catch (e) {
         // Column might not exist, ignore error
-        debugPrint('Note: Could not update last_active (column may not exist): $e');
+        debugPrint(
+          'Note: Could not update last_active (column may not exist): $e',
+        );
       }
 
       // Ensure user has worker/dataCollector role (only if RLS allows)
@@ -153,7 +180,9 @@ class AuthenticationService {
             });
           } catch (insertError) {
             // RLS might prevent insertion, that's okay - user might already have role from elsewhere
-            debugPrint('Note: Could not insert dataCollector role (RLS may prevent): $insertError');
+            debugPrint(
+              'Note: Could not insert dataCollector role (RLS may prevent): $insertError',
+            );
           }
         }
       } catch (e) {
@@ -166,10 +195,14 @@ class AuthenticationService {
   }
 
   void _handleSignOut() {
-    debugPrint('[AuthenticationService] _handleSignOut invoked at ${DateTime.now().toIso8601String()}');
+    debugPrint(
+      '[AuthenticationService] _handleSignOut invoked at ${DateTime.now().toIso8601String()}',
+    );
     if (kDebugMode) {
       final currentUserId = supabase.auth.currentUser?.id;
-      debugPrint('[AuthenticationService] Clearing local auth data for user: ${currentUserId ?? 'null'}');
+      debugPrint(
+        '[AuthenticationService] Clearing local auth data for user: ${currentUserId ?? 'null'}',
+      );
     }
     _clearLocalAuthData();
   }
@@ -210,7 +243,9 @@ class AuthenticationService {
         return false;
       }
 
-      debugPrint('Registration successful. User awaits email verification and admin approval.');
+      debugPrint(
+        'Registration successful. User awaits email verification and admin approval.',
+      );
       return true;
     } on AuthException catch (e) {
       debugPrint('Supabase signup error: ${e.message}');
@@ -257,7 +292,7 @@ class AuthenticationService {
           .eq('user_id', authResponse.user!.id);
 
       final userRoles = <app_models.AppRole>[];
-      if (rolesData != null && rolesData is List) {
+      if (rolesData is List) {
         for (final roleData in rolesData) {
           final roleStr = roleData['role'] as String?;
           if (roleStr != null) {
@@ -272,8 +307,8 @@ class AuthenticationService {
       }
 
       // Check approval status - MUST be approved
-      final isApproved = profileData != null &&
-          profileData['status'] == 'approved';
+      final isApproved =
+          profileData != null && profileData['status'] == 'approved';
       if (!isApproved) {
         debugPrint('User account is pending approval');
         await supabase.auth.signOut();
@@ -296,15 +331,15 @@ class AuthenticationService {
       // Check if email not verified
       final msg = e.message.toLowerCase();
       final isEmailNotConfirmed =
-          msg.contains('email') && (msg.contains('confirm') || msg.contains('verified'));
+          msg.contains('email') &&
+          (msg.contains('confirm') || msg.contains('verified'));
 
       if (isEmailNotConfirmed) {
-        debugPrint('Email not verified. Attempting to resend verification email.');
+        debugPrint(
+          'Email not verified. Attempting to resend verification email.',
+        );
         try {
-          await supabase.auth.resend(
-            type: OtpType.signup,
-            email: email,
-          );
+          await supabase.auth.resend(type: OtpType.signup, email: email);
           debugPrint('Verification email resent to $email');
         } catch (resendError) {
           debugPrint('Failed to resend verification email: $resendError');
@@ -351,7 +386,8 @@ class AuthenticationService {
         if (attempt > 0) {
           final delay = _calculateBackoffDelay(attempt, baseDelay);
           debugPrint(
-              'Hydration retry attempt ${attempt + 1}/$maxRetries, delay ${delay}ms...');
+            'Hydration retry attempt ${attempt + 1}/$maxRetries, delay ${delay}ms...',
+          );
           await Future.delayed(Duration(milliseconds: delay));
         }
 
@@ -383,7 +419,7 @@ class AuthenticationService {
             .eq('user_id', user.id);
 
         final userRoles = <app_models.AppRole>[];
-        if (rolesData != null && rolesData is List) {
+        if (rolesData is List) {
           for (final roleData in rolesData) {
             final roleStr = roleData['role'] as String?;
             if (roleStr != null) {
@@ -404,7 +440,11 @@ class AuthenticationService {
           return null;
         }
 
-        final hydratedUser = _buildUserFromProfile(user, profileData, userRoles);
+        final hydratedUser = _buildUserFromProfile(
+          user,
+          profileData,
+          userRoles,
+        );
 
         debugPrint('Successfully hydrated current user');
         return hydratedUser;
@@ -444,10 +484,7 @@ class AuthenticationService {
   /// RESEND VERIFICATION EMAIL
   Future<bool> resendVerificationEmail(String email) async {
     try {
-      await supabase.auth.resend(
-        type: OtpType.signup,
-        email: email,
-      );
+      await supabase.auth.resend(type: OtpType.signup, email: email);
       debugPrint('Verification email sent to $email');
       return true;
     } on AuthException catch (e) {
@@ -477,9 +514,7 @@ class AuthenticationService {
   /// UPDATE PASSWORD (for authenticated users)
   Future<bool> updatePassword(String newPassword) async {
     try {
-      await supabase.auth.updateUser(
-        UserAttributes(password: newPassword),
-      );
+      await supabase.auth.updateUser(UserAttributes(password: newPassword));
       debugPrint('Password updated successfully');
       return true;
     } on AuthException catch (e) {
@@ -537,7 +572,8 @@ class AuthenticationService {
           hasRetainer: profileData['has_retainer'] ?? false,
           retainerAmountCents: profileData['retainer_amount_cents'] ?? 0,
           retainerCurrency: profileData['retainer_currency'] ?? 'SDG',
-          effectiveFrom: profileData['effective_from'] ?? DateTime.now().toIso8601String(),
+          effectiveFrom:
+              profileData['effective_from'] ?? DateTime.now().toIso8601String(),
           effectiveUntil: profileData['effective_until'],
         );
       } catch (e) {
@@ -550,26 +586,41 @@ class AuthenticationService {
 
     return app_models.User(
       id: authUser.id,
-      name: _parseString(metadata['name']) ?? authUser.email?.split('@')[0] ?? 'User',
+      name:
+          _parseString(metadata['name']) ??
+          authUser.email?.split('@')[0] ??
+          'User',
       email: authUser.email ?? '',
       role: role,
       createdAt: profileData?['created_at'] as String?,
       updatedAt: profileData?['updated_at'] as String?,
       isApproved: isApproved,
-      employeeId: _parseString(metadata['employeeId']) ?? profileData?['employee_id'] as String?,
+      employeeId:
+          _parseString(metadata['employeeId']) ??
+          profileData?['employee_id'] as String?,
       phoneVerified: profileData?['phone_verified'] as bool? ?? false,
       phoneVerifiedAt: profileData?['phone_verified_at'] as String?,
       emailVerified: authUser.emailConfirmedAt != null,
       // emailConfirmedAt is already a String? in supabase_flutter 2.x
       emailVerifiedAt: authUser.emailConfirmedAt,
-      stateId: _parseString(metadata['stateId']) ?? profileData?['state_id'] as String?,
-      localityId: _parseString(metadata['localityId']) ?? profileData?['locality_id'] as String?,
-      hubId: _parseString(metadata['hubId']) ?? profileData?['hub_id'] as String?,
-      avatar: _parseString(metadata['avatar']) ?? profileData?['avatar_url'] as String?,
+      stateId:
+          _parseString(metadata['stateId']) ??
+          profileData?['state_id'] as String?,
+      localityId:
+          _parseString(metadata['localityId']) ??
+          profileData?['locality_id'] as String?,
+      hubId:
+          _parseString(metadata['hubId']) ?? profileData?['hub_id'] as String?,
+      avatar:
+          _parseString(metadata['avatar']) ??
+          profileData?['avatar_url'] as String?,
       username: profileData?['username'] as String?,
       fullName: profileData?['full_name'] as String?,
-      phone: _parseString(metadata['phone']) ?? profileData?['phone'] as String?,
-      lastActive: profileData?['last_active'] as String? ?? DateTime.now().toIso8601String(),
+      phone:
+          _parseString(metadata['phone']) ?? profileData?['phone'] as String?,
+      lastActive:
+          profileData?['last_active'] as String? ??
+          DateTime.now().toIso8601String(),
       availability: profileData?['availability'] as String? ?? 'offline',
       roles: userRoles.isNotEmpty ? userRoles : null,
       location: location,
@@ -614,7 +665,9 @@ class AuthenticationService {
       await prefs.setString('user_id', session.user.id);
       await prefs.setString('user_email', session.user.email ?? '');
       await prefs.setString(
-          'user_name', session.user.userMetadata?['name'] ?? '');
+        'user_name',
+        session.user.userMetadata?['name'] ?? '',
+      );
       await prefs.setBool('is_logged_in', true);
       await prefs.setInt('token_expires_at', session.expiresAt ?? 0);
 

@@ -10,14 +10,15 @@ import '../providers/profile_provider.dart';
 import '../theme/app_design_system.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_widgets.dart';
-import '../utils/error_handler.dart';
 import '../screens/profile_screen.dart';
-import '../screens/help_screen.dart';
 import '../screens/settings_screen.dart';
 import '../screens/field_operations_enhanced_screen.dart';
 import '../screens/dashboard_screen.dart';
 import '../screens/wallet_screen.dart';
 import '../screens/site_verification_screen.dart';
+import '../screens/chats_screen.dart';
+import '../screens/help_screen.dart';
+import '../screens/support_screen.dart';
 
 class CustomDrawerMenu extends ConsumerStatefulWidget {
   final User? currentUser;
@@ -440,6 +441,51 @@ class _CustomDrawerMenuState extends ConsumerState<CustomDrawerMenu> {
                             context,
                             MaterialPageRoute(
                               builder: (context) => const SettingsScreen(),
+                            ),
+                          );
+                          widget.onClose();
+                        },
+                      ),
+                      _MenuItemData(
+                        icon: Icons.chat_rounded,
+                        title: 'Chats',
+                        subtitle: 'Messages and conversations',
+                        iconColor: Colors.blue,
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const ChatsScreen(),
+                            ),
+                          );
+                          widget.onClose();
+                        },
+                      ),
+                      _MenuItemData(
+                        icon: Icons.help_rounded,
+                        title: 'Help',
+                        subtitle: 'Get help and find answers',
+                        iconColor: Colors.purple,
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const HelpScreen(),
+                            ),
+                          );
+                          widget.onClose();
+                        },
+                      ),
+                      _MenuItemData(
+                        icon: Icons.support_rounded,
+                        title: 'Support',
+                        subtitle: 'Contact support team',
+                        iconColor: Colors.teal,
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const SupportScreen(),
                             ),
                           );
                           widget.onClose();

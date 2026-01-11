@@ -1,5 +1,6 @@
 /// Wallet models for the data collector wallet system.
 /// Based on the Supabase schema from pact_dashboard.
+library;
 
 // ============================================================================
 // WALLET MODEL
@@ -60,14 +61,14 @@ class Wallet {
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'user_id': userId,
-        'balances': balances,
-        'total_earned': totalEarned,
-        'total_withdrawn': totalWithdrawn,
-        'created_at': createdAt.toIso8601String(),
-        'updated_at': updatedAt.toIso8601String(),
-      };
+    'id': id,
+    'user_id': userId,
+    'balances': balances,
+    'total_earned': totalEarned,
+    'total_withdrawn': totalWithdrawn,
+    'created_at': createdAt.toIso8601String(),
+    'updated_at': updatedAt.toIso8601String(),
+  };
 }
 
 // ============================================================================
@@ -139,19 +140,19 @@ class WalletTransaction {
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'wallet_id': walletId,
-        'user_id': userId,
-        'type': type.name,
-        'amount': amount,
-        'currency': currency,
-        'site_visit_id': siteVisitId,
-        'withdrawal_request_id': withdrawalRequestId,
-        'description': description,
-        'balance_before': balanceBefore,
-        'balance_after': balanceAfter,
-        'created_at': createdAt.toIso8601String(),
-      };
+    'id': id,
+    'wallet_id': walletId,
+    'user_id': userId,
+    'type': type.name,
+    'amount': amount,
+    'currency': currency,
+    'site_visit_id': siteVisitId,
+    'withdrawal_request_id': withdrawalRequestId,
+    'description': description,
+    'balance_before': balanceBefore,
+    'balance_after': balanceAfter,
+    'created_at': createdAt.toIso8601String(),
+  };
 }
 
 // ============================================================================
@@ -244,35 +245,31 @@ class WithdrawalRequest {
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'user_id': userId,
-        'wallet_id': walletId,
-        'amount': amount,
-        'currency': currency,
-        'status': _statusToString(status),
-        'request_reason': requestReason,
-        'supervisor_id': supervisorId,
-        'supervisor_notes': supervisorNotes,
-        'approved_at': approvedAt?.toIso8601String(),
-        'admin_processed_by': adminProcessedBy,
-        'admin_notes': adminNotes,
-        'admin_processed_at': adminProcessedAt?.toIso8601String(),
-        'payment_method': paymentMethod,
-        'payment_details': paymentDetails,
-        'created_at': createdAt.toIso8601String(),
-        'updated_at': updatedAt.toIso8601String(),
-      };
+    'id': id,
+    'user_id': userId,
+    'wallet_id': walletId,
+    'amount': amount,
+    'currency': currency,
+    'status': _statusToString(status),
+    'request_reason': requestReason,
+    'supervisor_id': supervisorId,
+    'supervisor_notes': supervisorNotes,
+    'approved_at': approvedAt?.toIso8601String(),
+    'admin_processed_by': adminProcessedBy,
+    'admin_notes': adminNotes,
+    'admin_processed_at': adminProcessedAt?.toIso8601String(),
+    'payment_method': paymentMethod,
+    'payment_details': paymentDetails,
+    'created_at': createdAt.toIso8601String(),
+    'updated_at': updatedAt.toIso8601String(),
+  };
 }
 
 // ============================================================================
 // PAYMENT METHOD MODEL
 // ============================================================================
 
-enum PaymentMethodType {
-  bank,
-  mobileMoney,
-  card,
-}
+enum PaymentMethodType { bank, mobileMoney, card }
 
 class PaymentMethod {
   final String id;
@@ -343,18 +340,18 @@ class PaymentMethod {
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'user_id': userId,
-        'type': _paymentMethodTypeToString(type),
-        'name': name,
-        'account_number': accountNumber,
-        'bank_name': bankName,
-        'phone_number': phoneNumber,
-        'card_number': cardNumber,
-        'is_default': isDefault,
-        'created_at': createdAt.toIso8601String(),
-        'updated_at': updatedAt.toIso8601String(),
-      };
+    'id': id,
+    'user_id': userId,
+    'type': _paymentMethodTypeToString(type),
+    'name': name,
+    'account_number': accountNumber,
+    'bank_name': bankName,
+    'phone_number': phoneNumber,
+    'card_number': cardNumber,
+    'is_default': isDefault,
+    'created_at': createdAt.toIso8601String(),
+    'updated_at': updatedAt.toIso8601String(),
+  };
 }
 
 // ============================================================================

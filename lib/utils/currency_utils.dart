@@ -1,4 +1,6 @@
 /// Currency formatting utilities matching the React TSX implementation
+library;
+
 import 'package:intl/intl.dart';
 import '../config/wallet_constants.dart';
 
@@ -14,9 +16,9 @@ String formatCurrency(
       symbol: '',
       decimalDigits: 2,
     );
-    
+
     final formattedNumber = formatter.format(amount);
-    
+
     // Add currency symbol based on currency code
     final symbol = _getCurrencySymbol(currency);
     return '$symbol$formattedNumber';

@@ -11,15 +11,16 @@ class SitesRegistryMatcher {
   // CONFIDENCE THRESHOLDS & MATCHING CONSTANTS
   // ============================================================================
 
-  static const double CONFIDENCE_AUTO_ACCEPT = 0.90;  // >= 90% = auto-accept
-  static const double CONFIDENCE_HIGH = 0.85;         // >= 85% = high confidence
-  static const double CONFIDENCE_MEDIUM = 0.70;       // >= 70% = medium confidence
-  static const double CONFIDENCE_LOW = 0.50;          // >= 50% = low confidence
+  static const double CONFIDENCE_AUTO_ACCEPT = 0.90; // >= 90% = auto-accept
+  static const double CONFIDENCE_HIGH = 0.85; // >= 85% = high confidence
+  static const double CONFIDENCE_MEDIUM = 0.70; // >= 70% = medium confidence
+  static const double CONFIDENCE_LOW = 0.50; // >= 50% = low confidence
 
-  static const double MATCH_EXACT_CODE = 1.0;        // 100% - exact site code match
-  static const double MATCH_NAME_LOCATION = 0.85;    // 85% - name + state + locality
-  static const double MATCH_PARTIAL_STATE = 0.70;    // 70% - name + state only
-  static const double MATCH_FUZZY_NAME = 0.50;       // 50% - name only match
+  static const double MATCH_EXACT_CODE = 1.0; // 100% - exact site code match
+  static const double MATCH_NAME_LOCATION =
+      0.85; // 85% - name + state + locality
+  static const double MATCH_PARTIAL_STATE = 0.70; // 70% - name + state only
+  static const double MATCH_FUZZY_NAME = 0.50; // 50% - name only match
 
   // ============================================================================
   // UTILITY FUNCTIONS
@@ -75,7 +76,8 @@ class SitesRegistryMatcher {
   }) {
     // Extract site fields (handle camelCase and snake_case variations)
     final siteCode = siteEntry['siteCode'] ?? siteEntry['site_code'] ?? '';
-    final siteName = siteEntry['siteName'] ??
+    final siteName =
+        siteEntry['siteName'] ??
         siteEntry['site_name'] ??
         siteEntry['activity_at_site'] ??
         '';
@@ -132,7 +134,8 @@ class SitesRegistryMatcher {
         matchType = 'partial';
       }
       // Rule 4: Name only match (50%)
-      else if (normalizedName.isNotEmpty && normalizedName == regNormalizedName) {
+      else if (normalizedName.isNotEmpty &&
+          normalizedName == regNormalizedName) {
         confidence = MATCH_FUZZY_NAME;
         matchType = 'fuzzy';
       }
@@ -167,33 +170,38 @@ class SitesRegistryMatcher {
         reason: 'no_registry_entry',
         details: 'No matching site found in registry',
         pendingReview: true,
-        suggestedAction: 'Create new site in registry or manually select from alternatives',
+        suggestedAction:
+            'Create new site in registry or manually select from alternatives',
       );
     } else if (requiresReview) {
       unmatched = UnmatchedInfo(
         reason: 'low_confidence',
-        details: 'Match confidence: ${(matchConfidence * 100).toStringAsFixed(0)}%',
+        details:
+            'Match confidence: ${(matchConfidence * 100).toStringAsFixed(0)}%',
         pendingReview: true,
         suggestedAction: 'Review and confirm match manually',
       );
     }
 
     final gpsCoordinates = bestMatch != null && autoAccepted
-        ? (bestMatch.key.gpsLatitude != null && bestMatch.key.gpsLongitude != null
-            ? GPSCoordinates(
-                latitude: bestMatch.key.gpsLatitude!,
-                longitude: bestMatch.key.gpsLongitude!,
-              )
-            : null)
+        ? (bestMatch.key.gpsLatitude != null &&
+                  bestMatch.key.gpsLongitude != null
+              ? GPSCoordinates(
+                  latitude: bestMatch.key.gpsLatitude!,
+                  longitude: bestMatch.key.gpsLongitude!,
+                )
+              : null)
         : null;
 
     final alternativeCandidates = candidates
-        .map((e) => AlternativeCandidate(
-          registrySiteId: e.key.id,
-          siteCode: e.key.siteCode,
-          siteName: e.key.siteName,
-          confidence: e.value,
-        ))
+        .map(
+          (e) => AlternativeCandidate(
+            registrySiteId: e.key.id,
+            siteCode: e.key.siteCode,
+            siteName: e.key.siteName,
+            confidence: e.value,
+          ),
+        )
         .toList();
 
     final registryLinkage = RegistryLinkage(
@@ -341,7 +349,7 @@ class SitesRegistryMatcher {
           .eq('id', registrySiteId)
           .single();
 
-      final site = SiteRegistry.fromJson(currentSite as Map<String, dynamic>);
+      final site = SiteRegistry.fromJson(currentSite);
 
       // Check if GPS already exists
       GPSCoordinates? previousGps;
@@ -361,13 +369,16 @@ class SitesRegistryMatcher {
       }
 
       // Update sites_registry with new GPS
-      await _supabase.from('sites_registry').update({
-        'gps_latitude': latitude,
-        'gps_longitude': longitude,
-        'gps_captured_by': userId ?? 'system',
-        'gps_captured_at': DateTime.now().toIso8601String(),
-        'updated_at': DateTime.now().toIso8601String(),
-      }).eq('id', registrySiteId);
+      await _supabase
+          .from('sites_registry')
+          .update({
+            'gps_latitude': latitude,
+            'gps_longitude': longitude,
+            'gps_captured_by': userId ?? 'system',
+            'gps_captured_at': DateTime.now().toIso8601String(),
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('id', registrySiteId);
 
       return GPSSaveResult(
         success: true,
@@ -376,10 +387,7 @@ class SitesRegistryMatcher {
       );
     } catch (e) {
       print('❌ Error saving GPS to registry: $e');
-      return GPSSaveResult(
-        success: false,
-        error: e.toString(),
-      );
+      return GPSSaveResult(success: false, error: e.toString());
     }
   }
 
@@ -420,10 +428,7 @@ class SitesRegistryMatcher {
       );
     } catch (e) {
       print('❌ Error looking up registry site ID: $e');
-      return GPSSaveResult(
-        success: false,
-        error: e.toString(),
-      );
+      return GPSSaveResult(success: false, error: e.toString());
     }
   }
 

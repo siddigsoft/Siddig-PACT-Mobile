@@ -572,6 +572,12 @@ class WalletService {
         throw Exception('Wallet not found. Please contact support.');
       }
 
+      if (wallet.id.isEmpty) {
+        throw Exception('Invalid wallet configuration. Please contact support.');
+      }
+
+      debugPrint('Creating withdrawal request with wallet ID: ${wallet.id}');
+
       final currentBalance = wallet.currentBalance;
       if (amount > currentBalance) {
         throw Exception('Insufficient balance. Available: ${formatCurrency(currentBalance)}');

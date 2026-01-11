@@ -211,6 +211,82 @@ class AuthService {
     }
   }
 
+  /// Request password reset with OTP
+  Future<void> requestPasswordReset(String email) async {
+    try {
+      // Call the verify-reset-otp edge function with 'generate' action
+      final response = await supabase.functions.invoke(
+        'verify-reset-otp',
+        body: {
+          'email': email.toLowerCase(),
+          'action': 'generate'
+        },
+      );
+
+      if (response.status != 200) {
+        throw AuthException('Failed to send reset code');
+      }
+
+      // The function returns success even if user doesn't exist (security)
+    } catch (e) {
+      debugPrint('Error requesting password reset: $e');
+      throw AuthException('Failed to send reset code. Please try again.');
+    }
+  }
+
+  /// Verify OTP for password reset
+  Future<void> verifyPasswordResetOTP(String email, String otp) async {
+    try {
+      final response = await supabase.functions.invoke(
+        'verify-reset-otp',
+        body: {
+          'email': email.toLowerCase(),
+          'otp': otp,
+        },
+      );
+
+      if (response.status != 200) {
+        throw AuthException('Invalid or expired verification code');
+      }
+
+      final data = response.data;
+      if (data == null || !(data['success'] as bool)) {
+        throw AuthException('Invalid or expired verification code');
+      }
+    } catch (e) {
+      debugPrint('Error verifying OTP: $e');
+      if (e is AuthException) rethrow;
+      throw AuthException('Failed to verify code. Please try again.');
+    }
+  }
+
+  /// Reset password with OTP
+  Future<void> resetPasswordWithOTP(String email, String otp, String newPassword) async {
+    try {
+      final response = await supabase.functions.invoke(
+        'reset-password-with-otp',
+        body: {
+          'email': email.toLowerCase(),
+          'otp': otp,
+          'newPassword': newPassword,
+        },
+      );
+
+      if (response.status != 200) {
+        throw AuthException('Failed to reset password');
+      }
+
+      final data = response.data;
+      if (data == null || !(data['success'] as bool)) {
+        throw AuthException('Failed to reset password');
+      }
+    } catch (e) {
+      debugPrint('Error resetting password: $e');
+      if (e is AuthException) rethrow;
+      throw AuthException('Failed to reset password. Please try again.');
+    }
+  }
+
   /// Signs in user with Google OAuth using platform-specific approach
   Future<bool> signInWithGoogle() async {
     try {

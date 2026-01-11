@@ -6,6 +6,7 @@ import '../widgets/reusable_app_bar.dart';
 import '../widgets/custom_drawer_menu.dart';
 import '../theme/app_colors.dart';
 import '../widgets/main_layout.dart';
+import '../services/wallet_service.dart';
 
 class WalletScreen extends StatefulWidget {
   const WalletScreen({super.key});
@@ -164,7 +165,7 @@ class _WalletScreenState extends State<WalletScreen> {
           .order('created_at', ascending: false)
           .limit(100);
 
-      _transactions = (data ?? []).map((t) => t as Map<String, dynamic>).toList();
+      _transactions = (data ?? []).map((t) => t).toList();
 
       // Calculate stats
       final now = DateTime.now();
@@ -204,7 +205,7 @@ class _WalletScreenState extends State<WalletScreen> {
           .order('created_at', ascending: false)
           .limit(50);
 
-      _withdrawalRequests = (data ?? []).map((w) => w as Map<String, dynamic>).toList();
+      _withdrawalRequests = (data ?? []).map((w) => w).toList();
 
       _pendingWithdrawals = _withdrawalRequests
           .where((w) => w['status'] == 'pending')
@@ -230,7 +231,7 @@ class _WalletScreenState extends State<WalletScreen> {
           .eq('user_id', _userId!)
           .order('created_at', ascending: false);
 
-      _paymentMethods = (data ?? []).map((p) => p as Map<String, dynamic>).toList();
+      _paymentMethods = (data ?? []).map((p) => p).toList();
       if (mounted) setState(() {});
     } catch (e) {
       debugPrint('Error loading payment methods: $e');
@@ -252,18 +253,15 @@ class _WalletScreenState extends State<WalletScreen> {
     setState(() => _isSubmittingWithdrawal = true);
 
     try {
-      await Supabase.instance.client
-          .from('withdrawal_requests')
-          .insert({
-            'user_id': _userId!,
-            'amount': amount,
-            'currency': 'SDG',
-            'request_reason': _withdrawalReasonController.text,
-            'payment_method': _selectedPaymentMethod.isNotEmpty
-                ? _selectedPaymentMethod
-                : 'Other',
-            'status': 'pending',
-          });
+      // Use the wallet service to create withdrawal request (includes wallet_id)
+      final walletService = WalletService();
+      await walletService.createWithdrawalRequest(
+        amount: amount,
+        requestReason: _withdrawalReasonController.text,
+        paymentMethod: _selectedPaymentMethod.isNotEmpty
+            ? _selectedPaymentMethod
+            : 'Other',
+      );
 
       setState(() {
         _showWithdrawalDialog = false;
@@ -330,7 +328,7 @@ class _WalletScreenState extends State<WalletScreen> {
   }
 
   String _formatCurrency(double amount) {
-    return NumberFormat.currency(symbol: '', decimalDigits: 2).format(amount) + ' SDG';
+    return '${NumberFormat.currency(symbol: '', decimalDigits: 2).format(amount)} SDG';
   }
 
   List<Map<String, dynamic>> _getFilteredTransactions() {
@@ -697,7 +695,7 @@ class _WalletScreenState extends State<WalletScreen> {
             // Payment Method
             if (_paymentMethods.isNotEmpty) ...[
               DropdownButtonFormField<String>(
-                value: _selectedPaymentMethod.isEmpty ? null : _selectedPaymentMethod,
+                initialValue: _selectedPaymentMethod.isEmpty ? null : _selectedPaymentMethod,
                 decoration: InputDecoration(
                   labelText: 'Payment Method',
                   prefixIcon: const Icon(Icons.payment),

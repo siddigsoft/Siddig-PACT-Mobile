@@ -9,13 +9,15 @@ import 'package:pact_mobile/theme/app_theme.dart';
 import 'package:intl/intl.dart';
 
 class ApprovalDashboardScreen extends ConsumerStatefulWidget {
-  const ApprovalDashboardScreen({Key? key}) : super(key: key);
+  const ApprovalDashboardScreen({super.key});
 
   @override
-  ConsumerState<ApprovalDashboardScreen> createState() => _ApprovalDashboardScreenState();
+  ConsumerState<ApprovalDashboardScreen> createState() =>
+      _ApprovalDashboardScreenState();
 }
 
-class _ApprovalDashboardScreenState extends ConsumerState<ApprovalDashboardScreen>
+class _ApprovalDashboardScreenState
+    extends ConsumerState<ApprovalDashboardScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
 
@@ -46,10 +48,7 @@ class _ApprovalDashboardScreenState extends ConsumerState<ApprovalDashboardScree
       ),
       body: TabBarView(
         controller: _tabController,
-        children: [
-          _CostSubmissionsTab(),
-          _WithdrawalRequestsTab(),
-        ],
+        children: [_CostSubmissionsTab(), _WithdrawalRequestsTab()],
       ),
     );
   }
@@ -57,13 +56,14 @@ class _ApprovalDashboardScreenState extends ConsumerState<ApprovalDashboardScree
 
 class _CostSubmissionsTab extends ConsumerStatefulWidget {
   @override
-  ConsumerState<_CostSubmissionsTab> createState() => _CostSubmissionsTabState();
+  ConsumerState<_CostSubmissionsTab> createState() =>
+      _CostSubmissionsTabState();
 }
 
 class _CostSubmissionsTabState extends ConsumerState<_CostSubmissionsTab> {
   static const int _pageSize = 10;
   int _currentPage = 0;
-  bool _isLoadingMore = false;
+  final bool _isLoadingMore = false;
   List<CostSubmission> _allSubmissions = [];
   List<CostSubmission> _currentPageSubmissions = [];
   bool _hasMorePages = true;
@@ -109,9 +109,8 @@ class _CostSubmissionsTabState extends ConsumerState<_CostSubmissionsTab> {
 
     return costSubmissionsAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (error, stack) => Center(
-        child: Text('Error loading cost submissions: $error'),
-      ),
+      error: (error, stack) =>
+          Center(child: Text('Error loading cost submissions: $error')),
       data: (submissions) {
         // Update data if it changed
         if (_allSubmissions.length != submissions.length) {
@@ -120,9 +119,7 @@ class _CostSubmissionsTabState extends ConsumerState<_CostSubmissionsTab> {
         }
 
         if (_allSubmissions.isEmpty) {
-          return const Center(
-            child: Text('No pending cost submissions'),
-          );
+          return const Center(child: Text('No pending cost submissions'));
         }
 
         return Column(
@@ -171,7 +168,9 @@ class _CostSubmissionsTabState extends ConsumerState<_CostSubmissionsTab> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     IconButton(
-                      onPressed: _currentPage > 0 ? () => _loadPage(_currentPage - 1) : null,
+                      onPressed: _currentPage > 0
+                          ? () => _loadPage(_currentPage - 1)
+                          : null,
                       icon: const Icon(Icons.chevron_left),
                       tooltip: 'Previous page',
                     ),
@@ -182,7 +181,9 @@ class _CostSubmissionsTabState extends ConsumerState<_CostSubmissionsTab> {
                     ),
                     const SizedBox(width: 16),
                     IconButton(
-                      onPressed: _hasMorePages ? () => _loadPage(_currentPage + 1) : null,
+                      onPressed: _hasMorePages
+                          ? () => _loadPage(_currentPage + 1)
+                          : null,
                       icon: const Icon(Icons.chevron_right),
                       tooltip: 'Next page',
                     ),
@@ -203,7 +204,10 @@ class _CostSubmissionCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final currencyFormat = NumberFormat.currency(symbol: 'SDG ', decimalDigits: 2);
+    final currencyFormat = NumberFormat.currency(
+      symbol: 'SDG ',
+      decimalDigits: 2,
+    );
 
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
@@ -276,11 +280,17 @@ class _CostSubmissionCard extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (submission.transportationCost != null)
-          Text('Transportation: ${currencyFormat.format(submission.transportationCost! / 100)}'),
+          Text(
+            'Transportation: ${currencyFormat.format(submission.transportationCost! / 100)}',
+          ),
         if (submission.accommodationCost != null)
-          Text('Accommodation: ${currencyFormat.format(submission.accommodationCost! / 100)}'),
+          Text(
+            'Accommodation: ${currencyFormat.format(submission.accommodationCost! / 100)}',
+          ),
         if (submission.mealAllowance != null)
-          Text('Meals: ${currencyFormat.format(submission.mealAllowance! / 100)}'),
+          Text(
+            'Meals: ${currencyFormat.format(submission.mealAllowance! / 100)}',
+          ),
         if (submission.otherCosts != null)
           Text('Other: ${currencyFormat.format(submission.otherCosts! / 100)}'),
         const Divider(),
@@ -304,11 +314,18 @@ class _CostSubmissionCard extends ConsumerWidget {
             children: [
               Text('Reference: ${submission.referenceId}'),
               Text('Site Visit: ${submission.siteVisitName ?? 'Unknown'}'),
-              Text('Submitted: ${DateFormat('MMM dd, yyyy HH:mm').format(submission.createdAt)}'),
+              Text(
+                'Submitted: ${DateFormat('MMM dd, yyyy HH:mm').format(submission.createdAt)}',
+              ),
               if (submission.documents?.isNotEmpty ?? false) ...[
                 const SizedBox(height: 8),
-                const Text('Documents:', style: TextStyle(fontWeight: FontWeight.bold)),
-                ...submission.documents!.map((doc) => Text('• ${doc.fileName}')),
+                const Text(
+                  'Documents:',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                ...submission.documents!.map(
+                  (doc) => Text('• ${doc.fileName}'),
+                ),
               ],
             ],
           ),
@@ -329,7 +346,9 @@ class _CostSubmissionCard extends ConsumerWidget {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(approve ? 'Approve Cost Submission' : 'Reject Cost Submission'),
+        title: Text(
+          approve ? 'Approve Cost Submission' : 'Reject Cost Submission',
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -369,7 +388,11 @@ class _CostSubmissionCard extends ConsumerWidget {
     );
   }
 
-  Future<void> _processApproval(WidgetRef ref, bool approve, String notes) async {
+  Future<void> _processApproval(
+    WidgetRef ref,
+    bool approve,
+    String notes,
+  ) async {
     try {
       final notifier = ref.read(costSubmissionApprovalProvider.notifier);
       await notifier.approveCostSubmission(
@@ -389,9 +412,9 @@ class _CostSubmissionCard extends ConsumerWidget {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     }
   }
@@ -400,18 +423,17 @@ class _CostSubmissionCard extends ConsumerWidget {
 class _WithdrawalRequestsTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final withdrawalRequestsAsync = ref.watch(pendingWithdrawalRequestsProvider);
+    final withdrawalRequestsAsync = ref.watch(
+      pendingWithdrawalRequestsProvider,
+    );
 
     return withdrawalRequestsAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (error, stack) => Center(
-        child: Text('Error loading withdrawal requests: $error'),
-      ),
+      error: (error, stack) =>
+          Center(child: Text('Error loading withdrawal requests: $error')),
       data: (requests) {
         if (requests.isEmpty) {
-          return const Center(
-            child: Text('No pending withdrawal requests'),
-          );
+          return const Center(child: Text('No pending withdrawal requests'));
         }
 
         return ListView.builder(
@@ -434,7 +456,10 @@ class _WithdrawalRequestCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final currencyFormat = NumberFormat.currency(symbol: 'SDG ', decimalDigits: 2);
+    final currencyFormat = NumberFormat.currency(
+      symbol: 'SDG ',
+      decimalDigits: 2,
+    );
 
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
@@ -461,9 +486,9 @@ class _WithdrawalRequestCard extends ConsumerWidget {
             ),
             Text(
               'Amount: ${currencyFormat.format(request.amount)}',
-              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold),
             ),
             Text(
               'Payment Method: ${request.paymentMethod.displayName}',
@@ -499,9 +524,11 @@ class _WithdrawalRequestCard extends ConsumerWidget {
                     onPressed: () => _showApprovalDialog(context, ref, false),
                     child: const Text('Reject'),
                   ),
-                ] else if (request.status == WithdrawalStatus.supervisorApproved) ...[
+                ] else if (request.status ==
+                    WithdrawalStatus.supervisorApproved) ...[
                   ElevatedButton(
-                    onPressed: () => _showFinalApprovalDialog(context, ref, true),
+                    onPressed: () =>
+                        _showFinalApprovalDialog(context, ref, true),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.green,
                     ),
@@ -509,7 +536,8 @@ class _WithdrawalRequestCard extends ConsumerWidget {
                   ),
                   const SizedBox(width: 8),
                   OutlinedButton(
-                    onPressed: () => _showFinalApprovalDialog(context, ref, false),
+                    onPressed: () =>
+                        _showFinalApprovalDialog(context, ref, false),
                     child: const Text('Final Reject'),
                   ),
                 ],
@@ -536,11 +564,17 @@ class _WithdrawalRequestCard extends ConsumerWidget {
               Text('Payment Method: ${request.paymentMethod.displayName}'),
               if (request.paymentMethodDetails?.isNotEmpty ?? false)
                 Text('Details: ${request.paymentMethodDetails}'),
-              Text('Requested: ${DateFormat('MMM dd, yyyy HH:mm').format(request.createdAt)}'),
+              Text(
+                'Requested: ${DateFormat('MMM dd, yyyy HH:mm').format(request.createdAt)}',
+              ),
               if (request.supervisorApprovedAt != null)
-                Text('Supervisor Approved: ${DateFormat('MMM dd, yyyy HH:mm').format(request.supervisorApprovedAt!)}'),
+                Text(
+                  'Supervisor Approved: ${DateFormat('MMM dd, yyyy HH:mm').format(request.supervisorApprovedAt!)}',
+                ),
               if (request.approvedAt != null)
-                Text('Final Approved: ${DateFormat('MMM dd, yyyy HH:mm').format(request.approvedAt!)}'),
+                Text(
+                  'Final Approved: ${DateFormat('MMM dd, yyyy HH:mm').format(request.approvedAt!)}',
+                ),
             ],
           ),
         ),
@@ -600,13 +634,19 @@ class _WithdrawalRequestCard extends ConsumerWidget {
     );
   }
 
-  void _showFinalApprovalDialog(BuildContext context, WidgetRef ref, bool approve) {
+  void _showFinalApprovalDialog(
+    BuildContext context,
+    WidgetRef ref,
+    bool approve,
+  ) {
     final controller = TextEditingController();
 
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(approve ? 'Final Approve Withdrawal' : 'Final Reject Withdrawal'),
+        title: Text(
+          approve ? 'Final Approve Withdrawal' : 'Final Reject Withdrawal',
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -646,7 +686,11 @@ class _WithdrawalRequestCard extends ConsumerWidget {
     );
   }
 
-  Future<void> _processSupervisorApproval(WidgetRef ref, bool approve, String notes) async {
+  Future<void> _processSupervisorApproval(
+    WidgetRef ref,
+    bool approve,
+    String notes,
+  ) async {
     try {
       final notifier = ref.read(withdrawalApprovalProvider.notifier);
       await notifier.supervisorApproveWithdrawal(
@@ -659,21 +703,27 @@ class _WithdrawalRequestCard extends ConsumerWidget {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              approve ? 'Supervisor approved withdrawal request' : 'Supervisor rejected withdrawal request',
+              approve
+                  ? 'Supervisor approved withdrawal request'
+                  : 'Supervisor rejected withdrawal request',
             ),
           ),
         );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     }
   }
 
-  Future<void> _processFinalApproval(WidgetRef ref, bool approve, String notes) async {
+  Future<void> _processFinalApproval(
+    WidgetRef ref,
+    bool approve,
+    String notes,
+  ) async {
     try {
       final notifier = ref.read(withdrawalApprovalProvider.notifier);
       await notifier.finalApproveWithdrawal(
@@ -686,16 +736,18 @@ class _WithdrawalRequestCard extends ConsumerWidget {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              approve ? 'Final approved withdrawal request' : 'Final rejected withdrawal request',
+              approve
+                  ? 'Final approved withdrawal request'
+                  : 'Final rejected withdrawal request',
             ),
           ),
         );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     }
   }
@@ -771,7 +823,10 @@ class _WithdrawalStatusChip extends StatelessWidget {
     }
 
     return Chip(
-      label: Text(label, style: const TextStyle(color: Colors.white, fontSize: 12)),
+      label: Text(
+        label,
+        style: const TextStyle(color: Colors.white, fontSize: 12),
+      ),
       backgroundColor: color,
     );
   }

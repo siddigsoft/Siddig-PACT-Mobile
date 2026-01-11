@@ -29,8 +29,11 @@ class SiteVisitService {
   }
 
   Future<Map<String, dynamic>> getSiteVisitDetails(String visitId) async {
-    final response =
-        await _supabase.from('mmp_site_entries').select().eq('id', visitId).single();
+    final response = await _supabase
+        .from('mmp_site_entries')
+        .select()
+        .eq('id', visitId)
+        .single();
 
     return response;
   }
@@ -46,18 +49,19 @@ class SiteVisitService {
         await OfflineDataService().queueVisitStatusUpdate(
           visitId: visitId,
           newStatus: status,
-          extra: {
-            'queued_at': DateTime.now().toIso8601String(),
-          },
+          extra: {'queued_at': DateTime.now().toIso8601String()},
         );
         print('📦 Visit status queued for sync (offline).');
         await _updateCachedVisitStatus(visitId, status);
         return;
       }
-      await _supabase.from('mmp_site_entries').update({
-        'status': status,
-        'updated_at': DateTime.now().toIso8601String(),
-      }).eq('id', visitId);
+      await _supabase
+          .from('mmp_site_entries')
+          .update({
+            'status': status,
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('id', visitId);
       print('✅ Visit status updated in mmp_site_entries');
       await _updateCachedVisitStatus(visitId, status);
     } catch (e) {
@@ -78,7 +82,10 @@ class SiteVisitService {
         return;
       }
       final visitData = visit.toJson();
-      await _supabase.from('mmp_site_entries').update(visitData).eq('id', visit.id);
+      await _supabase
+          .from('mmp_site_entries')
+          .update(visitData)
+          .eq('id', visit.id);
       print('✅ Visit updated in mmp_site_entries');
       await _updateLocalCacheWithVisit(visit);
     } catch (e) {
@@ -89,7 +96,9 @@ class SiteVisitService {
     }
   }
 
-  Future<List<SiteVisit>> getAvailableSiteVisits([PACTUserProfile? userProfile]) async {
+  Future<List<SiteVisit>> getAvailableSiteVisits([
+    PACTUserProfile? userProfile,
+  ]) async {
     final response = await _supabase
         .from('mmp_site_entries')
         .select()
@@ -107,17 +116,25 @@ class SiteVisitService {
   }
 
   /// Check if user can claim a specific site visit
-  Future<ConstraintCheckResult> canClaimSite(SiteVisit visit, PACTUserProfile userProfile) async {
+  Future<ConstraintCheckResult> canClaimSite(
+    SiteVisit visit,
+    PACTUserProfile userProfile,
+  ) async {
     return SiteVisitConstraints.canClaimSite(visit, userProfile);
   }
 
   /// Check if user can accept a specific site visit
-  Future<ConstraintCheckResult> canAcceptSite(SiteVisit visit, PACTUserProfile userProfile) async {
+  Future<ConstraintCheckResult> canAcceptSite(
+    SiteVisit visit,
+    PACTUserProfile userProfile,
+  ) async {
     return SiteVisitConstraints.canAcceptSite(visit, userProfile);
   }
 
   /// Get filtered site visits based on user constraints
-  Future<List<SiteVisit>> getFilteredSiteVisits(PACTUserProfile userProfile) async {
+  Future<List<SiteVisit>> getFilteredSiteVisits(
+    PACTUserProfile userProfile,
+  ) async {
     final response = await _supabase
         .from('mmp_site_entries')
         .select()
@@ -132,7 +149,10 @@ class SiteVisitService {
         .from('mmp_site_entries')
         .select()
         .eq('claimed_by', userId)
-        .inFilter('status', ['Assigned', 'Claimed']) // Sites claimed but not yet accepted
+        .inFilter('status', [
+          'Assigned',
+          'Claimed',
+        ]) // Sites claimed but not yet accepted
         .order('created_at', ascending: false);
 
     return response.map((json) => SiteVisit.fromJson(json)).toList();
@@ -143,7 +163,10 @@ class SiteVisitService {
         .from('mmp_site_entries')
         .select()
         .eq('accepted_by', userId)
-        .inFilter('status', ['Accepted', 'Accept']) // Support both for compatibility
+        .inFilter('status', [
+          'Accepted',
+          'Accept',
+        ]) // Support both for compatibility
         .order('created_at', ascending: false);
 
     return response.map((json) => SiteVisit.fromJson(json)).toList();
@@ -162,13 +185,13 @@ class SiteVisitService {
 
   Future<List<SiteVisit>> getCompletedSiteVisits(String userId) async {
     final response = await _supabase
-      .from('mmp_site_entries')
-      .select()
-      // Some environments store status values in lowercase.
-      .inFilter('status', ['Completed', 'Complete', 'completed', 'complete'])
-      // Completed visits should be visible to the user who accepted them OR completed them.
-      .or('accepted_by.eq.$userId,visit_completed_by.eq.$userId')
-      .order('updated_at', ascending: false);
+        .from('mmp_site_entries')
+        .select()
+        // Some environments store status values in lowercase.
+        .inFilter('status', ['Completed', 'Complete', 'completed', 'complete'])
+        // Completed visits should be visible to the user who accepted them OR completed them.
+        .or('accepted_by.eq.$userId,visit_completed_by.eq.$userId')
+        .order('updated_at', ascending: false);
 
     return response.map((json) => SiteVisit.fromJson(json)).toList();
   }
@@ -200,10 +223,12 @@ class SiteVisitService {
         .stream(primaryKey: ['id'])
         .eq('accepted_by', userId)
         .order('created_at', ascending: false)
-        .map((data) => data
-            .where((item) => ['Accepted', 'Accept'].contains(item['status']))
-            .map((json) => SiteVisit.fromJson(json))
-            .toList());
+        .map(
+          (data) => data
+              .where((item) => ['Accepted', 'Accept'].contains(item['status']))
+              .map((json) => SiteVisit.fromJson(json))
+              .toList(),
+        );
   }
 
   // Real-time stream for ongoing site visits
@@ -213,10 +238,14 @@ class SiteVisitService {
         .stream(primaryKey: ['id'])
         .eq('accepted_by', userId)
         .order('created_at', ascending: false)
-        .map((data) => data
-            .where((item) => ['Ongoing', 'In Progress'].contains(item['status']))
-            .map((json) => SiteVisit.fromJson(json))
-            .toList());
+        .map(
+          (data) => data
+              .where(
+                (item) => ['Ongoing', 'In Progress'].contains(item['status']),
+              )
+              .map((json) => SiteVisit.fromJson(json))
+              .toList(),
+        );
   }
 
   // Real-time stream for completed site visits
@@ -224,28 +253,37 @@ class SiteVisitService {
     return _supabase
         .from('mmp_site_entries')
         .stream(primaryKey: ['id'])
-      // Supabase stream filters don't support `.or(...)`.
-      // Reports screen relies on getCompletedSiteVisits() (non-stream) for the full query.
-      .eq('accepted_by', userId)
+        // Supabase stream filters don't support `.or(...)`.
+        // Reports screen relies on getCompletedSiteVisits() (non-stream) for the full query.
+        .eq('accepted_by', userId)
         .order('updated_at', ascending: false)
-        .map((data) => data
-        .where((item) => ['Completed', 'Complete', 'completed', 'complete'].contains(item['status']))
-            .map((json) => SiteVisit.fromJson(json))
-            .toList());
+        .map(
+          (data) => data
+              .where(
+                (item) => [
+                  'Completed',
+                  'Complete',
+                  'completed',
+                  'complete',
+                ].contains(item['status']),
+              )
+              .map((json) => SiteVisit.fromJson(json))
+              .toList(),
+        );
   }
 
   Future<void> acceptVisit(String visitId, String userId) async {
     print('Attempting to accept visit: $visitId by user: $userId');
-    
+
     // Check connectivity first
     final connectivity = await Connectivity().checkConnectivity();
     final hasConnection = !connectivity.contains(ConnectivityResult.none);
-    
+
     if (!hasConnection) {
       // OFFLINE: Queue for sync and update local cache
       print('📦 Offline mode - queuing accept visit for sync...');
       Map<String, dynamic>? locationData;
-      
+
       // Try to get location even offline
       try {
         final position = await Geolocator.getCurrentPosition(
@@ -261,17 +299,17 @@ class SiteVisitService {
       } catch (e) {
         print('⚠️ Could not get location offline: $e');
       }
-      
+
       await OfflineDataService().queueAcceptVisit(
         visitId: visitId,
         userId: userId,
         locationData: locationData,
       );
-      
+
       print('✅ Accept visit queued for sync when online');
       return;
     }
-    
+
     try {
       // First check whether the visit exists in mmp_site_entries
       final existing = await _supabase
@@ -332,12 +370,15 @@ class SiteVisitService {
             position = null;
           }
         }
-        
+
         if (position != null) {
-          print('✓ Location captured: ${position.latitude}, ${position.longitude} (accuracy: ${position.accuracy}m)');
+          print(
+            '✓ Location captured: ${position.latitude}, ${position.longitude} (accuracy: ${position.accuracy}m)',
+          );
 
           // Merge into existing additional_data (do not overwrite)
-          final existingData = (existing['additional_data'] as Map<String, dynamic>?) ?? {};
+          final existingData =
+              (existing['additional_data'] as Map<String, dynamic>?) ?? {};
           final merged = {
             ...existingData,
             'acceptance_location': {
@@ -345,21 +386,26 @@ class SiteVisitService {
               'lng': position.longitude,
               'accuracy': position.accuracy,
               'timestamp': DateTime.now().toIso8601String(),
-            }
+            },
           };
 
-          await _supabase.from('mmp_site_entries').update({
-            'additional_data': merged,
-            'updated_at': DateTime.now().toIso8601String(),
-          }).eq('id', visitId);
-          
+          await _supabase
+              .from('mmp_site_entries')
+              .update({
+                'additional_data': merged,
+                'updated_at': DateTime.now().toIso8601String(),
+              })
+              .eq('id', visitId);
+
           print('✅ Acceptance location saved to additional_data');
         } else {
           print('⚠️ No position available (current or last known)');
         }
       } catch (locError) {
         // Log location error but don't fail the accept operation
-        print('⚠️ Warning: Could not capture location during acceptance: $locError');
+        print(
+          '⚠️ Warning: Could not capture location during acceptance: $locError',
+        );
         print('Visit acceptance succeeded, but location capture failed.');
       }
     } catch (e) {
@@ -380,7 +426,7 @@ class SiteVisitService {
   Future<void> startVisit(String visitId) async {
     print('Starting visit: $visitId');
     final userId = _supabase.auth.currentUser?.id;
-    
+
     // Capture start location first (needed for both online and offline)
     Map<String, dynamic> startLocationData = {};
     try {
@@ -403,7 +449,7 @@ class SiteVisitService {
           position = null;
         }
       }
-      
+
       if (position != null) {
         startLocationData = {
           'lat': position.latitude,
@@ -411,34 +457,36 @@ class SiteVisitService {
           'accuracy': position.accuracy,
           'timestamp': DateTime.now().toIso8601String(),
         };
-        print('✓ Start location captured: ${position.latitude}, ${position.longitude}');
+        print(
+          '✓ Start location captured: ${position.latitude}, ${position.longitude}',
+        );
       }
     } catch (e) {
       print('⚠️ Could not capture start location: $e');
     }
-    
+
     // Check connectivity
     final connectivity = await Connectivity().checkConnectivity();
     final hasConnection = !connectivity.contains(ConnectivityResult.none);
-    
+
     if (!hasConnection) {
       // OFFLINE: Queue for sync and update local cache
       print('📦 Offline mode - queuing start visit for sync...');
-      
+
       if (userId == null) {
         throw Exception('User not authenticated');
       }
-      
+
       await OfflineDataService().queueStartVisit(
         visitId: visitId,
         userId: userId,
         startLocation: startLocationData,
       );
-      
+
       print('✅ Start visit queued for sync when online');
       return;
     }
-    
+
     try {
       // Verify whether this visit exists in mmp_site_entries
       final existing = await _supabase
@@ -460,7 +508,8 @@ class SiteVisitService {
             'updated_at': DateTime.now().toIso8601String(),
             if (startLocationData.isNotEmpty)
               'additional_data': {
-                ...((existing['additional_data'] as Map<String, dynamic>?) ?? {}),
+                ...((existing['additional_data'] as Map<String, dynamic>?) ??
+                    {}),
                 'start_location': startLocationData,
               },
           })
@@ -517,10 +566,11 @@ class SiteVisitService {
             completionPosition = null;
           }
         }
-        
+
         if (completionPosition != null) {
           // Merge with existing additional_data
-          final existingData = existing['additional_data'] as Map<String, dynamic>? ?? {};
+          final existingData =
+              existing['additional_data'] as Map<String, dynamic>? ?? {};
           endLocationData = {
             ...existingData,
             'end_location': {
@@ -528,15 +578,19 @@ class SiteVisitService {
               'longitude': completionPosition.longitude,
               'accuracy': completionPosition.accuracy,
               'timestamp': DateTime.now().toIso8601String(),
-            }
+            },
           };
-          print('✓ End location captured: ${completionPosition.latitude}, ${completionPosition.longitude} (accuracy: ${completionPosition.accuracy}m)');
+          print(
+            '✓ End location captured: ${completionPosition.latitude}, ${completionPosition.longitude} (accuracy: ${completionPosition.accuracy}m)',
+          );
         } else {
-          endLocationData = existing['additional_data'] as Map<String, dynamic>? ?? {};
+          endLocationData =
+              existing['additional_data'] as Map<String, dynamic>? ?? {};
         }
       } catch (e) {
         print('⚠️ Could not capture end location: $e');
-        endLocationData = existing['additional_data'] as Map<String, dynamic>? ?? {};
+        endLocationData =
+            existing['additional_data'] as Map<String, dynamic>? ?? {};
       }
 
       final response = await _supabase
@@ -557,30 +611,37 @@ class SiteVisitService {
         print(msg);
         throw Exception(msg);
       }
-      
+
       print('✅ Visit completed successfully');
-      
+
       // Update sites_registry with GPS coordinates for future visits
-      if (completionPosition != null && 
-          completionPosition.accuracy <= 30 && // Only save high-quality GPS (< 30m)
+      if (completionPosition != null &&
+          completionPosition.accuracy <=
+              30 && // Only save high-quality GPS (< 30m)
           existing['registry_site_id'] != null) {
         try {
           print('📍 Updating sites_registry with GPS coordinates...');
-          await _supabase.from('sites_registry').update({
-            'gps_latitude': completionPosition.latitude,
-            'gps_longitude': completionPosition.longitude,
-            'gps_accuracy': completionPosition.accuracy,
-            'gps_captured_at': DateTime.now().toIso8601String(),
-            'gps_captured_by': _supabase.auth.currentUser?.id,
-            'last_verified_at': DateTime.now().toIso8601String(),
-          }).eq('id', existing['registry_site_id']);
+          await _supabase
+              .from('sites_registry')
+              .update({
+                'gps_latitude': completionPosition.latitude,
+                'gps_longitude': completionPosition.longitude,
+                'gps_accuracy': completionPosition.accuracy,
+                'gps_captured_at': DateTime.now().toIso8601String(),
+                'gps_captured_by': _supabase.auth.currentUser?.id,
+                'last_verified_at': DateTime.now().toIso8601String(),
+              })
+              .eq('id', existing['registry_site_id']);
           print('✅ Sites registry updated with GPS data');
         } catch (e) {
           print('⚠️ Could not update sites_registry: $e');
           // Don't fail the completion if registry update fails
         }
-      } else if (completionPosition != null && completionPosition.accuracy > 30) {
-        print('⚠️ GPS accuracy (${completionPosition.accuracy}m) too low to update registry (requires <30m)');
+      } else if (completionPosition != null &&
+          completionPosition.accuracy > 30) {
+        print(
+          '⚠️ GPS accuracy (${completionPosition.accuracy}m) too low to update registry (requires <30m)',
+        );
       }
     } catch (e) {
       print('Error completing visit: $e');
@@ -600,8 +661,11 @@ class SiteVisitService {
   }
 
   Future<SiteVisit?> getSiteVisitById(String id) async {
-    final response =
-        await _supabase.from('mmp_site_entries').select().eq('id', id).single();
+    final response = await _supabase
+        .from('mmp_site_entries')
+        .select()
+        .eq('id', id)
+        .single();
 
     return SiteVisit.fromJson(response);
   }
@@ -609,12 +673,15 @@ class SiteVisitService {
   Future<void> markTaskDeclined(String taskId, String userId) async {
     // This could be implemented as a separate table for declined tasks
     // For now, we'll just log it locally or update a declined status
-    await _supabase.from('mmp_site_entries').update({
-      'status': 'Declined',
-      'rejected_by': userId,
-      'rejected_at': DateTime.now().toIso8601String(),
-      'updated_at': DateTime.now().toIso8601String(),
-    }).eq('id', taskId);
+    await _supabase
+        .from('mmp_site_entries')
+        .update({
+          'status': 'Declined',
+          'rejected_by': userId,
+          'rejected_at': DateTime.now().toIso8601String(),
+          'updated_at': DateTime.now().toIso8601String(),
+        })
+        .eq('id', taskId);
   }
 
   // ===== LOCAL STORAGE METHODS =====
@@ -632,7 +699,9 @@ class SiteVisitService {
 
   /// Cache visits data locally for offline access
   Future<void> cacheVisitsLocally(
-      List<SiteVisit> visits, String cacheKey) async {
+    List<SiteVisit> visits,
+    String cacheKey,
+  ) async {
     try {
       final box = await _getVisitsBox();
       final visitsJson = visits.map((visit) => visit.toJson()).toList();
@@ -675,8 +744,9 @@ class SiteVisitService {
       final remoteData = await getAssignedSiteVisits(userId);
 
       // Cache the data locally
-      final visits =
-          remoteData.map((json) => SiteVisit.fromJson(json)).toList();
+      final visits = remoteData
+          .map((json) => SiteVisit.fromJson(json))
+          .toList();
       await cacheVisitsLocally(visits, 'assigned_$userId');
 
       return remoteData;
@@ -692,7 +762,9 @@ class SiteVisitService {
   }
 
   /// Get available site visits with local caching
-  Future<List<SiteVisit>> getAvailableSiteVisitsCached([PACTUserProfile? userProfile]) async {
+  Future<List<SiteVisit>> getAvailableSiteVisitsCached([
+    PACTUserProfile? userProfile,
+  ]) async {
     try {
       // Try to get from remote first
       final remoteData = await getAvailableSiteVisits(userProfile);
@@ -887,7 +959,7 @@ class SiteVisitService {
   // ===== ADDITIONAL METHODS FROM SITE VISITS SERVICE =====
 
   Future<List<Map<String, dynamic>>>
-      getAssignedSiteVisitsForCurrentUser() async {
+  getAssignedSiteVisitsForCurrentUser() async {
     final user = _supabase.auth.currentUser;
     if (user == null) return [];
 
@@ -944,14 +1016,17 @@ class SiteVisitService {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('arrival_$visitId', gpsData.toString());
 
-      await _supabase.from('mmp_site_entries').update({
-        'status': 'Arrived',
-        'additional_data': {
-          'arrival_recorded': true,
-          'arrival_timestamp': DateTime.now().toIso8601String(),
-        },
-        'updated_at': DateTime.now().toIso8601String(),
-      }).eq('id', visitId);
+      await _supabase
+          .from('mmp_site_entries')
+          .update({
+            'status': 'Arrived',
+            'additional_data': {
+              'arrival_recorded': true,
+              'arrival_timestamp': DateTime.now().toIso8601String(),
+            },
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('id', visitId);
       return;
     }
 
@@ -961,16 +1036,19 @@ class SiteVisitService {
       );
 
       // Update visit with arrival data
-      await _supabase.from('mmp_site_entries').update({
-        'status': 'Arrived',
-        'additional_data': {
-          'arrival_recorded': true,
-          'arrival_latitude': position.latitude,
-          'arrival_longitude': position.longitude,
-          'arrival_timestamp': DateTime.now().toIso8601String(),
-        },
-        'updated_at': DateTime.now().toIso8601String(),
-      }).eq('id', visitId);
+      await _supabase
+          .from('mmp_site_entries')
+          .update({
+            'status': 'Arrived',
+            'additional_data': {
+              'arrival_recorded': true,
+              'arrival_latitude': position.latitude,
+              'arrival_longitude': position.longitude,
+              'arrival_timestamp': DateTime.now().toIso8601String(),
+            },
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('id', visitId);
       // Store locally for backup
       final prefs = await SharedPreferences.getInstance();
       final gpsData = {
@@ -1002,7 +1080,7 @@ class SiteVisitService {
   Future<void> verifySiteEntry(String siteEntryId, String userId) async {
     try {
       print('✓ Verifying site entry: $siteEntryId by $userId');
-      
+
       final response = await _supabase
           .from('mmp_site_entries')
           .update({
@@ -1035,7 +1113,7 @@ class SiteVisitService {
   }) async {
     try {
       print('📤 Dispatching site entry: $siteEntryId');
-      
+
       final updateData = {
         'status': 'Dispatched',
         'dispatched_by': userId,
@@ -1055,10 +1133,6 @@ class SiteVisitService {
           .select()
           .single();
 
-      if (response == null) {
-        throw Exception('Failed to dispatch site entry: No rows updated');
-      }
-
       print('✅ Site entry dispatched successfully');
 
       // ✅ NEW: Send notification to assigned collector
@@ -1069,8 +1143,10 @@ class SiteVisitService {
             toDataCollectorId,
             siteName ?? (response['site_name'] ?? 'Unknown Site'),
             siteEntryId,
-            enumeratorFee: enumeratorFee ?? (response['enumerator_fee'] as double?),
-            transportFee: transportFee ?? (response['transport_fee'] as double?),
+            enumeratorFee:
+                enumeratorFee ?? (response['enumerator_fee'] as double?),
+            transportFee:
+                transportFee ?? (response['transport_fee'] as double?),
             assignedBy: userId,
           );
           print('✅ Notification sent to collector: $toDataCollectorId');
@@ -1093,7 +1169,7 @@ class SiteVisitService {
   }) async {
     try {
       print('🚩 Flagging site entry: $siteEntryId - $flagReason');
-      
+
       final additionalData = await _getSiteAdditionalData(siteEntryId);
       additionalData['isFlagged'] = true;
       additionalData['flagReason'] = flagReason;
@@ -1120,13 +1196,10 @@ class SiteVisitService {
   }
 
   /// Acknowledge cost for a site entry
-  Future<void> acknowledgeCost(
-    String siteEntryId,
-    String userId,
-  ) async {
+  Future<void> acknowledgeCost(String siteEntryId, String userId) async {
     try {
       print('💰 Acknowledging cost for site entry: $siteEntryId');
-      
+
       final response = await _supabase
           .from('mmp_site_entries')
           .update({
@@ -1151,10 +1224,7 @@ class SiteVisitService {
   /// Get all hubs
   Future<List<Map<String, dynamic>>> getAllHubs() async {
     try {
-      final response = await _supabase
-          .from('hubs')
-          .select()
-          .order('name');
+      final response = await _supabase.from('hubs').select().order('name');
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
       print('❌ Error fetching hubs: $e');
@@ -1186,7 +1256,9 @@ class SiteVisitService {
           .single();
 
       final registryLinkage = response['additional_data']?['registry_linkage'];
-      return registryLinkage != null ? Map<String, dynamic>.from(registryLinkage) : null;
+      return registryLinkage != null
+          ? Map<String, dynamic>.from(registryLinkage)
+          : null;
     } catch (e) {
       print('⚠️ Error getting registry linkage: $e');
       return null;
@@ -1194,7 +1266,9 @@ class SiteVisitService {
   }
 
   /// Helper: get additional_data for a site entry
-  Future<Map<String, dynamic>> _getSiteAdditionalData(String siteEntryId) async {
+  Future<Map<String, dynamic>> _getSiteAdditionalData(
+    String siteEntryId,
+  ) async {
     try {
       final response = await _supabase
           .from('mmp_site_entries')
@@ -1216,7 +1290,9 @@ class SiteVisitService {
     try {
       final response = await _supabase
           .from('mmp_site_entries')
-          .select('enumerator_fee, transport_fee, cost_acknowledged, cost_acknowledged_at, cost_acknowledged_by')
+          .select(
+            'enumerator_fee, transport_fee, cost_acknowledged, cost_acknowledged_at, cost_acknowledged_by',
+          )
           .eq('id', siteEntryId)
           .single();
 
@@ -1290,4 +1366,3 @@ class SiteVisitService {
     }
   }
 }
-

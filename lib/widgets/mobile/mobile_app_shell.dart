@@ -16,12 +16,12 @@ class MobileAppShell extends ConsumerStatefulWidget {
   final int autoSyncIntervalMs;
 
   const MobileAppShell({
-    Key? key,
+    super.key,
     required this.child,
     this.enableOfflineMode = true,
     this.enableGPSTracking = true,
     this.autoSyncIntervalMs = 60000, // 1 minute
-  }) : super(key: key);
+  });
 
   @override
   ConsumerState<MobileAppShell> createState() => _MobileAppShellState();
@@ -89,7 +89,9 @@ class _MobileAppShellState extends ConsumerState<MobileAppShell>
       }
     });
 
-    print('[OfflineMode] Network status changed: ${isOnline ? 'ONLINE' : 'OFFLINE'}');
+    print(
+      '[OfflineMode] Network status changed: ${isOnline ? 'ONLINE' : 'OFFLINE'}',
+    );
 
     // Show snackbar for network changes
     ScaffoldMessenger.of(context).showSnackBar(
@@ -127,16 +129,18 @@ class _MobileAppShellState extends ConsumerState<MobileAppShell>
         distanceFilter: 100, // Update every 100 meters
       );
 
-      Geolocator.getPositionStream(locationSettings: locationSettings)
-          .listen((Position position) {
-        _saveLocationOffline(
-          lat: position.latitude,
-          lng: position.longitude,
-          accuracy: position.accuracy,
-        );
-      }, onError: (error) {
-        print('[GPSTracking] Error: $error');
-      });
+      Geolocator.getPositionStream(locationSettings: locationSettings).listen(
+        (Position position) {
+          _saveLocationOffline(
+            lat: position.latitude,
+            lng: position.longitude,
+            accuracy: position.accuracy,
+          );
+        },
+        onError: (error) {
+          print('[GPSTracking] Error: $error');
+        },
+      );
 
       print('[GPSTracking] Started tracking location');
     } catch (e) {
@@ -151,11 +155,13 @@ class _MobileAppShellState extends ConsumerState<MobileAppShell>
     required double accuracy,
   }) async {
     try {
-      await ref.read(saveLocationOfflineProvider({
-        lat: lat,
-        lng: lng,
-        accuracy: accuracy,
-      }).future);
+      await ref.read(
+        saveLocationOfflineProvider({
+          lat: lat,
+          lng: lng,
+          accuracy: accuracy,
+        }).future,
+      );
     } catch (e) {
       print('[GPSTracking] Failed to save location: $e');
     }
@@ -234,10 +240,7 @@ class _MobileAppShellState extends ConsumerState<MobileAppShell>
   }
 
   /// Show local notification
-  void _showLocalNotification({
-    required String title,
-    required String body,
-  }) {
+  void _showLocalNotification({required String title, required String body}) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         duration: const Duration(seconds: 5),
@@ -245,10 +248,7 @@ class _MobileAppShellState extends ConsumerState<MobileAppShell>
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              title,
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
+            Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 4),
             Text(body),
           ],
@@ -298,12 +298,7 @@ class _MobileAppShellState extends ConsumerState<MobileAppShell>
       children: [
         widget.child,
         // Offline banner at top
-        const Positioned(
-          top: 0,
-          left: 0,
-          right: 0,
-          child: OfflineBanner(),
-        ),
+        const Positioned(top: 0, left: 0, right: 0, child: OfflineBanner()),
         // Sync progress toast at bottom
         const SyncProgressToast(),
       ],
@@ -318,11 +313,11 @@ class OfflineModeWrapper extends ConsumerWidget {
   final bool enableGPSTracking;
 
   const OfflineModeWrapper({
-    Key? key,
+    super.key,
     required this.child,
     this.showStatusBar = true,
     this.enableGPSTracking = true,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -331,9 +326,9 @@ class OfflineModeWrapper extends ConsumerWidget {
         if (showStatusBar)
           SyncStatusBar(
             onSyncPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Starting sync...')),
-              );
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(const SnackBar(content: Text('Starting sync...')));
             },
           ),
         Expanded(

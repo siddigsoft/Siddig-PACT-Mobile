@@ -2,7 +2,6 @@
 // Run with: flutter test test/services/biometric_auth_service_test.dart
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter/services.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:pact_mobile/services/biometric_auth_service.dart';
@@ -45,17 +44,23 @@ void main() {
 
     group('getBiometricTypeName', () {
       test('returns "Face ID" for face biometric', () {
-        final name = biometricService.getBiometricTypeName([BiometricType.face]);
+        final name = biometricService.getBiometricTypeName([
+          BiometricType.face,
+        ]);
         expect(name, equals('Face ID'));
       });
 
       test('returns "Fingerprint" for fingerprint biometric', () {
-        final name = biometricService.getBiometricTypeName([BiometricType.fingerprint]);
+        final name = biometricService.getBiometricTypeName([
+          BiometricType.fingerprint,
+        ]);
         expect(name, equals('Fingerprint'));
       });
 
       test('returns "Iris" for iris biometric', () {
-        final name = biometricService.getBiometricTypeName([BiometricType.iris]);
+        final name = biometricService.getBiometricTypeName([
+          BiometricType.iris,
+        ]);
         expect(name, equals('Iris'));
       });
 
@@ -86,18 +91,22 @@ void main() {
         );
       });
 
-      test('getStoredCredentials returns map with email and password keys', () async {
-        final credentials = await biometricService.getStoredCredentials();
-        expect(credentials, isA<Map<String, String?>>());
-        expect(credentials.containsKey('email'), isTrue);
-        expect(credentials.containsKey('password'), isTrue);
-      });
+      test(
+        'getStoredCredentials returns map with email and password keys',
+        () async {
+          final credentials = await biometricService.getStoredCredentials();
+          expect(credentials, isA<Map<String, String?>>());
+          expect(credentials.containsKey('email'), isTrue);
+          expect(credentials.containsKey('password'), isTrue);
+        },
+      );
     });
 
     group('Biometric Enable/Disable', () {
       test('enableBiometric stores user email', () async {
         expect(
-          () async => await biometricService.enableBiometric('test@example.com'),
+          () async =>
+              await biometricService.enableBiometric('test@example.com'),
           returnsNormally,
         );
       });
@@ -122,7 +131,7 @@ void main() {
 
       // Check availability
       final isAvailable = await service.isBiometricAvailable();
-      
+
       if (isAvailable) {
         // Get biometric types
         final biometrics = await service.getAvailableBiometrics();
@@ -141,13 +150,10 @@ void main() {
   group('Error Handling', () {
     test('handles platform exceptions gracefully', () async {
       final service = BiometricAuthService();
-      
+
       // These should not throw exceptions
-      expect(
-        () async => await service.isBiometricAvailable(),
-        returnsNormally,
-      );
-      
+      expect(() async => await service.isBiometricAvailable(), returnsNormally);
+
       expect(
         () async => await service.getAvailableBiometrics(),
         returnsNormally,

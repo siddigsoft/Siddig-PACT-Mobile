@@ -243,6 +243,7 @@ class QueuedRequest extends HiveObject {
 
 @HiveType(typeId: 4)
 class CachedItem extends HiveObject {
+  @override
   @HiveField(0)
   late String key;
 
@@ -266,7 +267,8 @@ class CachedItem extends HiveObject {
     this.version,
   });
 
-  bool get isExpired => expiresAt != null && DateTime.now().millisecondsSinceEpoch > expiresAt!;
+  bool get isExpired =>
+      expiresAt != null && DateTime.now().millisecondsSinceEpoch > expiresAt!;
 
   Map<String, dynamic> toJson() => {
     'key': key,
@@ -302,7 +304,8 @@ class OfflineStats {
     required this.isOnline,
   });
 
-  int get totalPending => pendingActions + unsyncedVisits + unsyncedLocations + queuedRequests;
+  int get totalPending =>
+      pendingActions + unsyncedVisits + unsyncedLocations + queuedRequests;
 
   Map<String, dynamic> toJson() => {
     'pendingActions': pendingActions,
@@ -356,7 +359,8 @@ class SyncResult {
 // ============================================================================
 
 class SyncProgress {
-  final String phase; // 'site_visits', 'locations', 'pending_actions', 'cleanup'
+  final String
+  phase; // 'site_visits', 'locations', 'pending_actions', 'cleanup'
   final int current;
   final int total;
   final double percentage;
@@ -384,7 +388,8 @@ class SyncProgress {
 // ============================================================================
 
 class ConflictResolution {
-  final String strategy; // 'client_wins', 'server_wins', 'last_write_wins', 'manual'
+  final String
+  strategy; // 'client_wins', 'server_wins', 'last_write_wins', 'manual'
   final Map<String, dynamic>? localData;
   final Map<String, dynamic>? serverData;
   final Map<String, dynamic>? resolvedData;

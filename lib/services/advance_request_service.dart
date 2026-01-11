@@ -4,7 +4,10 @@ import 'dart:developer' as developer;
 
 class AdvanceRequestService {
   /// Get existing advance request for a site
-  static Future<Map<String, dynamic>?> getExistingRequest(String siteId, String userId) async {
+  static Future<Map<String, dynamic>?> getExistingRequest(
+    String siteId,
+    String userId,
+  ) async {
     try {
       final response = await Supabase.instance.client
           .from('down_payment_requests')
@@ -15,7 +18,7 @@ class AdvanceRequestService {
           .limit(1)
           .maybeSingle();
 
-      return response as Map<String, dynamic>?;
+      return response;
     } catch (e) {
       developer.log('Error getting advance request: $e');
       return null;
@@ -51,7 +54,10 @@ class AdvanceRequestService {
 
       // Determine requester role (dataCollector or coordinator)
       final role = (requesterRole ?? '').toLowerCase();
-      final finalRequesterRole = (role == 'coordinator' || role == 'field_coordinator' || role == 'state_coordinator')
+      final finalRequesterRole =
+          (role == 'coordinator' ||
+              role == 'field_coordinator' ||
+              role == 'state_coordinator')
           ? 'coordinator'
           : 'dataCollector';
 
@@ -76,7 +82,7 @@ class AdvanceRequestService {
           .select()
           .single();
 
-      return response as Map<String, dynamic>;
+      return response;
     } catch (e) {
       developer.log('Error creating advance request: $e');
       rethrow;
@@ -84,7 +90,9 @@ class AdvanceRequestService {
   }
 
   /// Get all advance requests for the current user
-  static Future<List<Map<String, dynamic>>> getUserRequests(String userId) async {
+  static Future<List<Map<String, dynamic>>> getUserRequests(
+    String userId,
+  ) async {
     try {
       final response = await Supabase.instance.client
           .from('down_payment_requests')
@@ -92,11 +100,7 @@ class AdvanceRequestService {
           .eq('requested_by', userId)
           .order('created_at', ascending: false);
 
-      if (response != null) {
-        return (response as List)
-            .map((e) => e as Map<String, dynamic>)
-            .toList();
-      }
+      return (response as List).map((e) => e as Map<String, dynamic>).toList();
       return [];
     } catch (e) {
       developer.log('Error loading user advance requests: $e');
@@ -126,11 +130,7 @@ class AdvanceRequestService {
           'icon': Icons.check_circle,
         };
       case 'rejected':
-        return {
-          'label': 'Rejected',
-          'color': Colors.red,
-          'icon': Icons.cancel,
-        };
+        return {'label': 'Rejected', 'color': Colors.red, 'icon': Icons.cancel};
       case 'partially_paid':
         return {
           'label': 'Partial Payment',
@@ -150,12 +150,7 @@ class AdvanceRequestService {
           'icon': Icons.cancel,
         };
       default:
-        return {
-          'label': status,
-          'color': Colors.grey,
-          'icon': Icons.info,
-        };
+        return {'label': status, 'color': Colors.grey, 'icon': Icons.info};
     }
   }
 }
-

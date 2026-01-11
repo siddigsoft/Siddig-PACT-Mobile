@@ -1,11 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../theme/app_colors.dart';
-import '../theme/app_design_system.dart';
-import '../widgets/app_widgets.dart';
-import '../providers/offline_provider.dart';
 import '../providers/active_visit_provider.dart';
 import '../models/site_visit.dart';
 import '../screens/complete_visit_screen.dart';
@@ -23,7 +18,8 @@ class CompleteVisitButton extends ConsumerStatefulWidget {
   });
 
   @override
-  ConsumerState<CompleteVisitButton> createState() => _CompleteVisitButtonState();
+  ConsumerState<CompleteVisitButton> createState() =>
+      _CompleteVisitButtonState();
 }
 
 class _CompleteVisitButtonState extends ConsumerState<CompleteVisitButton> {

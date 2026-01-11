@@ -9,16 +9,15 @@ import '../utils/currency_utils.dart';
 class DownPaymentRequestDialog extends ConsumerStatefulWidget {
   final String userId;
 
-  const DownPaymentRequestDialog({
-    Key? key,
-    required this.userId,
-  }) : super(key: key);
+  const DownPaymentRequestDialog({super.key, required this.userId});
 
   @override
-  ConsumerState<DownPaymentRequestDialog> createState() => _DownPaymentRequestDialogState();
+  ConsumerState<DownPaymentRequestDialog> createState() =>
+      _DownPaymentRequestDialogState();
 }
 
-class _DownPaymentRequestDialogState extends ConsumerState<DownPaymentRequestDialog> {
+class _DownPaymentRequestDialogState
+    extends ConsumerState<DownPaymentRequestDialog> {
   SiteVisit? _selectedSiteVisit;
   final _amountController = TextEditingController();
   final _justificationController = TextEditingController();
@@ -53,8 +52,12 @@ class _DownPaymentRequestDialogState extends ConsumerState<DownPaymentRequestDia
             siteVisitsAsync.when(
               data: (siteVisits) {
                 // Filter for accepted status (case-insensitive to handle 'Accepted', 'Accept', 'accepted')
-                final acceptedVisits = siteVisits.where((visit) => 
-                  visit.status.toLowerCase().startsWith('accept')).toList();
+                final acceptedVisits = siteVisits
+                    .where(
+                      (visit) =>
+                          visit.status.toLowerCase().startsWith('accept'),
+                    )
+                    .toList();
 
                 if (acceptedVisits.isEmpty) {
                   return const Padding(
@@ -67,7 +70,7 @@ class _DownPaymentRequestDialogState extends ConsumerState<DownPaymentRequestDia
                 }
 
                 return DropdownButtonFormField<SiteVisit>(
-                  value: _selectedSiteVisit,
+                  initialValue: _selectedSiteVisit,
                   isExpanded: true,
                   decoration: const InputDecoration(
                     labelText: 'Select Site Visit',
@@ -87,14 +90,16 @@ class _DownPaymentRequestDialogState extends ConsumerState<DownPaymentRequestDia
                     setState(() {
                       _selectedSiteVisit = value;
                       if (value != null) {
-                        _amountController.text = ((value.transportFee ?? 0) * 100).toString();
+                        _amountController.text =
+                            ((value.transportFee ?? 0) * 100).toString();
                       }
                     });
                   },
                 );
               },
               loading: () => const Center(child: CircularProgressIndicator()),
-              error: (error, stack) => Text('Error loading site visits: $error'),
+              error: (error, stack) =>
+                  Text('Error loading site visits: $error'),
             ),
 
             const SizedBox(height: 16),
@@ -115,7 +120,7 @@ class _DownPaymentRequestDialogState extends ConsumerState<DownPaymentRequestDia
 
             // Payment type
             DropdownButtonFormField<String>(
-              value: _paymentType,
+              initialValue: _paymentType,
               decoration: const InputDecoration(
                 labelText: 'Payment Type',
                 border: OutlineInputBorder(),
@@ -177,7 +182,10 @@ class _DownPaymentRequestDialogState extends ConsumerState<DownPaymentRequestDia
                           (double.tryParse(_amountController.text) ?? 0))
                         const Text(
                           '⚠️ Requested amount exceeds budget!',
-                          style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+                          style: TextStyle(
+                            color: Colors.red,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                     ],
                   ),
@@ -193,7 +201,9 @@ class _DownPaymentRequestDialogState extends ConsumerState<DownPaymentRequestDia
           child: const Text('Cancel'),
         ),
         ElevatedButton(
-          onPressed: _isLoading || _selectedSiteVisit == null ? null : _submitRequest,
+          onPressed: _isLoading || _selectedSiteVisit == null
+              ? null
+              : _submitRequest,
           child: _isLoading
               ? const SizedBox(
                   width: 20,
@@ -220,7 +230,9 @@ class _DownPaymentRequestDialogState extends ConsumerState<DownPaymentRequestDia
     final budget = (_selectedSiteVisit!.transportFee ?? 0) * 100;
     if (amount > budget) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Requested amount cannot exceed transportation budget')),
+        const SnackBar(
+          content: Text('Requested amount cannot exceed transportation budget'),
+        ),
       );
       return;
     }
@@ -235,30 +247,36 @@ class _DownPaymentRequestDialogState extends ConsumerState<DownPaymentRequestDia
     setState(() => _isLoading = true);
 
     try {
-      await ref.read(downPaymentProvider(widget.userId).notifier).createRequest(
-        siteVisitId: _selectedSiteVisit!.id,
-        mmpSiteEntryId: _selectedSiteVisit!.mmpId ?? '',
-        siteName: _selectedSiteVisit!.siteName,
-        requesterRole: 'dataCollector', // This should come from user profile
-        hubId: null, // Hub info not available in current SiteVisit model
-        hubName: null, // Hub info not available in current SiteVisit model
-        totalTransportationBudget: (_selectedSiteVisit!.transportFee ?? 0) * 100,
-        requestedAmount: amount,
-        paymentType: _paymentType,
-        justification: _justificationController.text.trim(),
-      );
+      await ref
+          .read(downPaymentProvider(widget.userId).notifier)
+          .createRequest(
+            siteVisitId: _selectedSiteVisit!.id,
+            mmpSiteEntryId: _selectedSiteVisit!.mmpId ?? '',
+            siteName: _selectedSiteVisit!.siteName,
+            requesterRole:
+                'dataCollector', // This should come from user profile
+            hubId: null, // Hub info not available in current SiteVisit model
+            hubName: null, // Hub info not available in current SiteVisit model
+            totalTransportationBudget:
+                (_selectedSiteVisit!.transportFee ?? 0) * 100,
+            requestedAmount: amount,
+            paymentType: _paymentType,
+            justification: _justificationController.text.trim(),
+          );
 
       if (mounted) {
         Navigator.of(context).pop();
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Down payment request submitted successfully')),
+          const SnackBar(
+            content: Text('Down payment request submitted successfully'),
+          ),
         );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to submit request: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to submit request: $e')));
       }
     } finally {
       if (mounted) {

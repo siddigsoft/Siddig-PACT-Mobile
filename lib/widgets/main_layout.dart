@@ -5,15 +5,14 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'custom_bottom_navigation_bar.dart';
 import '../screens/dashboard_screen.dart';
 import '../screens/field_operations_enhanced_screen.dart';
-import '../screens/reports_screen.dart';
-import '../screens/safety_hub_screen.dart';
-import '../screens/chat_list_screen.dart';
 import '../screens/wallet_screen.dart';
 import '../screens/site_verification_screen.dart';
+import '../widgets/movable_online_offline_toggle.dart';
+import '../widgets/online_offline_toggle.dart';
 
 /// A reusable layout wrapper that automatically includes bottom navigation bar
 /// and handles all navigation logic. Just wrap your screen content with this.
-/// 
+///
 /// Usage:
 /// ```dart
 /// MainLayout(
@@ -24,7 +23,7 @@ import '../screens/site_verification_screen.dart';
 class MainLayout extends StatefulWidget {
   /// The current tab index (0-5)
   final int currentIndex;
-  
+
   /// The content to display in the body
   final Widget child;
 
@@ -67,9 +66,10 @@ class _MainLayoutState extends State<MainLayout> {
       if (response != null && mounted) {
         final role = (response['role'] as String?)?.toLowerCase() ?? '';
         setState(() {
-          _isCoordinator = role == 'coordinator' || 
-                           role == 'field_coordinator' ||
-                           role == 'state_coordinator';
+          _isCoordinator =
+              role == 'coordinator' ||
+              role == 'field_coordinator' ||
+              role == 'state_coordinator';
           _isLoadingRole = false;
         });
       } else {
@@ -117,7 +117,9 @@ class _MainLayoutState extends State<MainLayout> {
       case 3:
         // Only for coordinators
         if (_isCoordinator) {
-          screen = const SiteVerificationScreen().withMainLayout(currentIndex: 3);
+          screen = const SiteVerificationScreen().withMainLayout(
+            currentIndex: 3,
+          );
         }
         break;
     }
@@ -133,7 +135,13 @@ class _MainLayoutState extends State<MainLayout> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: widget.child,
+      body: Stack(
+        children: [
+          widget.child,
+          // Movable Online/Offline toggle (only for data collectors)
+          MovableOnlineOfflineToggle(variant: ToggleVariant.uber),
+        ],
+      ),
       bottomNavigationBar: _isLoadingRole
           ? null // Hide nav bar while loading role
           : CustomBottomNavigationBar(
@@ -148,15 +156,12 @@ class _MainLayoutState extends State<MainLayout> {
 /// Extension to easily wrap any widget with MainLayout
 extension MainLayoutExtension on Widget {
   /// Wraps this widget with MainLayout and bottom navigation
-  /// 
+  ///
   /// Usage:
   /// ```dart
   /// MyScreen().withMainLayout(currentIndex: 0)
   /// ```
   Widget withMainLayout({required int currentIndex}) {
-    return MainLayout(
-      currentIndex: currentIndex,
-      child: this,
-    );
+    return MainLayout(currentIndex: currentIndex, child: this);
   }
 }

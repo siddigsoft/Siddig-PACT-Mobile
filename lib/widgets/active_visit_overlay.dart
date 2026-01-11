@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_design_system.dart';
 import '../widgets/app_widgets.dart';
@@ -85,7 +84,7 @@ class _MinimizedOverlay extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 12),
-        
+
         // Site name (truncated)
         Expanded(
           child: Text(
@@ -98,7 +97,7 @@ class _MinimizedOverlay extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
           ),
         ),
-        
+
         // Timer
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -122,7 +121,7 @@ class _MinimizedOverlay extends StatelessWidget {
             ],
           ),
         ),
-        
+
         // Expand icon
         const SizedBox(width: 8),
         Icon(Icons.expand_less, color: AppColors.textSecondary, size: 20),
@@ -202,11 +201,11 @@ class _ExpandedOverlay extends ConsumerWidget {
             Icon(Icons.expand_more, color: AppColors.textSecondary),
           ],
         ),
-        
+
         const SizedBox(height: 16),
         const Divider(height: 1),
         const SizedBox(height: 16),
-        
+
         // Site name
         Text(
           visit.siteName,
@@ -215,24 +214,24 @@ class _ExpandedOverlay extends ConsumerWidget {
             color: AppColors.textPrimary,
           ),
         ),
-        
+
         const SizedBox(height: 8),
-        
+
         // Site code
         if (visit.siteCode.isNotEmpty)
           _buildInfoRow(Icons.qr_code, 'Code', visit.siteCode),
-        
+
         // Location
         _buildInfoRow(
           Icons.location_on,
           'Location',
           '${visit.state}${visit.locality.isNotEmpty ? ', ${visit.locality}' : ''}',
         ),
-        
+
         // Activity
         if (visit.activity.isNotEmpty)
           _buildInfoRow(Icons.work, 'Activity', visit.activity),
-        
+
         // Due date
         if (visit.dueDate != null)
           _buildInfoRow(
@@ -240,7 +239,7 @@ class _ExpandedOverlay extends ConsumerWidget {
             'Scheduled',
             _formatDate(visit.dueDate!),
           ),
-        
+
         // GPS Status
         if (state.currentLocation != null) ...[
           const SizedBox(height: 8),
@@ -273,7 +272,7 @@ class _ExpandedOverlay extends ConsumerWidget {
             ),
           ),
         ],
-        
+
         // Cost info if available
         if (visit.cost != null && visit.cost! > 0) ...[
           const SizedBox(height: 8),
@@ -289,9 +288,7 @@ class _ExpandedOverlay extends ConsumerWidget {
                 const SizedBox(width: 8),
                 Text(
                   'Total Payout:',
-                  style: AppTextStyles.bodySmall.copyWith(
-                    color: Colors.blue,
-                  ),
+                  style: AppTextStyles.bodySmall.copyWith(color: Colors.blue),
                 ),
                 const Spacer(),
                 Text(
@@ -305,9 +302,9 @@ class _ExpandedOverlay extends ConsumerWidget {
             ),
           ),
         ],
-        
+
         const SizedBox(height: 16),
-        
+
         // Hint text
         Text(
           'Tap anywhere to minimize • Photos & notes added at completion',
@@ -317,9 +314,9 @@ class _ExpandedOverlay extends ConsumerWidget {
           ),
           textAlign: TextAlign.center,
         ),
-        
+
         const SizedBox(height: 16),
-        
+
         // Complete button - opens photo/notes form
         SizedBox(
           width: double.infinity,

@@ -4,19 +4,20 @@ import '../models/site_visit.dart';
 import 'notification_trigger_service.dart';
 
 /// AutoReleaseService - Monitors and auto-releases sites that are not confirmed within deadline
-/// 
+///
 /// Handles the automatic release of assigned sites back to "Dispatched" status if:
 /// - Site is assigned to a collector
 /// - Autorelease deadline has passed
 /// - Site has not been confirmed
 class AutoReleaseService {
   static final AutoReleaseService _instance = AutoReleaseService._internal();
-  
+
   factory AutoReleaseService() => _instance;
   AutoReleaseService._internal();
 
   final SupabaseClient _supabase = Supabase.instance.client;
-  final NotificationTriggerService _notificationService = NotificationTriggerService();
+  final NotificationTriggerService _notificationService =
+      NotificationTriggerService();
 
   /// Check for sites that need auto-release and process them
   /// Call this periodically (e.g., every 5-10 minutes) via background task
@@ -42,7 +43,7 @@ class AutoReleaseService {
 
       for (final siteJson in sites) {
         final site = _parseSiteEntry(siteJson);
-        
+
         if (_shouldAutoRelease(site)) {
           await _releaseSite(site);
           releasedCount++;
@@ -63,14 +64,14 @@ class AutoReleaseService {
   /// Determine if a site should be auto-released
   bool _shouldAutoRelease(SiteEntryData site) {
     // Check if site has autorelease deadline in additional_data
-    final additionalData = site.additionalData as Map<String, dynamic>?;
+    final additionalData = site.additionalData;
     if (additionalData == null) {
       return false;
     }
 
     final confirmationDeadline = additionalData['confirmation_deadline'];
     final autoReleaseAt = additionalData['autorelease_at'];
-    
+
     if (autoReleaseAt == null) {
       return false;
     }
@@ -81,7 +82,9 @@ class AutoReleaseService {
 
       // Release if deadline has passed
       if (now.isAfter(deadline)) {
-        debugPrint('🔄 Site ${site.id} past auto-release deadline: $autoReleaseAt');
+        debugPrint(
+          '🔄 Site ${site.id} past auto-release deadline: $autoReleaseAt',
+        );
         return true;
       }
     } catch (e) {
@@ -94,7 +97,9 @@ class AutoReleaseService {
   /// Release a site back to "Dispatched" status
   Future<void> _releaseSite(SiteEntryData site) async {
     try {
-      debugPrint('🔄 Auto-releasing site: ${site.id} (was claimed by ${site.claimedBy})');
+      debugPrint(
+        '🔄 Auto-releasing site: ${site.id} (was claimed by ${site.claimedBy})',
+      );
 
       // Get the former claimant for notification
       final formerClaimant = site.claimedBy;
@@ -111,7 +116,7 @@ class AutoReleaseService {
             'claimed_at': null,
             'enumerator_fee': null,
             'cost': null,
-            'additional_data': (site.additionalData as Map<String, dynamic>? ?? {})
+            'additional_data': (site.additionalData ?? {})
               ..addAll({
                 'autorelease_triggered': true,
                 'autorelease_timestamp': DateTime.now().toIso8601String(),
@@ -136,7 +141,9 @@ class AutoReleaseService {
             site.id,
           );
         } catch (notifError) {
-          debugPrint('⚠️ Failed to send auto-release notification: $notifError');
+          debugPrint(
+            '⚠️ Failed to send auto-release notification: $notifError',
+          );
         }
       }
 

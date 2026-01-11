@@ -333,7 +333,9 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
         'Tab counts - New: ${_newSites.length}, CP Verification: ${_cpVerificationSites.length}, Verified: ${_verifiedSites.length}, Approved: ${_approvedSites.length}, Completed: ${_completedSites.length}, Rejected: ${_rejectedSites.length}',
       );
 
-      setState(() {});
+      if (mounted) {
+        setState(() {});
+      }
     } catch (e) {
       debugPrint('Error fetching sites for verification: $e');
       rethrow;
@@ -1053,7 +1055,7 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
                     ],
                   ),
                 ),
-              ...sites.map((site) => _buildSiteCard(site, 'new')).toList(),
+              ...sites.map((site) => _buildSiteCard(site, 'new')),
             ],
           ),
         );
@@ -1157,7 +1159,7 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
                           label: Text('Upload locality permit (${sitesNeedingLocalityPermit.length})'),
                           onPressed: () {
                             final parts = locality.split(' - ');
-                            final stateName = parts.length > 0 ? parts[0] : '';
+                            final stateName = parts.isNotEmpty ? parts[0] : '';
                             final localityName = parts.length > 1 ? parts[1] : '';
                             _handleLocalityCardClick(stateName, localityName, sites);
                           },
@@ -1166,7 +1168,7 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
                     ],
                   ),
                 ),
-              ...sites.map((site) => _buildSiteCard(site, 'locality_permit')).toList(),
+              ...sites.map((site) => _buildSiteCard(site, 'locality_permit')),
             ],
           ),
         );
@@ -1269,7 +1271,7 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
             final key = grouped.keys.elementAt(index);
             final localitySites = grouped[key]!;
             final parts = key.split(' - ');
-            final stateName = parts.length > 0 ? parts[0] : '';
+            final stateName = parts.isNotEmpty ? parts[0] : '';
             final localityName = parts.length > 1 ? parts[1] : '';
 
             return Card(
@@ -4952,8 +4954,9 @@ class _LocalityPermitDialogState extends State<_LocalityPermitDialog> {
                             firstDate: DateTime(2000),
                             lastDate: DateTime(2100),
                           );
-                          if (picked != null)
+                          if (picked != null) {
                             setState(() => _localityPermitIssueDate = picked);
+                          }
                         },
                         child: Container(
                           padding: const EdgeInsets.symmetric(
@@ -4984,8 +4987,9 @@ class _LocalityPermitDialogState extends State<_LocalityPermitDialog> {
                             firstDate: DateTime(2000),
                             lastDate: DateTime(2100),
                           );
-                          if (picked != null)
+                          if (picked != null) {
                             setState(() => _localityPermitExpiryDate = picked);
+                          }
                         },
                         child: Container(
                           padding: const EdgeInsets.symmetric(
@@ -5081,8 +5085,9 @@ class _LocalityPermitDialogState extends State<_LocalityPermitDialog> {
                         firstDate: DateTime(2000),
                         lastDate: DateTime(2100),
                       );
-                      if (picked != null)
+                      if (picked != null) {
                         setStateDialog(() => tempIssue = picked);
+                      }
                     },
                     child: Container(
                       padding: const EdgeInsets.symmetric(
@@ -5122,8 +5127,9 @@ class _LocalityPermitDialogState extends State<_LocalityPermitDialog> {
                         firstDate: DateTime(2000),
                         lastDate: DateTime(2100),
                       );
-                      if (picked != null)
+                      if (picked != null) {
                         setStateDialog(() => tempExpiry = picked);
+                      }
                     },
                     child: Container(
                       padding: const EdgeInsets.symmetric(
@@ -5330,10 +5336,12 @@ class _LocalityPermitDialogState extends State<_LocalityPermitDialog> {
         // Allow proceeding even when an image wasn't uploaded (user may choose to
         // proceed without a locality permit). If dates are provided, validate them.
         if (_localityPermitIssueDate != null || _localityPermitExpiryDate != null) {
-          if (_localityPermitIssueDate == null || _localityPermitExpiryDate == null)
+          if (_localityPermitIssueDate == null || _localityPermitExpiryDate == null) {
             return false;
-          if (_localityPermitExpiryDate!.isBefore(_localityPermitIssueDate!))
+          }
+          if (_localityPermitExpiryDate!.isBefore(_localityPermitIssueDate!)) {
             return false;
+          }
         }
         return true;
       default:

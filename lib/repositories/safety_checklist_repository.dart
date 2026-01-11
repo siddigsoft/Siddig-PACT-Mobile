@@ -1,4 +1,3 @@
-import 'package:sqflite/sqflite.dart';
 import '../models/safety_checklist.dart';
 import 'base_repository.dart';
 
@@ -6,9 +5,7 @@ class SafetyChecklistRepository extends BaseRepository<SafetyChecklist> {
   SafetyChecklistRepository({
     required super.database,
     required super.supabaseService,
-  }) : super(
-          tableName: 'safety_checklists',
-        );
+  }) : super(tableName: 'safety_checklists');
 
   @override
   Map<String, dynamic> toMap(SafetyChecklist item) => item.toJson();

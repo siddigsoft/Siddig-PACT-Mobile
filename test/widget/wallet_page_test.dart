@@ -1,4 +1,6 @@
 /// Widget tests for wallet page components
+library;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -17,9 +19,7 @@ void main() {
               body: Consumer(
                 builder: (context, ref, child) {
                   ref.watch(walletNotifierProvider);
-                  return const Center(
-                    child: CircularProgressIndicator(),
-                  );
+                  return const Center(child: CircularProgressIndicator());
                 },
               ),
             ),
@@ -42,9 +42,7 @@ void main() {
                     builder: (context) => AlertDialog(
                       title: const Text('Request Withdrawal'),
                       content: const TextField(
-                        decoration: InputDecoration(
-                          labelText: 'Amount (SDG)',
-                        ),
+                        decoration: InputDecoration(labelText: 'Amount (SDG)'),
                       ),
                       actions: [
                         TextButton(
@@ -73,7 +71,9 @@ void main() {
       expect(find.text('Request Withdrawal'), findsWidgets);
     });
 
-    testWidgets('Transaction search widget renders', (WidgetTester tester) async {
+    testWidgets('Transaction search widget renders', (
+      WidgetTester tester,
+    ) async {
       await tester.pumpWidget(
         ProviderContainer(
           child: MaterialApp(
@@ -99,7 +99,8 @@ void main() {
                             ),
                             TextField(
                               decoration: InputDecoration(
-                                hintText: 'Search by description, ID, or site visit ID',
+                                hintText:
+                                    'Search by description, ID, or site visit ID',
                                 prefixIcon: const Icon(Icons.search),
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(8),
@@ -202,8 +203,9 @@ void main() {
       expect(find.text('Transactions'), findsWidgets);
     });
 
-    testWidgets('Withdrawal list items display correctly',
-        (WidgetTester tester) async {
+    testWidgets('Withdrawal list items display correctly', (
+      WidgetTester tester,
+    ) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -236,7 +238,10 @@ void main() {
                         ],
                       ),
                       IconButton(
-                        icon: const Icon(Icons.cancel_outlined, color: Colors.red),
+                        icon: const Icon(
+                          Icons.cancel_outlined,
+                          color: Colors.red,
+                        ),
                         onPressed: () {},
                       ),
                     ],
@@ -253,7 +258,9 @@ void main() {
       expect(find.byIcon(Icons.cancel_outlined), findsOneWidget);
     });
 
-    testWidgets('Amount validation message appears', (WidgetTester tester) async {
+    testWidgets('Amount validation message appears', (
+      WidgetTester tester,
+    ) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -261,9 +268,7 @@ void main() {
               children: [
                 TextField(
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Amount (SDG)',
-                  ),
+                  decoration: const InputDecoration(labelText: 'Amount (SDG)'),
                 ),
                 const SizedBox(height: 12),
                 const Text(
@@ -289,9 +294,9 @@ void main() {
                   child: Center(
                     child: Text(
                       'No transactions found',
-                      style: Theme.of(tester.element(find.byType(Center)))
-                          .textTheme
-                          .bodyMedium,
+                      style: Theme.of(
+                        tester.element(find.byType(Center)),
+                      ).textTheme.bodyMedium,
                     ),
                   ),
                 ),
@@ -304,7 +309,9 @@ void main() {
       expect(find.text('No transactions found'), findsOneWidget);
     });
 
-    testWidgets('Pending withdrawals alert displays', (WidgetTester tester) async {
+    testWidgets('Pending withdrawals alert displays', (
+      WidgetTester tester,
+    ) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -330,10 +337,7 @@ void main() {
                         const SizedBox(height: 4),
                         Text(
                           'Total amount: 500.00 SDG',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey,
-                          ),
+                          style: TextStyle(fontSize: 12, color: Colors.grey),
                         ),
                       ],
                     ),
@@ -345,7 +349,10 @@ void main() {
         ),
       );
 
-      expect(find.text('You have 1 pending withdrawal request'), findsOneWidget);
+      expect(
+        find.text('You have 1 pending withdrawal request'),
+        findsOneWidget,
+      );
       expect(find.text('Total amount: 500.00 SDG'), findsOneWidget);
     });
   });
