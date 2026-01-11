@@ -163,18 +163,76 @@ class _MMPScreenState extends State<MMPScreen> {
     }
   }
 
-  Future<void> _loadDataCollectorData() async {
+  Future<void> _loadDataCollectorData({bool preserveExistingData = false}) async {
+    final supabase = Supabase.instance.client;
+    
     try {
-      if (_userId == null) return;
+      // Validate session before starting reload
+      var session = supabase.auth.currentSession;
+      if (session == null || session.isExpired) {
+        debugPrint('[_loadDataCollectorData] Session expired, refreshing...');
+        try {
+          await supabase.auth.refreshSession();
+          session = supabase.auth.currentSession;
+          if (session == null) {
+            debugPrint('[_loadDataCollectorData] Session refresh failed - aborting reload');
+            return;
+          }
+          // Update _userId if it changed
+          final currentUserId = supabase.auth.currentUser?.id;
+          if (currentUserId != null) {
+            _userId = currentUserId;
+          }
+        } catch (refreshError) {
+          debugPrint('[_loadDataCollectorData] Session refresh error: $refreshError');
+          return;
+        }
+      }
+      
+      // Re-validate _userId from current session
+      final currentUserId = supabase.auth.currentUser?.id;
+      if (currentUserId == null) {
+        debugPrint('[_loadDataCollectorData] User ID is null - aborting reload');
+        return;
+      }
+      _userId = currentUserId;
+
+      debugPrint('[_loadDataCollectorData] Starting reload with userId: $_userId (preserveExistingData: $preserveExistingData)');
+      
+      // If preserving data, don't clear existing lists - they'll be updated with new data
+      if (!preserveExistingData) {
+        // Only clear if this is a fresh load, not a background refresh
+      }
 
       // Load available sites (Dispatched, not accepted, in collector's area)
       await _loadAvailableSites();
       
+      // Verify session after each major operation
+      session = supabase.auth.currentSession;
+      if (session == null || session.isExpired) {
+        debugPrint('[_loadDataCollectorData] Session expired after _loadAvailableSites, refreshing...');
+        await supabase.auth.refreshSession();
+      }
+      
       // Load smart assigned sites (status = 'Assigned', accepted_by = currentUser, not cost-acknowledged)
       await _loadSmartAssignedSites();
       
+      // Verify session
+      session = supabase.auth.currentSession;
+      if (session == null || session.isExpired) {
+        debugPrint('[_loadDataCollectorData] Session expired after _loadSmartAssignedSites, refreshing...');
+        await supabase.auth.refreshSession();
+      }
+      
       // Load my sites (all sites accepted by this collector)
       await _loadMySites();
+      
+      // Verify session
+      session = supabase.auth.currentSession;
+      if (session == null || session.isExpired) {
+        debugPrint('[_loadDataCollectorData] Session expired after _loadMySites, refreshing...');
+        await supabase.auth.refreshSession();
+      }
       
       // Load unsynced completed visits (from offline DB if available)
       await _loadUnsyncedCompletedVisits();
@@ -185,8 +243,25 @@ class _MMPScreenState extends State<MMPScreen> {
       // Group available sites by state-locality
       _groupAvailableSites();
       
+      debugPrint('[_loadDataCollectorData] Reload completed successfully');
+      
     } catch (e) {
-      debugPrint('Error loading data collector data: $e');
+      debugPrint('[_loadDataCollectorData] Error loading data collector data: $e');
+      
+      // Check if it's an auth error
+      final errorStr = e.toString().toLowerCase();
+      if (errorStr.contains('auth') || errorStr.contains('unauthorized') || 
+          errorStr.contains('jwt') || errorStr.contains('token')) {
+        debugPrint('[_loadDataCollectorData] Auth error during reload - attempting recovery');
+        try {
+          await supabase.auth.refreshSession();
+          debugPrint('[_loadDataCollectorData] Session refreshed after auth error');
+        } catch (refreshError) {
+          debugPrint('[_loadDataCollectorData] Session refresh after error failed: $refreshError');
+          // Don't throw - just log and return, don't trigger logout
+        }
+      }
+      // Don't rethrow - we don't want reload errors to cause logout
     }
   }
 
@@ -237,15 +312,24 @@ class _MMPScreenState extends State<MMPScreen> {
   }
 
   Future<void> _loadAvailableSites() async {
+    final supabase = Supabase.instance.client;
+    
     try {
       if (_userId == null) return;
+
+      // Verify session before query
+      var session = supabase.auth.currentSession;
+      if (session == null || session.isExpired) {
+        debugPrint('[_loadAvailableSites] Session expired, refreshing...');
+        await supabase.auth.refreshSession();
+      }
 
       debugPrint('Loading available sites...');
       debugPrint('User state: $_userStateName (ID: $_userStateId)');
       debugPrint('User locality: $_userLocalityName (ID: $_userLocalityId)');
 
       // Build query step by step
-      var query = Supabase.instance.client
+      var query = supabase
           .from('mmp_site_entries')
           .select('*')
           .ilike('status', 'Dispatched');
@@ -285,26 +369,41 @@ class _MMPScreenState extends State<MMPScreen> {
         _availableSites = [];
       }
     } catch (e) {
-      debugPrint('Error loading available sites: $e');
+      debugPrint('[_loadAvailableSites] Error loading available sites: $e');
+      
+      // Check if it's an auth error
+      final errorStr = e.toString().toLowerCase();
+      if (errorStr.contains('auth') || errorStr.contains('unauthorized') || 
+          errorStr.contains('jwt') || errorStr.contains('token')) {
+        debugPrint('[_loadAvailableSites] Auth error - attempting session refresh');
+        try {
+          await supabase.auth.refreshSession();
+          // Don't retry automatically - just log and set empty list
+        } catch (refreshError) {
+          debugPrint('[_loadAvailableSites] Session refresh failed: $refreshError');
+        }
+      }
+      
       _availableSites = [];
       
-      // Show error to user
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error loading sites: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      // Don't show error to user for reload operations - it's not critical
     }
   }
 
   Future<void> _loadSmartAssignedSites() async {
+    final supabase = Supabase.instance.client;
+    
     try {
       if (_userId == null) return;
 
-      final response = await Supabase.instance.client
+      // Verify session before query
+      var session = supabase.auth.currentSession;
+      if (session == null || session.isExpired) {
+        debugPrint('[_loadSmartAssignedSites] Session expired, refreshing...');
+        await supabase.auth.refreshSession();
+      }
+
+      final response = await supabase
           .from('mmp_site_entries')
           .select('*')
           .ilike('status', 'Assigned')
@@ -327,15 +426,36 @@ class _MMPScreenState extends State<MMPScreen> {
         }).toList();
       }
     } catch (e) {
-      debugPrint('Error loading smart assigned sites: $e');
+      debugPrint('[_loadSmartAssignedSites] Error loading smart assigned sites: $e');
+      
+      // Check if it's an auth error
+      final errorStr = e.toString().toLowerCase();
+      if (errorStr.contains('auth') || errorStr.contains('unauthorized') || 
+          errorStr.contains('jwt') || errorStr.contains('token')) {
+        debugPrint('[_loadSmartAssignedSites] Auth error - attempting session refresh');
+        try {
+          await supabase.auth.refreshSession();
+        } catch (refreshError) {
+          debugPrint('[_loadSmartAssignedSites] Session refresh failed: $refreshError');
+        }
+      }
     }
   }
 
   Future<void> _loadMySites() async {
+    final supabase = Supabase.instance.client;
+    
     try {
       if (_userId == null) return;
 
-      final response = await Supabase.instance.client
+      // Verify session before query
+      var session = supabase.auth.currentSession;
+      if (session == null || session.isExpired) {
+        debugPrint('[_loadMySites] Session expired, refreshing...');
+        await supabase.auth.refreshSession();
+      }
+
+      final response = await supabase
           .from('mmp_site_entries')
           .select('*')
           .eq('accepted_by', _userId!)
@@ -348,7 +468,19 @@ class _MMPScreenState extends State<MMPScreen> {
             .toList();
       }
     } catch (e) {
-      debugPrint('Error loading my sites: $e');
+      debugPrint('[_loadMySites] Error loading my sites: $e');
+      
+      // Check if it's an auth error
+      final errorStr = e.toString().toLowerCase();
+      if (errorStr.contains('auth') || errorStr.contains('unauthorized') || 
+          errorStr.contains('jwt') || errorStr.contains('token')) {
+        debugPrint('[_loadMySites] Auth error - attempting session refresh');
+        try {
+          await supabase.auth.refreshSession();
+        } catch (refreshError) {
+          debugPrint('[_loadMySites] Session refresh failed: $refreshError');
+        }
+      }
     }
   }
 
@@ -1383,7 +1515,7 @@ class _MMPScreenState extends State<MMPScreen> {
         updateData['visit_completed_at'] = now;
       }
       if (currentSite?['visit_completed_by'] == null) {
-        updateData['visit_completed_by'] = _userId;
+        updateData['visit_completed_by'] = userId;
       }
 
       debugPrint('[_completeVisit] Updating mmp_site_entries for site: ${site['id']}');
@@ -1463,19 +1595,58 @@ class _MMPScreenState extends State<MMPScreen> {
         
       }
 
+      // Verify session is still valid before reloading data
+      currentSession = supabase.auth.currentSession;
+      if (currentSession == null || currentSession.isExpired) {
+        debugPrint('[_completeVisit] Session expired before reload, refreshing...');
+        try {
+          await supabase.auth.refreshSession();
+          debugPrint('[_completeVisit] Session refreshed before reload');
+        } catch (refreshError) {
+          debugPrint('[_completeVisit] Session refresh before reload failed: $refreshError');
+          // Don't throw - just log and continue, the reload might still work
+        }
+      }
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Visit completed and report submitted successfully'),
             backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
           ),
         );
       }
 
-      // Reload data
-      await _loadDataCollectorData();
-      if (!mounted) return;
-      setState(() {});
+      // Don't reload immediately - let the user see the success message and stay on the page
+      // The realtime subscription will automatically update the UI when the database changes
+      // If realtime is not working, we can reload in the background after a delay
+      debugPrint('[_completeVisit] Completion successful - UI will update via realtime subscription');
+      
+      // Optionally reload in background after a longer delay to ensure UI stays responsive
+      // Only reload if realtime updates don't work
+      final finalSessionCheck = supabase.auth.currentSession;
+      if (finalSessionCheck != null && !finalSessionCheck.isExpired) {
+        // Reload after 2 seconds in the background - this gives realtime a chance to update first
+        Future.delayed(const Duration(seconds: 2), () async {
+          if (!mounted) return;
+          
+          try {
+            debugPrint('[_completeVisit] Starting background refresh (realtime may have already updated)...');
+            // Only reload specific data, not everything
+            await _loadAvailableSites();
+            await _loadMySites();
+            if (mounted) {
+              // Only update if widget is still mounted and visible
+              setState(() {});
+              debugPrint('[_completeVisit] Background refresh completed');
+            }
+          } catch (reloadError) {
+            debugPrint('[_completeVisit] Error during background refresh (non-critical): $reloadError');
+            // Silently fail - realtime should handle updates
+          }
+        });
+      }
 
     } catch (e, stack) {
       debugPrint('[_completeVisit] Error completing visit: $e');

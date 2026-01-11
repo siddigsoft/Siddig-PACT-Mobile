@@ -24,7 +24,7 @@ class MovableOnlineOfflineToggle extends ConsumerStatefulWidget {
 
 class _MovableOnlineOfflineToggleState
     extends ConsumerState<MovableOnlineOfflineToggle> {
-  late Offset _position;
+  Offset _position = const Offset(20, 100); // Initialize with default value
   bool _isDragging = false;
   final String _positionKey = 'movable_toggle_position';
   Size? _lastScreenSize;
@@ -158,7 +158,10 @@ class _MovableOnlineOfflineToggleState
         _handleScreenSizeChange(screenSize);
 
         // Ensure position is always valid for current screen size
-        final validPosition = _validateAndAdjustPosition(_position, screenSize);
+        // Only validate if position has been initialized
+        final validPosition = _positionInitialized 
+            ? _validateAndAdjustPosition(_position, screenSize)
+            : _position;
 
         return Stack(
           children: [

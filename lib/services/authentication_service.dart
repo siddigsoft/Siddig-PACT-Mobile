@@ -39,29 +39,51 @@ class AuthenticationService {
       } else if (data.event == AuthChangeEvent.signedOut) {
         // Only handle sign out if it's a real sign out, not a transient error
         // Check if this is a user-initiated sign out or a token refresh failure
-        final previousSession = supabase.auth.currentSession;
+        final currentSession = supabase.auth.currentSession;
         final hasLocalAuthData = _hasLocalAuthData();
         
-        debugPrint('[AuthenticationService] Sign out detected - previous session: ${previousSession != null}, has local auth: $hasLocalAuthData');
+        debugPrint('[AuthenticationService] Sign out detected - current session: ${currentSession != null}, has local auth: $hasLocalAuthData');
         
         // If we have local auth data but no session, this might be a transient error
         // Don't clear local data immediately - user might still be able to recover
         // Only clear if it's been a while or if explicitly requested
-        if (hasLocalAuthData && previousSession == null) {
+        // Also check if we had a previous session - if not, this might be a false alarm
+        if (hasLocalAuthData && currentSession == null) {
           debugPrint('[AuthenticationService] Detected potential transient auth error - delaying local data clear');
           // Delay clearing to allow for potential recovery
-          Future.delayed(const Duration(seconds: 2), () {
-            final currentSession = supabase.auth.currentSession;
-            if (currentSession == null) {
+          // Give it more time (5 seconds) for long operations like photo uploads
+          Future.delayed(const Duration(seconds: 5), () async {
+            // Try to refresh session before clearing
+            try {
+              final refreshedSession = await supabase.auth.refreshSession();
+              if (refreshedSession.session != null) {
+                debugPrint('[AuthenticationService] Session recovered after delay - not clearing local data');
+                // Update local auth data with refreshed session
+                _storeAuthDataLocally(refreshedSession.session!);
+                return;
+              }
+            } catch (refreshError) {
+              debugPrint('[AuthenticationService] Session refresh after delay failed: $refreshError');
+            }
+            
+            // Final check - is session still null?
+            final finalSessionCheck = supabase.auth.currentSession;
+            if (finalSessionCheck == null) {
               debugPrint('[AuthenticationService] Session still null after delay - clearing local data');
               _handleSignOut();
             } else {
-              debugPrint('[AuthenticationService] Session recovered - not clearing local data');
+              debugPrint('[AuthenticationService] Session exists after delay - not clearing local data');
+              // Update local auth data with current session
+              _storeAuthDataLocally(finalSessionCheck);
             }
           });
-        } else {
-          // Normal sign out flow
+        } else if (!hasLocalAuthData) {
+          // No local auth data means this is likely a clean sign out or already cleared
+          debugPrint('[AuthenticationService] No local auth data - normal sign out flow');
           _handleSignOut();
+        } else {
+          // Session exists but sign-out event fired - might be a false alarm during refresh
+          debugPrint('[AuthenticationService] Session exists but sign-out event fired - likely false alarm, ignoring');
         }
       } else if (data.event == AuthChangeEvent.tokenRefreshed) {
         debugPrint('[AuthenticationService] Token refreshed successfully');
@@ -105,23 +127,38 @@ class AuthenticationService {
         await _storeAuthDataLocally(session);
       }
 
-      // Update user's last_active timestamp
-      await supabase.from('profiles').update({
-        'last_active': DateTime.now().toIso8601String(),
-      }).eq('id', user.id);
+      // Update user's last_active timestamp (if column exists)
+      try {
+        await supabase.from('profiles').update({
+          'last_active': DateTime.now().toIso8601String(),
+        }).eq('id', user.id);
+      } catch (e) {
+        // Column might not exist, ignore error
+        debugPrint('Note: Could not update last_active (column may not exist): $e');
+      }
 
-      // Ensure user has worker/dataCollector role
-      final roleExists = await supabase
-          .from('user_roles')
-          .select()
-          .eq('user_id', user.id)
-          .maybeSingle();
+      // Ensure user has worker/dataCollector role (only if RLS allows)
+      try {
+        final roleExists = await supabase
+            .from('user_roles')
+            .select()
+            .eq('user_id', user.id)
+            .maybeSingle();
 
-      if (roleExists == null) {
-        await supabase.from('user_roles').insert({
-          'user_id': user.id,
-          'role': 'dataCollector',
-        });
+        if (roleExists == null) {
+          try {
+            await supabase.from('user_roles').insert({
+              'user_id': user.id,
+              'role': 'dataCollector',
+            });
+          } catch (insertError) {
+            // RLS might prevent insertion, that's okay - user might already have role from elsewhere
+            debugPrint('Note: Could not insert dataCollector role (RLS may prevent): $insertError');
+          }
+        }
+      } catch (e) {
+        // Role check/insert failed, but don't block sign-in
+        debugPrint('Note: Role check/insert failed (non-critical): $e');
       }
     } catch (e) {
       debugPrint('Error handling sign in: $e');
