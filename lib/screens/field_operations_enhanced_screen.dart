@@ -14,6 +14,7 @@ import '../services/location_service.dart';
 import '../services/photo_upload_service.dart';
 import '../services/advance_request_service.dart';
 import '../models/visit_report.dart';
+import '../models/visit_report_data.dart';
 import '../widgets/request_advance_dialog.dart';
 
 class FieldOperationsEnhancedScreen extends StatefulWidget {

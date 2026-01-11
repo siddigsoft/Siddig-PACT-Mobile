@@ -54,9 +54,13 @@
 	<key>NSFaceIDUsageDescription</key>
 	<string>We use Face ID to let you sign in securely without your password.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>This app needs access to location to show your position on the map.</string>
+	<string>Location access is required to track site visits accurately.</string>
 	<key>NSLocationAlwaysUsageDescription</key>
-	<string>This app needs access to location to show your position on the map.</string>
+	<string>Location access is required to track site visits accurately.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Camera access is required to capture site visit photos.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Photo library access is required to select site visit photos.</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

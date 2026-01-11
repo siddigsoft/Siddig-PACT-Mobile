@@ -1,52 +1,87 @@
-// lib/services/photo_upload_service.dart
-
 import 'dart:io';
-import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:path/path.dart' as path;
+import 'dart:developer' as developer;
 
 class PhotoUploadService {
+  /// Upload photos to Supabase Storage
+  /// 
+  /// [photoPaths] is a list of local file paths (String) that will be uploaded
+  /// Returns a list of public URLs for the uploaded photos
   static Future<List<String>> uploadPhotos(
     String siteId,
-    List<File> photos,
+    List<String> photoPaths,
   ) async {
     final uploadedUrls = <String>[];
 
-    for (final photo in photos) {
-      try {
-        final fileName = 'visit-photos/$siteId/${DateTime.now().millisecondsSinceEpoch}-${path.basename(photo.path)}';
-        
-        final bytes = await photo.readAsBytes();
-        
-        // Try site-visit-photos first, fallback to site-visit-media
-        try {
-          await Supabase.instance.client.storage
-              .from('site-visit-photos')
-              .uploadBinary(fileName, bytes);
+    try {
+      for (int i = 0; i < photoPaths.length; i++) {
+        final photoPath = photoPaths[i];
+        final file = File(photoPath);
 
-          final publicUrl = Supabase.instance.client.storage
-              .from('site-visit-photos')
-              .getPublicUrl(fileName);
-          uploadedUrls.add(publicUrl);
-        } catch (e) {
-          // Fallback to site-visit-media bucket
-          await Supabase.instance.client.storage
-              .from('site-visit-media')
-              .uploadBinary(fileName, bytes);
-
-          final publicUrl = Supabase.instance.client.storage
-              .from('site-visit-media')
-              .getPublicUrl(fileName);
-          uploadedUrls.add(publicUrl);
+        if (!await file.exists()) {
+          developer.log('Photo file does not exist: $photoPath');
+          continue;
         }
 
-      } catch (e) {
-        debugPrint('Error uploading photo: $e');
-        // Continue with other photos
-      }
-    }
+        // Create unique file name
+        final timestamp = DateTime.now().millisecondsSinceEpoch;
+        final fileName = 'site-visits/$siteId/${timestamp}_$i.jpg';
+        
+        try {
+          // Upload to Supabase Storage
+          await Supabase.instance.client.storage
+              .from('site-visit-photos')
+              .upload(
+                fileName,
+                file,
+                fileOptions: const FileOptions(
+                  contentType: 'image/jpeg',
+                  upsert: false,
+                ),
+              );
+          
+          // Get public URL
+          final publicUrl = Supabase.instance.client.storage
+              .from('site-visit-photos')
+              .getPublicUrl(fileName);
 
-    return uploadedUrls;
+          uploadedUrls.add(publicUrl);
+          developer.log('Photo uploaded: $publicUrl');
+        } catch (uploadError) {
+          developer.log('Error uploading photo $i: $uploadError');
+          // Continue with other photos even if one fails
+          continue;
+        }
+      }
+
+      return uploadedUrls;
+    } catch (e) {
+      developer.log('Error uploading photos: $e');
+      rethrow;
+    }
+  }
+
+  /// Delete photos from storage
+  static Future<void> deletePhotos(List<String> photoUrls) async {
+    try {
+      for (final url in photoUrls) {
+        // Extract file path from URL
+        final uri = Uri.parse(url);
+        final pathParts = uri.path.split('/');
+        final fileName = pathParts.last;
+
+        if (pathParts.length > 1) {
+          final folderPath = pathParts.sublist(0, pathParts.length - 1).join('/');
+          final fullPath = '$folderPath/$fileName';
+
+          await Supabase.instance.client.storage
+              .from('site-visit-photos')
+              .remove([fullPath]);
+        }
+      }
+    } catch (e) {
+      developer.log('Error deleting photos: $e');
+    }
   }
 }
 

@@ -1,9 +1,10 @@
-// lib/models/visit_report.dart
+import 'package:supabase_flutter/supabase_flutter.dart';
 
+/// Model for visit report stored in database
 class VisitReport {
   final String siteId;
-  final List<String> activities;
-  final String? notes;
+  final String activities; // Stored as string in database
+  final String notes;
   final int durationMinutes;
   final double? latitude;
   final double? longitude;
@@ -14,7 +15,7 @@ class VisitReport {
   VisitReport({
     required this.siteId,
     required this.activities,
-    this.notes,
+    required this.notes,
     required this.durationMinutes,
     this.latitude,
     this.longitude,
@@ -24,41 +25,19 @@ class VisitReport {
   });
 
   Map<String, dynamic> toJson({String? submittedBy}) {
-    // Build comprehensive notes that includes all data
-    final notesText = StringBuffer();
-    if (notes != null && notes!.isNotEmpty) {
-      notesText.writeln(notes);
-    }
-    notesText.writeln('\n--- Visit Details ---');
-    notesText.writeln('Activities: ${activities.join(", ")}');
-    notesText.writeln('Duration: $durationMinutes minutes');
-    if (latitude != null && longitude != null) {
-      notesText.writeln('Location: $latitude, $longitude (accuracy: ${accuracy ?? "N/A"}m)');
-    }
-
-    final reportData = <String, dynamic>{
-      'site_visit_id': siteId,
-      'notes': notesText.toString(),
+    return {
+      'site_id': siteId,
+      'submitted_by': submittedBy,
+      'activities': activities,
+      'notes': notes,
+      'duration_minutes': durationMinutes,
+      'latitude': latitude,
+      'longitude': longitude,
+      'accuracy': accuracy,
+      'photo_urls': photoUrls,
       'submitted_at': submittedAt.toIso8601String(),
+      'created_at': DateTime.now().toIso8601String(),
     };
-
-    // Add optional fields if provided
-    if (submittedBy != null) {
-      reportData['submitted_by'] = submittedBy;
-    }
-    
-    // Include additional fields - Supabase will ignore if columns don't exist
-    reportData['activities'] = activities;
-    reportData['duration_minutes'] = durationMinutes;
-    if (latitude != null && longitude != null) {
-      reportData['coordinates'] = {
-        'latitude': latitude,
-        'longitude': longitude,
-        'accuracy': accuracy,
-      };
-    }
-
-    return reportData;
   }
 }
 
