@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:google_fonts/google_fonts.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
@@ -493,8 +494,9 @@ class _VisitReportDialogState extends State<VisitReportDialog> {
       ),
       child: Column(
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               Row(
                 children: [
@@ -548,10 +550,13 @@ class _VisitReportDialogState extends State<VisitReportDialog> {
                 ],
               ),
               if (_coordinates != null)
-                TextButton.icon(
-                  onPressed: _isGettingLocation ? null : _refreshLocation,
-                  icon: const Icon(Icons.refresh, size: 18),
-                  label: Text(_isGettingLocation ? 'Refreshing...' : 'Refresh'),
+                Padding(
+                  padding: const EdgeInsets.only(top: 8.0),
+                  child: TextButton.icon(
+                    onPressed: _isGettingLocation ? null : _refreshLocation,
+                    icon: const Icon(Icons.refresh, size: 18),
+                    label: Text(_isGettingLocation ? 'Refreshing...' : 'Refresh'),
+                  ),
                 ),
             ],
           ),
@@ -564,45 +569,53 @@ class _VisitReportDialogState extends State<VisitReportDialog> {
             const SizedBox(height: 16),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Accuracy',
-                      style: GoogleFonts.poppins(
-                        fontSize: 12,
-                        color: AppColors.textLight,
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Accuracy',
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          color: AppColors.textLight,
+                        ),
                       ),
-                    ),
-                    Text(
-                      '±${_coordinates!.accuracy.toStringAsFixed(1)}m',
-                      style: GoogleFonts.poppins(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        fontFeatures: [const FontFeature.tabularFigures()],
+                      Text(
+                        '±${_coordinates!.accuracy.toStringAsFixed(1)}m',
+                        style: GoogleFonts.poppins(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          fontFeatures: [const FontFeature.tabularFigures()],
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      'Coordinates',
-                      style: GoogleFonts.poppins(
-                        fontSize: 12,
-                        color: AppColors.textLight,
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        'Coordinates',
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          color: AppColors.textLight,
+                        ),
                       ),
-                    ),
-                    Text(
-                      '${_coordinates!.latitude.toStringAsFixed(6)}, ${_coordinates!.longitude.toStringAsFixed(6)}',
-                      style: GoogleFonts.poppins(
-                        fontSize: 11,
-                        fontFeatures: [const FontFeature.tabularFigures()],
+                      Text(
+                        '${_coordinates!.latitude.toStringAsFixed(6)}, ${_coordinates!.longitude.toStringAsFixed(6)}',
+                        textAlign: TextAlign.right,
+                        softWrap: true,
+                        style: GoogleFonts.poppins(
+                          fontSize: 11,
+                          fontFeatures: [const FontFeature.tabularFigures()],
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -906,8 +919,21 @@ class _VisitReportDialogState extends State<VisitReportDialog> {
                   return const SizedBox.shrink();
                 }
                 
+                // On web, dart:io File is not supported. Show a simple placeholder
+                if (kIsWeb) {
+                  return Container(
+                    decoration: BoxDecoration(
+                      color: AppColors.backgroundGray,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Center(
+                      child: Icon(Icons.image_not_supported, size: 24),
+                    ),
+                  );
+                }
+
                 final file = File(photoPath);
-                
+
                 return Stack(
                   children: [
                     ClipRRect(

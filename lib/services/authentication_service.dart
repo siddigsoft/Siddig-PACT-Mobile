@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart' show kIsWeb, kDebugMode;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../models/user.dart';
+import '../models/user.dart' as app_models;
 
 /// Handles all authentication-related operations
 /// Implements TypeScript UserContext authentication flows
@@ -22,6 +22,12 @@ class AuthenticationService {
 
     // Listen for auth state changes
     supabase.auth.onAuthStateChange.listen((data) {
+      // Debug logging to help trace unexpected sign-outs
+      debugPrint('[AuthenticationService] Auth state changed: ${data.event} at ${DateTime.now().toIso8601String()}');
+      if (kDebugMode) {
+        final userId = data.session?.user?.id;
+        debugPrint('[AuthenticationService] Auth user for event ${data.event}: ${userId ?? 'null'}');
+      }
       if (data.event == AuthChangeEvent.signedIn) {
         _handleSignIn(data.session?.user);
       } else if (data.event == AuthChangeEvent.signedOut) {
@@ -32,7 +38,8 @@ class AuthenticationService {
     _initialized = true;
   }
 
-  Future<void> _handleSignIn(AuthUser? user) async {
+  // Handle Supabase auth user sign-in (User is Supabase/gotrue user)
+  Future<void> _handleSignIn(User? user) async {
     if (user == null) return;
 
     try {
@@ -66,6 +73,11 @@ class AuthenticationService {
   }
 
   void _handleSignOut() {
+    debugPrint('[AuthenticationService] _handleSignOut invoked at ${DateTime.now().toIso8601String()}');
+    if (kDebugMode) {
+      final currentUserId = supabase.auth.currentUser?.id;
+      debugPrint('[AuthenticationService] Clearing local auth data for user: ${currentUserId ?? 'null'}');
+    }
     _clearLocalAuthData();
   }
 
@@ -73,7 +85,7 @@ class AuthenticationService {
   Stream<AuthState> get authStateChanges => supabase.auth.onAuthStateChange;
 
   // Current user
-  AuthUser? get currentAuthUser => supabase.auth.currentUser;
+  User? get currentAuthUser => supabase.auth.currentUser;
 
   /// REGISTRATION FLOW
   /// User submits registration form with email, password, name, phone, role, location info, avatar
@@ -83,7 +95,7 @@ class AuthenticationService {
   /// Profile created via trigger with status 'pending'
   /// User awaits admin approval before login
   /// Verification email sent automatically by Supabase
-  Future<bool> registerUser(UserRegister userData) async {
+  Future<bool> registerUser(app_models.UserRegister userData) async {
     try {
       final response = await supabase.auth.signUp(
         email: userData.email,
@@ -126,7 +138,7 @@ class AuthenticationService {
   /// If approved: Construct User object from profile + auth metadata
   /// Merge roles from `user_roles` table
   /// Store user in localStorage and context
-  Future<User?> login(String email, String password) async {
+  Future<app_models.User?> login(String email, String password) async {
     try {
       final authResponse = await supabase.auth.signInWithPassword(
         email: email,
@@ -151,7 +163,7 @@ class AuthenticationService {
           .select('role')
           .eq('user_id', authResponse.user!.id);
 
-      final userRoles = <AppRole>[];
+      final userRoles = <app_models.AppRole>[];
       if (rolesData != null && rolesData is List) {
         for (final roleData in rolesData) {
           final roleStr = roleData['role'] as String?;
@@ -237,7 +249,7 @@ class AuthenticationService {
   /// Restores user session from existing Supabase auth token
   /// E.g., after page refresh
   /// Implements retry logic with exponential backoff
-  Future<User?> hydrateCurrentUser() async {
+  Future<app_models.User?> hydrateCurrentUser() async {
     const maxRetries = 10;
     const baseDelay = 300;
 
@@ -248,24 +260,6 @@ class AuthenticationService {
           debugPrint(
               'Hydration retry attempt ${attempt + 1}/$maxRetries, delay ${delay}ms...');
           await Future.delayed(Duration(milliseconds: delay));
-        }
-
-        // Get current session
-        final session = await supabase.auth.getSession();
-        if (session.session == null || session.session!.user == null) {
-          debugPrint('No session found for hydration');
-          continue;
-        }
-
-        // Check MFA/AAL level
-        final aalResponse = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-        final currentLevel = aalResponse.currentLevel;
-        final nextLevel = aalResponse.nextLevel;
-
-        if (nextLevel == 'aal2' && currentLevel == 'aal1') {
-          debugPrint(
-              'Session still at AAL1, MFA not yet complete, retrying...');
-          continue;
         }
 
         // Get current auth user
@@ -295,7 +289,7 @@ class AuthenticationService {
             .select('role')
             .eq('user_id', user.id);
 
-        final userRoles = <AppRole>[];
+        final userRoles = <app_models.AppRole>[];
         if (rolesData != null && rolesData is List) {
           for (final roleData in rolesData) {
             final roleStr = roleData['role'] as String?;
@@ -412,26 +406,26 @@ class AuthenticationService {
     return delay > 2000 ? 2000 : delay;
   }
 
-  /// Build User object from profile data
-  User _buildUserFromProfile(
-    AuthUser authUser,
+  /// Build app user object from profile data
+  app_models.User _buildUserFromProfile(
+    User authUser,
     Map<String, dynamic>? profileData,
-    List<AppRole> userRoles,
+    List<app_models.AppRole> userRoles,
   ) {
     final metadata = authUser.userMetadata ?? {};
 
     // Parse location if stored as JSON string
-    UserLocation? location;
+    app_models.UserLocation? location;
     if (profileData != null && profileData['location'] != null) {
       try {
         final locationData = profileData['location'];
         if (locationData is String) {
           // Try to parse JSON string
-          location = UserLocation.fromJson(
+          location = app_models.UserLocation.fromJson(
             Map<String, dynamic>.from(Uri.splitQueryString(locationData)),
           );
         } else if (locationData is Map) {
-          location = UserLocation.fromJson(
+          location = app_models.UserLocation.fromJson(
             Map<String, dynamic>.from(locationData),
           );
         }
@@ -441,10 +435,10 @@ class AuthenticationService {
     }
 
     // Parse classification if available
-    UserClassification? classification;
+    app_models.UserClassification? classification;
     if (profileData != null && profileData['classification_level'] != null) {
       try {
-        classification = UserClassification(
+        classification = app_models.UserClassification(
           level: profileData['classification_level'] ?? 'level_1',
           roleScope: profileData['role_scope'] ?? 'state',
           hasRetainer: profileData['has_retainer'] ?? false,
@@ -461,7 +455,7 @@ class AuthenticationService {
     final role = _parseString(metadata['role']) ?? 'dataCollector';
     final isApproved = profileData?['status'] == 'approved';
 
-    return User(
+    return app_models.User(
       id: authUser.id,
       name: _parseString(metadata['name']) ?? authUser.email?.split('@')[0] ?? 'User',
       email: authUser.email ?? '',
@@ -473,7 +467,8 @@ class AuthenticationService {
       phoneVerified: profileData?['phone_verified'] as bool? ?? false,
       phoneVerifiedAt: profileData?['phone_verified_at'] as String?,
       emailVerified: authUser.emailConfirmedAt != null,
-      emailVerifiedAt: authUser.emailConfirmedAt?.toIso8601String(),
+      // emailConfirmedAt is already a String? in supabase_flutter 2.x
+      emailVerifiedAt: authUser.emailConfirmedAt,
       stateId: _parseString(metadata['stateId']) ?? profileData?['state_id'] as String?,
       localityId: _parseString(metadata['localityId']) ?? profileData?['locality_id'] as String?,
       hubId: _parseString(metadata['hubId']) ?? profileData?['hub_id'] as String?,
@@ -490,19 +485,19 @@ class AuthenticationService {
   }
 
   /// Convert string to AppRole
-  AppRole _stringToAppRole(String value) {
+  app_models.AppRole _stringToAppRole(String value) {
     switch (value.toLowerCase()) {
       case 'datacollector':
-        return AppRole.dataCollector;
+        return app_models.AppRole.dataCollector;
       case 'coordinator':
-        return AppRole.coordinator;
+        return app_models.AppRole.coordinator;
       case 'supervisor':
-        return AppRole.supervisor;
+        return app_models.AppRole.supervisor;
       case 'fieldopmanager':
       case 'fom':
-        return AppRole.fom;
+        return app_models.AppRole.fom;
       case 'admin':
-        return AppRole.admin;
+        return app_models.AppRole.admin;
       default:
         throw Exception('Unknown role: $value');
     }
@@ -537,7 +532,7 @@ class AuthenticationService {
   }
 
   /// Store user data locally
-  Future<void> _storeUserLocally(User user) async {
+  Future<void> _storeUserLocally(app_models.User user) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final userJson = user.toJson();
@@ -618,7 +613,7 @@ class AuthenticationService {
   }
 
   /// Get cached user profile data
-  Future<User?> getLocalUserProfile() async {
+  Future<app_models.User?> getLocalUserProfile() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final userJsonStr = prefs.getString('current_user');

@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'dart:developer' as developer;
 
 class PhotoUploadService {
@@ -14,6 +15,14 @@ class PhotoUploadService {
     final uploadedUrls = <String>[];
 
     try {
+      // On Flutter Web, dart:io File APIs are not supported. For now, skip
+      // storage uploads on web to avoid runtime errors and allow the
+      // completion flow to succeed.
+      if (kIsWeb) {
+        developer.log('PhotoUploadService: skipping photo uploads on web (not supported with File-based implementation).');
+        return uploadedUrls;
+      }
+
       for (int i = 0; i < photoPaths.length; i++) {
         final photoPath = photoPaths[i];
         final file = File(photoPath);

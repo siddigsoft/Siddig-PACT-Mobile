@@ -10,6 +10,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart' hide ChangeNotifierProvider, Consumer;
 import 'package:hive_flutter/hive_flutter.dart';
+import 'services/authentication_service.dart';
 import '../services/biometric_auth_service.dart';
 import 'authentication/login_screen.dart';
 import 'authentication/improved_register_screen.dart';
@@ -68,6 +69,9 @@ void main() async {
       autoRefreshToken: true,
     ),
   );
+
+  // Initialize AuthenticationService so we can observe auth state changes
+  await AuthenticationService().initialize();
 
   // Initialize Hive for local storage
   await Hive.initFlutter();

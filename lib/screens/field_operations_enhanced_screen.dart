@@ -81,6 +81,7 @@ class _MMPScreenState extends State<MMPScreen> {
     try {
       final user = Supabase.instance.client.auth.currentUser;
       if (user == null) {
+        if (!mounted) return;
         setState(() => _isLoading = false);
         return;
       }
@@ -117,9 +118,11 @@ class _MMPScreenState extends State<MMPScreen> {
         _setupRealtimeSubscription();
       }
 
+      if (!mounted) return;
       setState(() => _isLoading = false);
     } catch (e) {
       debugPrint('Error initializing MMP: $e');
+      if (!mounted) return;
       setState(() => _isLoading = false);
     }
   }
@@ -145,12 +148,13 @@ class _MMPScreenState extends State<MMPScreen> {
             event: PostgresChangeEvent.all,
             schema: 'public',
             table: 'down_payment_requests',
-            callback: (payload) {
+            callback: (payload) async {
               debugPrint('down_payment_requests changed, reloading...');
-              if (_isDataCollector || _isCoordinator) {
-                _loadAdvanceRequests();
-                setState(() {});
-              }
+              if (!_isDataCollector && !_isCoordinator) return;
+              if (!mounted) return;
+              await _loadAdvanceRequests();
+              if (!mounted) return;
+              setState(() {});
             },
           )
           .subscribe();
@@ -381,6 +385,7 @@ class _MMPScreenState extends State<MMPScreen> {
     try {
       if (_userId == null) return;
 
+      if (!mounted) return;
       setState(() => _loadingAdvanceRequests = true);
 
       // Load all advance requests for this user
@@ -394,18 +399,20 @@ class _MMPScreenState extends State<MMPScreen> {
         // Map requests by site ID (keep most recent for each site)
         final requestsMap = <String, Map<String, dynamic>>{};
         for (final request in response) {
-          final siteId = (request['mmp_site_entry_id'] as String?) ??
+          final siteId = (request['mmp_site_entry_id'] as String?) ?? 
                          (request['site_visit_id'] as String?);
           if (siteId != null && !requestsMap.containsKey(siteId)) {
             requestsMap[siteId] = request as Map<String, dynamic>;
           }
         }
 
+        if (!mounted) return;
         setState(() {
           _advanceRequests = requestsMap;
           _loadingAdvanceRequests = false;
         });
       } else {
+        if (!mounted) return;
         setState(() {
           _advanceRequests = {};
           _loadingAdvanceRequests = false;
@@ -413,6 +420,7 @@ class _MMPScreenState extends State<MMPScreen> {
       }
     } catch (e) {
       debugPrint('Error loading advance requests: $e');
+      if (!mounted) return;
       setState(() {
         _advanceRequests = {};
         _loadingAdvanceRequests = false;
@@ -521,6 +529,7 @@ class _MMPScreenState extends State<MMPScreen> {
 
       // Reload data
       await _loadDataCollectorData();
+      if (!mounted) return;
       setState(() {});
     } catch (e) {
       debugPrint('Error claiming site: $e');
@@ -636,6 +645,7 @@ class _MMPScreenState extends State<MMPScreen> {
 
       // Reload advance requests
       await _loadAdvanceRequests();
+      if (!mounted) return;
       setState(() {});
 
     } catch (e) {
@@ -870,6 +880,7 @@ class _MMPScreenState extends State<MMPScreen> {
       }
 
       await _loadDataCollectorData();
+      if (!mounted) return;
       setState(() {});
     } catch (e) {
       debugPrint('Error acknowledging cost: $e');
@@ -992,7 +1003,8 @@ class _MMPScreenState extends State<MMPScreen> {
 
       // Reload data
       await _loadDataCollectorData();
-      setState(() {});
+      if (!mounted) return;
+      if (mounted) setState(() {});
 
     } catch (e) {
       debugPrint('Error starting visit: $e');
@@ -1009,6 +1021,7 @@ class _MMPScreenState extends State<MMPScreen> {
 
   Future<void> _completeVisit(Map<String, dynamic> site) async {
     try {
+      debugPrint('[_completeVisit] Starting completion for site: ${site['id']}');
       // Show visit report dialog
       final reportData = await showDialog<VisitReportData>(
         context: context,
@@ -1035,25 +1048,37 @@ class _MMPScreenState extends State<MMPScreen> {
         );
       }
 
-      // Create visit report
-      final report = VisitReport(
-        siteId: site['id'].toString(),
-        activities: reportData.activities,
-        notes: reportData.notes,
-        durationMinutes: reportData.durationMinutes,
-        latitude: position?.latitude,
-        longitude: position?.longitude,
-        accuracy: position?.accuracy,
-        photoUrls: photoUrls,
-        submittedAt: DateTime.now(),
-      );
+      // Build coordinates JSON to match existing reports schema
+      final coordinates = position != null
+          ? {
+              'latitude': position.latitude,
+              'longitude': position.longitude,
+              'accuracy': position.accuracy,
+            }
+          : <String, dynamic>{};
+
+      // Prepare insert payload to match existing reports table schema
+      final reportInsert = <String, dynamic>{
+        'site_visit_id': site['id'],
+        'notes': reportData.notes.trim(),
+        'activities': reportData.activities.trim().isEmpty
+            ? null
+            : reportData.activities.trim(),
+        'duration_minutes': reportData.durationMinutes,
+        'coordinates': coordinates,
+        'submitted_by': _userId,
+        'submitted_at': now,
+        'is_synced': true,
+      };
 
       // Save report to database
+      debugPrint('[_completeVisit] Inserting report for site: ${site['id']}');
       final savedReport = await Supabase.instance.client
           .from('reports')
-          .insert(report.toJson(submittedBy: _userId))
+          .insert(reportInsert)
           .select()
           .single();
+      debugPrint('[_completeVisit] Report inserted with id: ${savedReport['id']}');
 
       // Link photos to report
       if (photoUrls.isNotEmpty && savedReport != null) {
@@ -1063,6 +1088,7 @@ class _MMPScreenState extends State<MMPScreen> {
           'storage_path': url, // Use URL as storage path if separate path not available
         }).toList();
 
+        debugPrint('[_completeVisit] Inserting ${reportPhotos.length} report photos');
         await Supabase.instance.client
             .from('report_photos')
             .insert(reportPhotos);
@@ -1102,6 +1128,7 @@ class _MMPScreenState extends State<MMPScreen> {
         updateData['visit_completed_by'] = _userId;
       }
 
+      debugPrint('[_completeVisit] Updating mmp_site_entries for site: ${site['id']}');
       await Supabase.instance.client
           .from('mmp_site_entries')
           .update(updateData)
@@ -1109,6 +1136,7 @@ class _MMPScreenState extends State<MMPScreen> {
 
       // Save GPS to site_locations table
       if (position != null) {
+        debugPrint('[_completeVisit] Inserting final location for site: ${site['id']}');
         await Supabase.instance.client
             .from('site_locations')
             .insert({
@@ -1124,14 +1152,10 @@ class _MMPScreenState extends State<MMPScreen> {
 
       // Create wallet transaction (optional - you may need to implement this)
       try {
-        // TODO: Call your wallet transaction creation function if needed
-        // await createSiteVisitWalletTransaction(
-        //   siteVisitId: site['id'],
-        //   description: 'Site visit completed: ${site['site_name']}',
-        // );
+        
       } catch (e) {
         debugPrint('Error creating wallet transaction: $e');
-        // Don't fail the entire operation
+        
       }
 
       if (mounted) {
@@ -1145,10 +1169,12 @@ class _MMPScreenState extends State<MMPScreen> {
 
       // Reload data
       await _loadDataCollectorData();
+      if (!mounted) return;
       setState(() {});
 
-    } catch (e) {
+    } catch (e, stack) {
       debugPrint('Error completing visit: $e');
+      debugPrint('[_completeVisit] Stack trace: $stack');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
