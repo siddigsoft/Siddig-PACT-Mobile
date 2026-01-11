@@ -14,6 +14,7 @@ import '../theme/app_design_system.dart';
 import '../widgets/app_widgets.dart';
 import '../services/auth_service.dart';
 import '../services/storage_service.dart';
+import '../data/sudan_locations.dart';
 
 class ImprovedRegisterScreen extends StatefulWidget {
   const ImprovedRegisterScreen({super.key});
@@ -35,6 +36,8 @@ class _ImprovedRegisterScreenState extends State<ImprovedRegisterScreen>
   // State
   String? _selectedRole;
   String? _selectedHub;
+  String? _selectedState;
+  String? _selectedLocality;
   bool _isPasswordVisible = false;
   bool _acceptTerms = false;
   bool _isLoading = false;
@@ -50,14 +53,6 @@ class _ImprovedRegisterScreenState extends State<ImprovedRegisterScreen>
     'Admin',
     'ICT',
     'FOM',
-  ];
-
-  final List<String> _hubs = [
-    'Kassala hub',
-    'Kosti hub',
-    'El Fasher hub',
-    'Dongola hub',
-    'Country Office',
   ];
 
   // Services
@@ -306,6 +301,36 @@ class _ImprovedRegisterScreenState extends State<ImprovedRegisterScreen>
     return null;
   }
 
+  String? _validateState(String? value) {
+    if (value == null || value.isEmpty) {
+      return 'Please select a state';
+    }
+    return null;
+  }
+
+  String? _validateLocality(String? value) {
+    if (value == null || value.isEmpty) {
+      return 'Please select a locality';
+    }
+    return null;
+  }
+
+  // Get available states for selected hub
+  List<SudanState> get _availableStates {
+    if (_selectedHub == null) return [];
+    final hub = hubs.firstWhere(
+      (h) => h.id == _selectedHub,
+      orElse: () => hubs.first,
+    );
+    return getStatesInHub(hub.id);
+  }
+
+  // Get available localities for selected state
+  List<Locality> get _availableLocalities {
+    if (_selectedState == null) return [];
+    return getLocalitiesByState(_selectedState!);
+  }
+
   String? _validateName(String? value) {
     if (value == null || value.trim().isEmpty) {
       return 'Please enter your full name';
@@ -362,6 +387,8 @@ class _ImprovedRegisterScreenState extends State<ImprovedRegisterScreen>
             : null,
         role: _selectedRole ?? 'dataCollector',
         hubId: _selectedHub,
+        stateId: _selectedState,
+        localityId: _selectedLocality,
         avatarUrl: avatarUrl,
       );
 
@@ -524,9 +551,14 @@ class _ImprovedRegisterScreenState extends State<ImprovedRegisterScreen>
                         hint: 'Select your hub',
                         icon: Icons.location_city_outlined,
                         value: _selectedHub,
-                        items: _hubs,
+                        items: hubs.map((h) => h.id).toList(),
+                        displayItems: hubs.map((h) => h.name).toList(),
                         onChanged: (value) {
-                          setState(() => _selectedHub = value);
+                          setState(() {
+                            _selectedHub = value;
+                            _selectedState = null; // Reset state when hub changes
+                            _selectedLocality = null; // Reset locality when hub changes
+                          });
                         },
                         validator: _validateHub,
                         delay: 450,
@@ -534,7 +566,52 @@ class _ImprovedRegisterScreenState extends State<ImprovedRegisterScreen>
 
                       const SizedBox(height: 16),
 
-                      // 5. Full Name
+                      // 5. State Dropdown (depends on Hub)
+                      _buildDropdownField(
+                        label: 'Select State',
+                        hint: _selectedHub == null
+                            ? 'Select a hub first'
+                            : 'Select your state',
+                        icon: Icons.map_outlined,
+                        value: _selectedState,
+                        items: _availableStates.map((s) => s.id).toList(),
+                        displayItems: _availableStates.map((s) => s.name).toList(),
+                        onChanged: _selectedHub == null
+                            ? null
+                            : (value) {
+                                setState(() {
+                                  _selectedState = value;
+                                  _selectedLocality = null; // Reset locality when state changes
+                                });
+                              },
+                        validator: _validateState,
+                        delay: 500,
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // 6. Locality Dropdown (depends on State)
+                      _buildDropdownField(
+                        label: 'Select Locality',
+                        hint: _selectedState == null
+                            ? 'Select a state first'
+                            : 'Select your locality',
+                        icon: Icons.location_on_outlined,
+                        value: _selectedLocality,
+                        items: _availableLocalities.map((l) => l.id).toList(),
+                        displayItems: _availableLocalities.map((l) => l.name).toList(),
+                        onChanged: _selectedState == null
+                            ? null
+                            : (value) {
+                                setState(() {
+                                  _selectedLocality = value;
+                                });
+                              },
+                        validator: _validateLocality,
+                        delay: 550,
+                      ),
+
+                      // 7. Full Name
                       _buildTextField(
                         controller: _nameController,
                         label: 'Full Name',
@@ -546,7 +623,7 @@ class _ImprovedRegisterScreenState extends State<ImprovedRegisterScreen>
 
                       const SizedBox(height: 16),
 
-                      // 6. Phone Number
+                      // 8. Phone Number
                       _buildTextField(
                         controller: _phoneController,
                         label: 'Phone Number',
@@ -559,7 +636,7 @@ class _ImprovedRegisterScreenState extends State<ImprovedRegisterScreen>
 
                       const SizedBox(height: 16),
 
-                      // 7. Employee ID (Optional)
+                      // 9. Employee ID (Optional)
                       _buildTextField(
                         controller: _employeeIdController,
                         label: 'Employee ID (Optional)',
@@ -692,10 +769,13 @@ class _ImprovedRegisterScreenState extends State<ImprovedRegisterScreen>
     required IconData icon,
     required String? value,
     required List<String> items,
-    required void Function(String?) onChanged,
+    List<String>? displayItems,
+    void Function(String?)? onChanged,
     String? Function(String?)? validator,
     required int delay,
   }) {
+    // Use displayItems if provided, otherwise use items
+    final displayList = displayItems ?? items;
     return Container(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
@@ -709,7 +789,7 @@ class _ImprovedRegisterScreenState extends State<ImprovedRegisterScreen>
             ],
           ),
           child: DropdownButtonFormField<String>(
-            initialValue: value,
+            value: value,
             onChanged: onChanged,
             validator: validator,
             decoration: InputDecoration(
@@ -738,11 +818,14 @@ class _ImprovedRegisterScreenState extends State<ImprovedRegisterScreen>
                 borderSide: const BorderSide(color: Colors.red),
               ),
             ),
-            items: items.map((String item) {
+            items: items.asMap().entries.map((entry) {
+              final index = entry.key;
+              final item = entry.value;
+              final displayText = displayList[index];
               return DropdownMenuItem<String>(
                 value: item,
                 child: Text(
-                  item,
+                  displayText,
                   style: GoogleFonts.poppins(
                     fontSize: 15,
                     color: AppColors.textDark,
