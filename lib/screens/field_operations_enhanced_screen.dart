@@ -1089,7 +1089,6 @@ class _MMPScreenState extends State<MMPScreen> {
         context: context,
         builder: (context) => StartVisitDialog(
           site: site,
-          onConfirm: () => Navigator.of(context).pop(true),
         ),
       );
 
@@ -1288,7 +1287,6 @@ class _MMPScreenState extends State<MMPScreen> {
         context: context,
         builder: (context) => VisitReportDialog(
           site: site,
-          onSubmit: (data) => Navigator.of(context).pop(data),
         ),
       );
 

@@ -4,12 +4,9 @@ import '../theme/app_colors.dart';
 
 class StartVisitDialog extends StatelessWidget {
   final Map<String, dynamic> site;
-  final VoidCallback onConfirm;
-
   const StartVisitDialog({
     super.key,
     required this.site,
-    required this.onConfirm,
   });
 
   @override
@@ -210,7 +207,6 @@ class StartVisitDialog extends StatelessWidget {
                     child: ElevatedButton(
                       onPressed: () {
                         Navigator.of(context).pop(true);
-                        onConfirm();
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.black,

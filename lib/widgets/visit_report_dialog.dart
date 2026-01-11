@@ -11,12 +11,9 @@ import '../services/location_service.dart';
 
 class VisitReportDialog extends StatefulWidget {
   final Map<String, dynamic> site;
-  final Function(VisitReportData) onSubmit;
-
   const VisitReportDialog({
     super.key,
     required this.site,
-    required this.onSubmit,
   });
 
   @override
@@ -290,10 +287,8 @@ class _VisitReportDialogState extends State<VisitReportDialog> {
         coordinates: _coordinates,
       );
 
-      widget.onSubmit(reportData);
-      
       if (mounted) {
-        Navigator.of(context).pop();
+        Navigator.of(context).pop(reportData);
       }
     } catch (e) {
       debugPrint('Error submitting report: $e');
