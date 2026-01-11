@@ -146,3 +146,83 @@ Consider modifying auth state listener to differentiate between user-initiated l
 - `lib/services/authentication_service.dart` - Auth state listener
 - `lib/providers/site_visit_provider.dart` - Provider invalidations
 - Supabase database RLS policies for: reports, report_photos, site_locations, mmp_site_entries
+
+---
+
+## FIXES IMPLEMENTED (Date: Investigation Fix)
+
+### Root Cause Identified
+
+The logout issue was caused by:
+1. **Session expiration during long operations**: Photo uploads and multiple database operations could take long enough for the session token to expire
+2. **No session validation/refresh**: Operations didn't check if the session was valid before or during operations
+3. **Transient auth errors triggering logout**: Auth state listener was clearing local auth data immediately on any sign-out event, even transient ones during operations
+4. **Provider invalidations**: When providers were invalidated after operations, they re-subscribed to streams that read `currentUserIdProvider`, which reads from `supabase.auth.currentUser?.id`. If the session had expired, this could cause issues.
+
+### Fixes Applied
+
+#### 1. Session Validation and Refresh (`lib/screens/field_operations_enhanced_screen.dart`)
+
+**In `_startVisit` method:**
+- Added session validation before starting operation
+- Added session refresh if session is expired or missing
+- Added session check before database update
+- Added retry logic with session refresh on auth errors
+- Added comprehensive error handling with auth error detection
+- Added diagnostic logging to track session state
+
+**In `_completeVisit` method:**
+- Added session validation before starting operation
+- Added session refresh checks:
+  - Before dialog (after user returns from dialog)
+  - Before photo uploads
+  - After photo uploads (they can take a while)
+  - Before report insert
+  - Before report photos insert
+  - Before site status update
+  - Before location insert
+- Added retry logic with session refresh on auth errors for all database operations
+- Added comprehensive error handling with auth error detection
+- Changed `_userId` to local `userId` variable to avoid stale references
+- Added diagnostic logging throughout
+
+#### 2. Photo Upload Service (`lib/services/photo_upload_service.dart`)
+
+- Added session check and refresh before each photo upload
+- Added retry logic with session refresh on auth errors
+- Improved error handling to distinguish auth errors from other errors
+
+#### 3. Authentication Service (`lib/services/authentication_service.dart`)
+
+**Improved auth state listener:**
+- Added delay before clearing local auth data on sign-out events
+- Check if session recovers before clearing data (transient error detection)
+- Only clear local data if session is still null after delay
+- Added token refresh event handling to update local data
+- Added better diagnostic logging
+
+**Added `_hasLocalAuthData()` method:**
+- Quick synchronous check for session existence
+- Used to determine if sign-out is transient or real
+
+### Key Improvements
+
+1. **Proactive session management**: Session is validated and refreshed before operations, not after failures
+2. **Retry with refresh**: All database operations retry once with session refresh on auth errors
+3. **Transient error protection**: Auth state listener doesn't immediately clear data on transient errors
+4. **Comprehensive logging**: All operations log session state for debugging
+5. **Graceful degradation**: Operations continue even if some non-critical operations fail (e.g., location insert)
+
+### Testing Recommendations
+
+1. Test with a session that's close to expiring
+2. Test with slow network (to simulate long operations)
+3. Test with multiple photos (to trigger photo upload delays)
+4. Monitor console logs for session state messages
+5. Verify that logout doesn't occur during start/complete operations
+
+### Files Modified
+
+- `lib/screens/field_operations_enhanced_screen.dart` - Added session validation and refresh throughout start/complete flows
+- `lib/services/photo_upload_service.dart` - Added session checks before uploads
+- `lib/services/authentication_service.dart` - Improved auth state listener to handle transient errors

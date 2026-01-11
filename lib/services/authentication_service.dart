@@ -26,16 +26,72 @@ class AuthenticationService {
       debugPrint('[AuthenticationService] Auth state changed: ${data.event} at ${DateTime.now().toIso8601String()}');
       if (kDebugMode) {
         final userId = data.session?.user?.id;
+        final session = data.session;
         debugPrint('[AuthenticationService] Auth user for event ${data.event}: ${userId ?? 'null'}');
+        if (session != null) {
+          debugPrint('[AuthenticationService] Session expired: ${session.isExpired}');
+          debugPrint('[AuthenticationService] Session expires at: ${session.expiresAt}');
+        }
       }
+      
       if (data.event == AuthChangeEvent.signedIn) {
         _handleSignIn(data.session?.user);
       } else if (data.event == AuthChangeEvent.signedOut) {
-        _handleSignOut();
+        // Only handle sign out if it's a real sign out, not a transient error
+        // Check if this is a user-initiated sign out or a token refresh failure
+        final previousSession = supabase.auth.currentSession;
+        final hasLocalAuthData = _hasLocalAuthData();
+        
+        debugPrint('[AuthenticationService] Sign out detected - previous session: ${previousSession != null}, has local auth: $hasLocalAuthData');
+        
+        // If we have local auth data but no session, this might be a transient error
+        // Don't clear local data immediately - user might still be able to recover
+        // Only clear if it's been a while or if explicitly requested
+        if (hasLocalAuthData && previousSession == null) {
+          debugPrint('[AuthenticationService] Detected potential transient auth error - delaying local data clear');
+          // Delay clearing to allow for potential recovery
+          Future.delayed(const Duration(seconds: 2), () {
+            final currentSession = supabase.auth.currentSession;
+            if (currentSession == null) {
+              debugPrint('[AuthenticationService] Session still null after delay - clearing local data');
+              _handleSignOut();
+            } else {
+              debugPrint('[AuthenticationService] Session recovered - not clearing local data');
+            }
+          });
+        } else {
+          // Normal sign out flow
+          _handleSignOut();
+        }
+      } else if (data.event == AuthChangeEvent.tokenRefreshed) {
+        debugPrint('[AuthenticationService] Token refreshed successfully');
+        // Update local auth data with new session
+        if (data.session != null) {
+          _storeAuthDataLocally(data.session!);
+        }
       }
     });
 
     _initialized = true;
+  }
+
+  /// Check if local auth data exists (synchronous check)
+  /// This is a best-effort check - for accurate results use getLocalAuthData()
+  bool _hasLocalAuthData() {
+    try {
+      // Quick check: see if we have a current session
+      // If session exists, local data should exist too
+      final session = supabase.auth.currentSession;
+      if (session != null && !session.isExpired) {
+        return true;
+      }
+      // If no session, check if user ID is available
+      final userId = supabase.auth.currentUser?.id;
+      return userId != null;
+    } catch (e) {
+      debugPrint('Error checking local auth data: $e');
+      return false;
+    }
   }
 
   // Handle Supabase auth user sign-in (User is Supabase/gotrue user)

@@ -17,6 +17,7 @@ import '../screens/settings_screen.dart';
 import '../screens/field_operations_enhanced_screen.dart';
 import '../screens/dashboard_screen.dart';
 import '../screens/wallet_screen.dart';
+import '../screens/site_verification_screen.dart';
 
 class CustomDrawerMenu extends ConsumerStatefulWidget {
   final User? currentUser;
@@ -199,6 +200,7 @@ class _CustomDrawerMenuState extends ConsumerState<CustomDrawerMenu> {
     final avatarUrl = profile?.avatarUrl;
     
     return Drawer(
+      width: MediaQuery.of(context).size.width * 0.75, // 75% of screen width
       child: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
@@ -379,6 +381,24 @@ class _CustomDrawerMenuState extends ConsumerState<CustomDrawerMenu> {
                         },
                       ),
 
+                      // Site Verification - Only for Coordinators
+                      if (_userRole.toLowerCase() == 'coordinator')
+                        _MenuItemData(
+                          icon: Icons.verified_user_rounded,
+                          title: 'Site Verification',
+                          subtitle: 'Verify and approve sites',
+                          iconColor: Colors.purple,
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const SiteVerificationScreen(),
+                              ),
+                            );
+                            widget.onClose();
+                          },
+                        ),
+
                       _MenuItemData(
                         icon: Icons.account_balance_wallet_rounded,
                         title: 'My Wallet',
@@ -514,83 +534,83 @@ class _CustomDrawerMenuState extends ConsumerState<CustomDrawerMenu> {
             ),
 
             // Sign Out Button
-            // Container(
-            //   margin: const EdgeInsets.all(16),
-            //   decoration: BoxDecoration(
-            //     gradient: LinearGradient(
-            //       colors: [
-            //         Colors.red.shade400,
-            //         Colors.red.shade600,
-            //       ],
-            //     ),
-            //     borderRadius: BorderRadius.circular(16),
-            //     boxShadow: [
-            //       BoxShadow(
-            //         color: Colors.red.withOpacity(0.3),
-            //         blurRadius: 8,
-            //         offset: const Offset(0, 4),
-            //       ),
-            //     ],
-            //   ),
-            //   child: Material(
-            //     color: Colors.transparent,
-            //     child: InkWell(
-            //       onTap: () async {
-            //         final shouldSignOut = await showDialog<bool>(
-            //           context: context,
-            //           builder: (context) => AlertDialog(
-            //             title: const Text('Sign Out'),
-            //             content:
-            //                 const Text('Are you sure you want to sign out?'),
-            //             actions: [
-            //               TextButton(
-            //                 onPressed: () => Navigator.pop(context, false),
-            //                 child: const Text('Cancel'),
-            //               ),
-            //               ElevatedButton(
-            //                 onPressed: () => Navigator.pop(context, true),
-            //                 style: ElevatedButton.styleFrom(
-            //                   backgroundColor: Colors.red,
-            //                   foregroundColor: Colors.white,
-            //                 ),
-            //                 child: const Text('Sign Out'),
-            //               ),
-            //             ],
-            //           ),
-            //         );
+            Container(
+              margin: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Colors.red.shade400,
+                    Colors.red.shade600,
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.red.withOpacity(0.3),
+                    blurRadius: 8,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () async {
+                    final shouldSignOut = await showDialog<bool>(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        title: const Text('Sign Out'),
+                        content:
+                            const Text('Are you sure you want to sign out?'),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, false),
+                            child: const Text('Cancel'),
+                          ),
+                          ElevatedButton(
+                            onPressed: () => Navigator.pop(context, true),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.red,
+                              foregroundColor: Colors.white,
+                            ),
+                            child: const Text('Sign Out'),
+                          ),
+                        ],
+                      ),
+                    );
 
-            //         if (shouldSignOut == true) {
-            //           await AuthService().signOut();
-            //           if (context.mounted) {
-            //             Navigator.of(context).pushReplacementNamed('/login');
-            //           }
-            //         }
-            //       },
-            //       borderRadius: BorderRadius.circular(16),
-            //       child: Padding(
-            //         padding: const EdgeInsets.symmetric(vertical: 16),
-            //         child: Row(
-            //           mainAxisAlignment: MainAxisAlignment.center,
-            //           children: [
-            //             const Icon(
-            //               Icons.exit_to_app_rounded,
-            //               color: Colors.white,
-            //             ),
-            //             const SizedBox(width: 12),
-            //             const Text(
-            //               'Sign Out',
-            //               style: TextStyle(
-            //                 color: Colors.white,
-            //                 fontSize: 16,
-            //                 fontWeight: FontWeight.bold,
-            //               ),
-            //             ),
-            //           ],
-            //         ),
-            //       ),
-            //     ),
-            //   ),
-            // ),
+                    if (shouldSignOut == true) {
+                      await AuthService().signOut();
+                      if (context.mounted) {
+                        Navigator.of(context).pushReplacementNamed('/login');
+                      }
+                    }
+                  },
+                  borderRadius: BorderRadius.circular(16),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(
+                          Icons.exit_to_app_rounded,
+                          color: Colors.white,
+                        ),
+                        const SizedBox(width: 12),
+                        const Text(
+                          'Sign Out',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
 
             // App Version
             // Padding(

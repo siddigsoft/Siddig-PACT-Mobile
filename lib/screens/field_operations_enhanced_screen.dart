@@ -896,7 +896,48 @@ class _MMPScreenState extends State<MMPScreen> {
   }
 
   Future<void> _startVisit(Map<String, dynamic> site) async {
+    final supabase = Supabase.instance.client;
+    
     try {
+      // Validate and refresh session before starting operation
+      final session = supabase.auth.currentSession;
+      
+      debugPrint('[_startVisit] Session check - valid: ${session != null}, expired: ${session?.isExpired ?? true}');
+      
+      if (session == null || session.isExpired) {
+        debugPrint('[_startVisit] Session expired or missing, attempting refresh...');
+        try {
+          await supabase.auth.refreshSession();
+          debugPrint('[_startVisit] Session refreshed successfully');
+        } catch (refreshError) {
+          debugPrint('[_startVisit] Session refresh failed: $refreshError');
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Session expired. Please log in again.'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+          return;
+        }
+      }
+
+      // Re-check user ID after potential refresh
+      final userId = supabase.auth.currentUser?.id;
+      if (userId == null) {
+        debugPrint('[_startVisit] User ID is null after session check');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Authentication error. Please log in again.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+
       // Check location permissions
       final hasPermission = await LocationService.checkPermissions();
       if (!hasPermission) {
@@ -986,11 +1027,48 @@ class _MMPScreenState extends State<MMPScreen> {
         }
       }
 
+      // Verify session is still valid before database operation
+      final currentSession = supabase.auth.currentSession;
+      if (currentSession == null || currentSession.isExpired) {
+        debugPrint('[_startVisit] Session expired during operation, refreshing...');
+        try {
+          await supabase.auth.refreshSession();
+        } catch (refreshError) {
+          debugPrint('[_startVisit] Session refresh failed during operation: $refreshError');
+          throw Exception('Session expired. Please try again.');
+        }
+      }
+
       // Update database
-      await Supabase.instance.client
-          .from('mmp_site_entries')
-          .update(updateData)
-          .eq('id', site['id']);
+      try {
+        await supabase
+            .from('mmp_site_entries')
+            .update(updateData)
+            .eq('id', site['id']);
+        debugPrint('[_startVisit] Database update successful');
+      } catch (dbError) {
+        debugPrint('[_startVisit] Database error: $dbError');
+        // Check if it's an auth-related error
+        final errorStr = dbError.toString().toLowerCase();
+        if (errorStr.contains('auth') || errorStr.contains('unauthorized') || 
+            errorStr.contains('jwt') || errorStr.contains('token')) {
+          debugPrint('[_startVisit] Auth-related database error detected');
+          // Try to refresh session and retry once
+          try {
+            await supabase.auth.refreshSession();
+            await supabase
+                .from('mmp_site_entries')
+                .update(updateData)
+                .eq('id', site['id']);
+            debugPrint('[_startVisit] Retry after session refresh successful');
+          } catch (retryError) {
+            debugPrint('[_startVisit] Retry after refresh failed: $retryError');
+            throw Exception('Authentication error. Please log in again.');
+          }
+        } else {
+          rethrow;
+        }
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1007,11 +1085,21 @@ class _MMPScreenState extends State<MMPScreen> {
       if (mounted) setState(() {});
 
     } catch (e) {
-      debugPrint('Error starting visit: $e');
+      debugPrint('[_startVisit] Error starting visit: $e');
+      
+      // Check session state after error
+      final sessionAfterError = supabase.auth.currentSession;
+      debugPrint('[_startVisit] Session after error - valid: ${sessionAfterError != null}');
+      
       if (mounted) {
+        final errorMessage = e.toString().contains('Authentication') || 
+                            e.toString().contains('Session expired')
+            ? 'Authentication error. Please log in again.'
+            : 'Error: ${e.toString()}';
+        
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error: ${e.toString()}'),
+            content: Text(errorMessage),
             backgroundColor: Colors.red,
           ),
         );
@@ -1020,8 +1108,49 @@ class _MMPScreenState extends State<MMPScreen> {
   }
 
   Future<void> _completeVisit(Map<String, dynamic> site) async {
+    final supabase = Supabase.instance.client;
+    
     try {
       debugPrint('[_completeVisit] Starting completion for site: ${site['id']}');
+      
+      // Validate and refresh session before starting operation
+      final session = supabase.auth.currentSession;
+      debugPrint('[_completeVisit] Session check - valid: ${session != null}, expired: ${session?.isExpired ?? true}');
+      
+      if (session == null || session.isExpired) {
+        debugPrint('[_completeVisit] Session expired or missing, attempting refresh...');
+        try {
+          await supabase.auth.refreshSession();
+          debugPrint('[_completeVisit] Session refreshed successfully');
+        } catch (refreshError) {
+          debugPrint('[_completeVisit] Session refresh failed: $refreshError');
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Session expired. Please log in again.'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+          return;
+        }
+      }
+
+      // Re-check user ID after potential refresh
+      final userId = supabase.auth.currentUser?.id;
+      if (userId == null) {
+        debugPrint('[_completeVisit] User ID is null after session check');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Authentication error. Please log in again.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+
       // Show visit report dialog
       final reportData = await showDialog<VisitReportData>(
         context: context,
@@ -1033,19 +1162,83 @@ class _MMPScreenState extends State<MMPScreen> {
 
       if (reportData == null) return;
 
+      // Verify session is still valid after dialog (user may have been idle)
+      var currentSession = supabase.auth.currentSession;
+      if (currentSession == null || currentSession.isExpired) {
+        debugPrint('[_completeVisit] Session expired after dialog, refreshing...');
+        try {
+          await supabase.auth.refreshSession();
+          currentSession = supabase.auth.currentSession;
+        } catch (refreshError) {
+          debugPrint('[_completeVisit] Session refresh failed after dialog: $refreshError');
+          throw Exception('Session expired. Please try again.');
+        }
+      }
+
       // Get final location
       final position = reportData.coordinates ?? 
                        await LocationService.getCurrentLocation();
 
       final now = DateTime.now().toIso8601String();
 
-      // Upload photos
+      // Upload photos with session refresh during long operation
       List<String> photoUrls = [];
       if (reportData.photos.isNotEmpty) {
-        photoUrls = await PhotoUploadService.uploadPhotos(
-          site['id'].toString(),
-          reportData.photos,
-        );
+        debugPrint('[_completeVisit] Starting photo upload (${reportData.photos.length} photos)');
+        
+        // Refresh session before photo uploads if needed
+        currentSession = supabase.auth.currentSession;
+        if (currentSession == null || currentSession.isExpired) {
+          debugPrint('[_completeVisit] Refreshing session before photo uploads...');
+          try {
+            await supabase.auth.refreshSession();
+          } catch (refreshError) {
+            debugPrint('[_completeVisit] Session refresh before uploads failed: $refreshError');
+            throw Exception('Session expired during photo upload. Please try again.');
+          }
+        }
+        
+        try {
+          photoUrls = await PhotoUploadService.uploadPhotos(
+            site['id'].toString(),
+            reportData.photos,
+          );
+          debugPrint('[_completeVisit] Photo uploads completed (${photoUrls.length} URLs)');
+          
+          // Verify session after photo uploads (they can take a while)
+          currentSession = supabase.auth.currentSession;
+          if (currentSession == null || currentSession.isExpired) {
+            debugPrint('[_completeVisit] Session expired after photo uploads, refreshing...');
+            try {
+              await supabase.auth.refreshSession();
+            } catch (refreshError) {
+              debugPrint('[_completeVisit] Session refresh after uploads failed: $refreshError');
+              throw Exception('Session expired during upload. Please try again.');
+            }
+          }
+        } catch (uploadError) {
+          debugPrint('[_completeVisit] Photo upload error: $uploadError');
+          // Check if it's an auth error
+          final errorStr = uploadError.toString().toLowerCase();
+          if (errorStr.contains('auth') || errorStr.contains('unauthorized') || 
+              errorStr.contains('jwt') || errorStr.contains('token')) {
+            debugPrint('[_completeVisit] Auth-related photo upload error');
+            // Try refreshing session and retry
+            try {
+              await supabase.auth.refreshSession();
+              photoUrls = await PhotoUploadService.uploadPhotos(
+                site['id'].toString(),
+                reportData.photos,
+              );
+              debugPrint('[_completeVisit] Photo upload retry after refresh successful');
+            } catch (retryError) {
+              debugPrint('[_completeVisit] Photo upload retry failed: $retryError');
+              throw Exception('Authentication error during photo upload. Please log in again.');
+            }
+          } else {
+            rethrow;
+          }
+        }
       }
 
       // Build coordinates JSON to match existing reports schema
@@ -1066,19 +1259,55 @@ class _MMPScreenState extends State<MMPScreen> {
             : reportData.activities.trim(),
         'duration_minutes': reportData.durationMinutes,
         'coordinates': coordinates,
-        'submitted_by': _userId,
+        'submitted_by': userId,
         'submitted_at': now,
         'is_synced': true,
       };
 
+      // Verify session before database operations
+      currentSession = supabase.auth.currentSession;
+      if (currentSession == null || currentSession.isExpired) {
+        debugPrint('[_completeVisit] Session expired before report insert, refreshing...');
+        try {
+          await supabase.auth.refreshSession();
+        } catch (refreshError) {
+          debugPrint('[_completeVisit] Session refresh before report insert failed: $refreshError');
+          throw Exception('Session expired. Please try again.');
+        }
+      }
+
       // Save report to database
       debugPrint('[_completeVisit] Inserting report for site: ${site['id']}');
-      final savedReport = await Supabase.instance.client
-          .from('reports')
-          .insert(reportInsert)
-          .select()
-          .single();
-      debugPrint('[_completeVisit] Report inserted with id: ${savedReport['id']}');
+      dynamic savedReport;
+      try {
+        savedReport = await supabase
+            .from('reports')
+            .insert(reportInsert)
+            .select()
+            .single();
+        debugPrint('[_completeVisit] Report inserted with id: ${savedReport['id']}');
+      } catch (dbError) {
+        debugPrint('[_completeVisit] Report insert error: $dbError');
+        final errorStr = dbError.toString().toLowerCase();
+        if (errorStr.contains('auth') || errorStr.contains('unauthorized') || 
+            errorStr.contains('jwt') || errorStr.contains('token')) {
+          debugPrint('[_completeVisit] Auth-related report insert error');
+          try {
+            await supabase.auth.refreshSession();
+            savedReport = await supabase
+                .from('reports')
+                .insert(reportInsert)
+                .select()
+                .single();
+            debugPrint('[_completeVisit] Report insert retry after refresh successful');
+          } catch (retryError) {
+            debugPrint('[_completeVisit] Report insert retry failed: $retryError');
+            throw Exception('Authentication error. Please log in again.');
+          }
+        } else {
+          rethrow;
+        }
+      }
 
       // Link photos to report
       if (photoUrls.isNotEmpty && savedReport != null) {
@@ -1089,16 +1318,45 @@ class _MMPScreenState extends State<MMPScreen> {
         }).toList();
 
         debugPrint('[_completeVisit] Inserting ${reportPhotos.length} report photos');
-        await Supabase.instance.client
-            .from('report_photos')
-            .insert(reportPhotos);
+        // Verify session before inserting photos
+        currentSession = supabase.auth.currentSession;
+        if (currentSession == null || currentSession.isExpired) {
+          debugPrint('[_completeVisit] Refreshing session before report_photos insert...');
+          await supabase.auth.refreshSession();
+        }
+        
+        try {
+          await supabase
+              .from('report_photos')
+              .insert(reportPhotos);
+        } catch (photoError) {
+          debugPrint('[_completeVisit] Report photos insert error: $photoError');
+          final errorStr = photoError.toString().toLowerCase();
+          if (errorStr.contains('auth') || errorStr.contains('unauthorized') || 
+              errorStr.contains('jwt') || errorStr.contains('token')) {
+            debugPrint('[_completeVisit] Auth-related report photos error');
+            await supabase.auth.refreshSession();
+            await supabase
+                .from('report_photos')
+                .insert(reportPhotos);
+          } else {
+            rethrow;
+          }
+        }
+      }
+
+      // Verify session before updating site status
+      currentSession = supabase.auth.currentSession;
+      if (currentSession == null || currentSession.isExpired) {
+        debugPrint('[_completeVisit] Refreshing session before site status update...');
+        await supabase.auth.refreshSession();
       }
 
       // Update site status
       final updateData = <String, dynamic>{
         'status': 'Completed',
         'visit_completed_at': now,
-        'visit_completed_by': _userId,
+            'visit_completed_by': userId,
         'updated_at': now,
         'additional_data': {
           ...(site['additional_data'] as Map<String, dynamic>? ?? {}),
@@ -1129,25 +1387,72 @@ class _MMPScreenState extends State<MMPScreen> {
       }
 
       debugPrint('[_completeVisit] Updating mmp_site_entries for site: ${site['id']}');
-      await Supabase.instance.client
-          .from('mmp_site_entries')
-          .update(updateData)
-          .eq('id', site['id']);
+      try {
+        await supabase
+            .from('mmp_site_entries')
+            .update(updateData)
+            .eq('id', site['id']);
+      } catch (updateError) {
+        debugPrint('[_completeVisit] Site status update error: $updateError');
+        final errorStr = updateError.toString().toLowerCase();
+        if (errorStr.contains('auth') || errorStr.contains('unauthorized') || 
+            errorStr.contains('jwt') || errorStr.contains('token')) {
+          debugPrint('[_completeVisit] Auth-related site update error');
+          await supabase.auth.refreshSession();
+          await supabase
+              .from('mmp_site_entries')
+              .update(updateData)
+              .eq('id', site['id']);
+        } else {
+          rethrow;
+        }
+      }
 
       // Save GPS to site_locations table
       if (position != null) {
         debugPrint('[_completeVisit] Inserting final location for site: ${site['id']}');
-        await Supabase.instance.client
-            .from('site_locations')
-            .insert({
-              'site_id': site['id'],
-              'user_id': _userId,
-              'latitude': position.latitude,
-              'longitude': position.longitude,
-              'accuracy': position.accuracy ?? 10,
-              'notes': 'Visit end location',
-              'recorded_at': now,
-            });
+        // Verify session before location insert
+        currentSession = supabase.auth.currentSession;
+        if (currentSession == null || currentSession.isExpired) {
+          debugPrint('[_completeVisit] Refreshing session before location insert...');
+          await supabase.auth.refreshSession();
+        }
+        
+        try {
+          await supabase
+              .from('site_locations')
+              .insert({
+                'site_id': site['id'],
+                'user_id': userId,
+                'latitude': position.latitude,
+                'longitude': position.longitude,
+                'accuracy': position.accuracy ?? 10,
+                'notes': 'Visit end location',
+                'recorded_at': now,
+              });
+        } catch (locationError) {
+          debugPrint('[_completeVisit] Location insert error: $locationError');
+          final errorStr = locationError.toString().toLowerCase();
+          if (errorStr.contains('auth') || errorStr.contains('unauthorized') || 
+              errorStr.contains('jwt') || errorStr.contains('token')) {
+            debugPrint('[_completeVisit] Auth-related location insert error');
+            await supabase.auth.refreshSession();
+            await supabase
+                .from('site_locations')
+                .insert({
+                  'site_id': site['id'],
+                  'user_id': userId,
+                  'latitude': position.latitude,
+                  'longitude': position.longitude,
+                  'accuracy': position.accuracy ?? 10,
+                  'notes': 'Visit end location',
+                  'recorded_at': now,
+                });
+          } else {
+            // Location insert failure is not critical, log and continue
+            debugPrint('[_completeVisit] Location insert failed but continuing: $locationError');
+          }
+        }
       }
 
       // Create wallet transaction (optional - you may need to implement this)
@@ -1173,9 +1478,32 @@ class _MMPScreenState extends State<MMPScreen> {
       setState(() {});
 
     } catch (e, stack) {
-      debugPrint('Error completing visit: $e');
+      debugPrint('[_completeVisit] Error completing visit: $e');
       debugPrint('[_completeVisit] Stack trace: $stack');
+      
+      // Check session state after error
+      final sessionAfterError = supabase.auth.currentSession;
+      debugPrint('[_completeVisit] Session after error - valid: ${sessionAfterError != null}, expired: ${sessionAfterError?.isExpired ?? true}');
+      
+      // Check if error is auth-related
+      final errorStr = e.toString().toLowerCase();
+      final isAuthError = errorStr.contains('auth') || 
+                         errorStr.contains('unauthorized') || 
+                         errorStr.contains('jwt') || 
+                         errorStr.contains('token') ||
+                         errorStr.contains('session expired');
+      
+      if (isAuthError) {
+        debugPrint('[_completeVisit] ⚠️ AUTH ERROR detected during completion: $e');
+        // Don't let auth errors trigger logout - user might still be valid
+        // Only show error message
+      }
+      
       if (mounted) {
+        final errorMessage = isAuthError
+            ? 'Authentication error occurred. Please try again or log in again if the problem persists.'
+            : 'Error: ${e.toString()}';
+        
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error: ${e.toString()}'),

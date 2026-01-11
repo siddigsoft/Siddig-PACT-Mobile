@@ -37,8 +37,22 @@ class PhotoUploadService {
         final fileName = 'site-visits/$siteId/${timestamp}_$i.jpg';
         
         try {
+          // Check and refresh session before each upload if needed
+          final supabase = Supabase.instance.client;
+          final session = supabase.auth.currentSession;
+          if (session == null || session.isExpired) {
+            developer.log('PhotoUploadService: Session expired before upload $i, refreshing...');
+            try {
+              await supabase.auth.refreshSession();
+              developer.log('PhotoUploadService: Session refreshed successfully');
+            } catch (refreshError) {
+              developer.log('PhotoUploadService: Session refresh failed: $refreshError');
+              // Continue anyway - might still work if token is valid but expired flag is wrong
+            }
+          }
+
           // Upload to Supabase Storage
-          await Supabase.instance.client.storage
+          await supabase.storage
               .from('site-visit-photos')
               .upload(
                 fileName,
@@ -50,7 +64,7 @@ class PhotoUploadService {
               );
           
           // Get public URL
-          final publicUrl = Supabase.instance.client.storage
+          final publicUrl = supabase.storage
               .from('site-visit-photos')
               .getPublicUrl(fileName);
 
@@ -58,8 +72,42 @@ class PhotoUploadService {
           developer.log('Photo uploaded: $publicUrl');
         } catch (uploadError) {
           developer.log('Error uploading photo $i: $uploadError');
-          // Continue with other photos even if one fails
-          continue;
+          
+          // Check if it's an auth error and try to recover
+          final errorStr = uploadError.toString().toLowerCase();
+          if ((errorStr.contains('auth') || errorStr.contains('unauthorized') || 
+               errorStr.contains('jwt') || errorStr.contains('token')) &&
+              i == 0) {
+            // If first photo fails with auth error, try refreshing session and retry
+            developer.log('PhotoUploadService: Auth error on first photo, attempting recovery...');
+            try {
+              final supabase = Supabase.instance.client;
+              await supabase.auth.refreshSession();
+              // Retry upload
+              await supabase.storage
+                  .from('site-visit-photos')
+                  .upload(
+                    fileName,
+                    file,
+                    fileOptions: const FileOptions(
+                      contentType: 'image/jpeg',
+                      upsert: false,
+                    ),
+                  );
+              final publicUrl = supabase.storage
+                  .from('site-visit-photos')
+                  .getPublicUrl(fileName);
+              uploadedUrls.add(publicUrl);
+              developer.log('PhotoUploadService: Retry successful after session refresh');
+            } catch (retryError) {
+              developer.log('PhotoUploadService: Retry failed: $retryError');
+              // Continue with other photos even if this one fails
+              continue;
+            }
+          } else {
+            // Continue with other photos even if one fails
+            continue;
+          }
         }
       }
 
