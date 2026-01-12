@@ -88,7 +88,9 @@ class _LoginScreenState extends State<LoginScreen>
       debugPrint('  Available: $isAvailable');
       debugPrint('  Enabled: $isEnabled');
       debugPrint('  Has Enrolled: $hasEnrolled');
-      debugPrint('  Device Credentials: Available via fallback in authentication');
+      debugPrint(
+        '  Device Credentials: Available via fallback in authentication',
+      );
 
       if (isAvailable) {
         final biometrics = await _biometricService.getAvailableBiometrics();
@@ -149,7 +151,9 @@ class _LoginScreenState extends State<LoginScreen>
       final email = credentials['email'];
       final password = credentials['password'];
 
-      debugPrint('📧 Retrieved stored credentials: email=${email != null ? 'present' : 'null'}, password=${password != null ? 'present' : 'null'}');
+      debugPrint(
+        '📧 Retrieved stored credentials: email=${email != null ? 'present' : 'null'}, password=${password != null ? 'present' : 'null'}',
+      );
 
       if (email == null || password == null) {
         // Credentials not found, disable biometric
@@ -172,8 +176,10 @@ class _LoginScreenState extends State<LoginScreen>
 
       // Attempt login
       debugPrint('🔑 Attempting login with stored credentials...');
-      final response =
-          await _authService.signIn(email: email, password: password);
+      final response = await _authService.signIn(
+        email: email,
+        password: password,
+      );
 
       if (mounted) {
         if (response.user != null) {
@@ -249,6 +255,43 @@ class _LoginScreenState extends State<LoginScreen>
       return 'Password must be at least 6 characters';
     }
     return null;
+  }
+
+  /// Get user-friendly error message based on authentication error
+  String _getLoginErrorMessage(String error) {
+    final errorLower = error.toLowerCase();
+
+    if (errorLower.contains('invalid login credentials') ||
+        errorLower.contains('invalid_credentials')) {
+      return 'Invalid email or password. Please check your credentials and try again.';
+    }
+
+    if (errorLower.contains('email not confirmed') ||
+        errorLower.contains('email_not_confirmed')) {
+      return 'Please check your email and click the verification link before logging in.';
+    }
+
+    if (errorLower.contains('too many requests') ||
+        errorLower.contains('rate limit')) {
+      return 'Too many login attempts. Please wait a few minutes before trying again.';
+    }
+
+    if (errorLower.contains('user not found') ||
+        errorLower.contains('user_not_found')) {
+      return 'No account found with this email address. Please sign up first.';
+    }
+
+    if (errorLower.contains('account disabled') ||
+        errorLower.contains('user_disabled')) {
+      return 'Your account has been disabled. Please contact support.';
+    }
+
+    if (errorLower.contains('network') || errorLower.contains('connection')) {
+      return 'Network connection error. Please check your internet connection and try again.';
+    }
+
+    // Default fallback for any other errors
+    return 'Login failed. Please try again or contact support if the problem persists.';
   }
 
   // Handle login logic with improved animations and role check
@@ -362,11 +405,12 @@ class _LoginScreenState extends State<LoginScreen>
           }
         }
       } catch (e) {
-        // Show error message using new design system
+        // Show user-friendly error message based on error type
+        String errorMessage = _getLoginErrorMessage(e.toString());
         if (mounted) {
           AppSnackBar.show(
             context,
-            message: 'Login failed: ${e.toString()}',
+            message: errorMessage,
             type: SnackBarType.error,
           );
         }
@@ -419,49 +463,49 @@ class _LoginScreenState extends State<LoginScreen>
 
                     // Company Logo/Icon Section
                     Container(
-                      width: 150,
-                      height: 150,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: LinearGradient(
-                          colors: [
-                            Colors.white,
-                            AppColors.backgroundGray.withOpacity(0.8),
-                          ],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppColors.primaryOrange.withOpacity(
-                              0.15,
+                          width: 150,
+                          height: 150,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            gradient: LinearGradient(
+                              colors: [
+                                Colors.white,
+                                AppColors.backgroundGray.withOpacity(0.8),
+                              ],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
                             ),
-                            blurRadius: 30,
-                            offset: const Offset(0, 15),
-                            spreadRadius: -5,
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppColors.primaryOrange.withOpacity(
+                                  0.15,
+                                ),
+                                blurRadius: 30,
+                                offset: const Offset(0, 15),
+                                spreadRadius: -5,
+                              ),
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.03),
+                                blurRadius: 10,
+                                offset: const Offset(0, 5),
+                                spreadRadius: 0,
+                              ),
+                            ],
+                            border: Border.all(
+                              color: Colors.white.withOpacity(0.95),
+                              width: 6,
+                            ),
                           ),
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.03),
-                            blurRadius: 10,
-                            offset: const Offset(0, 5),
-                            spreadRadius: 0,
+                          child: Padding(
+                            padding: const EdgeInsets.all(4.0),
+                            child: ClipOval(
+                              child: Image.asset(
+                                'assets/images/pact_consultancy_pact_cover.jpg',
+                                fit: BoxFit.contain,
+                              ),
+                            ),
                           ),
-                        ],
-                        border: Border.all(
-                          color: Colors.white.withOpacity(0.95),
-                          width: 6,
-                        ),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(4.0),
-                        child: ClipOval(
-                          child: Image.asset(
-                            'assets/images/pact_consultancy_pact_cover.jpg',
-                            fit: BoxFit.contain,
-                          ),
-                        ),
-                      ),
-                    )
+                        )
                         .animate()
                         .fadeIn(duration: 800.ms, delay: 200.ms)
                         .slideY(
@@ -480,15 +524,15 @@ class _LoginScreenState extends State<LoginScreen>
 
                     // Welcome Text
                     Text(
-                      AppLocalizations.of(context)!.welcomeBack,
-                      style: GoogleFonts.poppins(
-                        fontSize: 34,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textDark,
-                        letterSpacing: 0.5,
-                        height: 1.1,
-                      ),
-                    )
+                          AppLocalizations.of(context)!.welcomeBack,
+                          style: GoogleFonts.poppins(
+                            fontSize: 34,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textDark,
+                            letterSpacing: 0.5,
+                            height: 1.1,
+                          ),
+                        )
                         .animate()
                         .fadeIn(duration: 800.ms, delay: 300.ms)
                         .slideY(begin: 0.3, end: 0, duration: 600.ms)
@@ -502,24 +546,24 @@ class _LoginScreenState extends State<LoginScreen>
 
                     // Subtitle
                     Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppColors.primaryOrange.withOpacity(0.08),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        AppLocalizations.of(context)!.signInToAccount,
-                        style: GoogleFonts.poppins(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w500,
-                          color: AppColors.textLight,
-                          letterSpacing: 0.2,
-                        ),
-                      ),
-                    )
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.primaryOrange.withOpacity(0.08),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            AppLocalizations.of(context)!.signInToAccount,
+                            style: GoogleFonts.poppins(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w500,
+                              color: AppColors.textLight,
+                              letterSpacing: 0.2,
+                            ),
+                          ),
+                        )
                         .animate()
                         .fadeIn(duration: 800.ms, delay: 400.ms)
                         .slideY(begin: 0.3, end: 0, duration: 500.ms),
@@ -530,58 +574,66 @@ class _LoginScreenState extends State<LoginScreen>
                     if (_isBiometricAvailable && _isBiometricEnabled)
                       Padding(
                         padding: const EdgeInsets.only(bottom: 24),
-                        child: InkWell(
-                          onTap: _isLoading ? null : _attemptBiometricLogin,
-                          borderRadius: BorderRadius.circular(20),
-                          child: Container(
-                            padding: const EdgeInsets.all(20),
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [
-                                  AppColors.primaryOrange,
-                                  AppColors.primaryOrange.withOpacity(0.8),
-                                ],
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                              ),
-                              borderRadius: BorderRadius.circular(20),
-                              boxShadow: [
-                                BoxShadow(
-                                  color:
-                                      AppColors.primaryOrange.withOpacity(0.3),
-                                  blurRadius: 20,
-                                  offset: const Offset(0, 10),
-                                  spreadRadius: -5,
-                                ),
-                              ],
-                            ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  _biometricType.toLowerCase().contains('face')
-                                      ? Icons.face
-                                      : Icons.fingerprint,
-                                  color: Colors.white,
-                                  size: 28,
-                                ),
-                                const SizedBox(width: 12),
-                                Text(
-                                  'Login with $_biometricType',
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.white,
-                                    letterSpacing: 0.5,
+                        child:
+                            InkWell(
+                                  onTap: _isLoading
+                                      ? null
+                                      : _attemptBiometricLogin,
+                                  borderRadius: BorderRadius.circular(20),
+                                  child: Container(
+                                    padding: const EdgeInsets.all(20),
+                                    decoration: BoxDecoration(
+                                      gradient: LinearGradient(
+                                        colors: [
+                                          AppColors.primaryOrange,
+                                          AppColors.primaryOrange.withOpacity(
+                                            0.8,
+                                          ),
+                                        ],
+                                        begin: Alignment.topLeft,
+                                        end: Alignment.bottomRight,
+                                      ),
+                                      borderRadius: BorderRadius.circular(20),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: AppColors.primaryOrange
+                                              .withOpacity(0.3),
+                                          blurRadius: 20,
+                                          offset: const Offset(0, 10),
+                                          spreadRadius: -5,
+                                        ),
+                                      ],
+                                    ),
+                                    child: Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        Icon(
+                                          _biometricType.toLowerCase().contains(
+                                                'face',
+                                              )
+                                              ? Icons.face
+                                              : Icons.fingerprint,
+                                          color: Colors.white,
+                                          size: 28,
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Text(
+                                          'Login with $_biometricType',
+                                          style: GoogleFonts.poppins(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w600,
+                                            color: Colors.white,
+                                            letterSpacing: 0.5,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
                                   ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        )
-                            .animate()
-                            .fadeIn(duration: 600.ms, delay: 300.ms)
-                            .slideY(begin: 0.2, end: 0, duration: 500.ms),
+                                )
+                                .animate()
+                                .fadeIn(duration: 600.ms, delay: 300.ms)
+                                .slideY(begin: 0.2, end: 0, duration: 500.ms),
                       ),
 
                     // Form Section
@@ -591,56 +643,56 @@ class _LoginScreenState extends State<LoginScreen>
                         children: [
                           // Email Input Field
                           Container(
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(20),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(0.03),
-                                  blurRadius: 20,
-                                  offset: const Offset(0, 10),
-                                  spreadRadius: -5,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(20),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.03),
+                                      blurRadius: 20,
+                                      offset: const Offset(0, 10),
+                                      spreadRadius: -5,
+                                    ),
+                                  ],
                                 ),
-                              ],
-                            ),
-                            child: TextFormField(
-                              controller: _emailController,
-                              keyboardType: TextInputType.emailAddress,
-                              validator: _validateEmail,
-                              style: GoogleFonts.poppins(
-                                fontSize: 16,
-                                color: AppColors.textDark,
-                                fontWeight: FontWeight.w500,
-                              ),
-                              decoration: InputDecoration(
-                                labelText: 'Email',
-                                hintText: 'Enter your email',
-                                contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 24,
-                                  vertical: 22,
-                                ),
-                                prefixIcon: Container(
-                                  margin: const EdgeInsets.only(
-                                    left: 16,
-                                    right: 12,
+                                child: TextFormField(
+                                  controller: _emailController,
+                                  keyboardType: TextInputType.emailAddress,
+                                  validator: _validateEmail,
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 16,
+                                    color: AppColors.textDark,
+                                    fontWeight: FontWeight.w500,
                                   ),
-                                  child: const Icon(
-                                    Icons.email_outlined,
-                                    color: AppColors.primaryOrange,
-                                    size: 22,
+                                  decoration: InputDecoration(
+                                    labelText: 'Email',
+                                    hintText: 'Enter your email',
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 24,
+                                      vertical: 22,
+                                    ),
+                                    prefixIcon: Container(
+                                      margin: const EdgeInsets.only(
+                                        left: 16,
+                                        right: 12,
+                                      ),
+                                      child: const Icon(
+                                        Icons.email_outlined,
+                                        color: AppColors.primaryOrange,
+                                        size: 22,
+                                      ),
+                                    ),
+                                    floatingLabelBehavior:
+                                        FloatingLabelBehavior.auto,
+                                    labelStyle: TextStyle(
+                                      color: AppColors.textLight.withOpacity(
+                                        0.8,
+                                      ),
+                                      fontWeight: FontWeight.w500,
+                                      fontSize: 15,
+                                    ),
                                   ),
                                 ),
-                                floatingLabelBehavior:
-                                    FloatingLabelBehavior.auto,
-                                labelStyle: TextStyle(
-                                  color: AppColors.textLight.withOpacity(
-                                    0.8,
-                                  ),
-                                  fontWeight: FontWeight.w500,
-                                  fontSize: 15,
-                                ),
-                              ),
-                            ),
-                          )
+                              )
                               .animate()
                               .fadeIn(duration: 600.ms, delay: 500.ms)
                               .slideY(begin: 0.3, end: 0, duration: 400.ms),
@@ -649,74 +701,74 @@ class _LoginScreenState extends State<LoginScreen>
 
                           // Password Input Field
                           Container(
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(20),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(0.03),
-                                  blurRadius: 20,
-                                  offset: const Offset(0, 10),
-                                  spreadRadius: -5,
-                                ),
-                              ],
-                            ),
-                            child: TextFormField(
-                              controller: _passwordController,
-                              obscureText:
-                                  !_isPasswordVisible, // Hide/show password
-                              validator: _validatePassword,
-                              style: GoogleFonts.poppins(
-                                fontSize: 16,
-                                color: AppColors.textDark,
-                                fontWeight: FontWeight.w500,
-                              ),
-                              decoration: InputDecoration(
-                                labelText: 'Password',
-                                hintText: 'Enter your password',
-                                contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 24,
-                                  vertical: 22,
-                                ),
-                                prefixIcon: Container(
-                                  margin: const EdgeInsets.only(
-                                    left: 16,
-                                    right: 12,
-                                  ),
-                                  child: const Icon(
-                                    Icons.lock_outline,
-                                    color: AppColors.primaryOrange,
-                                    size: 22,
-                                  ),
-                                ),
-                                suffixIcon: Container(
-                                  margin: const EdgeInsets.only(right: 8),
-                                  child: IconButton(
-                                    icon: Icon(
-                                      _isPasswordVisible
-                                          ? Icons.visibility_off
-                                          : Icons.visibility,
-                                      color: AppColors.textLight,
-                                      size: 22,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(20),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.03),
+                                      blurRadius: 20,
+                                      offset: const Offset(0, 10),
+                                      spreadRadius: -5,
                                     ),
-                                    splashRadius: 20,
-                                    onPressed: () {
-                                      setState(() {
-                                        _isPasswordVisible =
-                                            !_isPasswordVisible;
-                                      });
-                                    },
+                                  ],
+                                ),
+                                child: TextFormField(
+                                  controller: _passwordController,
+                                  obscureText:
+                                      !_isPasswordVisible, // Hide/show password
+                                  validator: _validatePassword,
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 16,
+                                    color: AppColors.textDark,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                  decoration: InputDecoration(
+                                    labelText: 'Password',
+                                    hintText: 'Enter your password',
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 24,
+                                      vertical: 22,
+                                    ),
+                                    prefixIcon: Container(
+                                      margin: const EdgeInsets.only(
+                                        left: 16,
+                                        right: 12,
+                                      ),
+                                      child: const Icon(
+                                        Icons.lock_outline,
+                                        color: AppColors.primaryOrange,
+                                        size: 22,
+                                      ),
+                                    ),
+                                    suffixIcon: Container(
+                                      margin: const EdgeInsets.only(right: 8),
+                                      child: IconButton(
+                                        icon: Icon(
+                                          _isPasswordVisible
+                                              ? Icons.visibility_off
+                                              : Icons.visibility,
+                                          color: AppColors.textLight,
+                                          size: 22,
+                                        ),
+                                        splashRadius: 20,
+                                        onPressed: () {
+                                          setState(() {
+                                            _isPasswordVisible =
+                                                !_isPasswordVisible;
+                                          });
+                                        },
+                                      ),
+                                    ),
+                                    labelStyle: TextStyle(
+                                      color: AppColors.textLight.withOpacity(
+                                        0.8,
+                                      ),
+                                      fontWeight: FontWeight.w500,
+                                      fontSize: 15,
+                                    ),
                                   ),
                                 ),
-                                labelStyle: TextStyle(
-                                  color: AppColors.textLight.withOpacity(
-                                    0.8,
-                                  ),
-                                  fontWeight: FontWeight.w500,
-                                  fontSize: 15,
-                                ),
-                              ),
-                            ),
-                          )
+                              )
                               .animate()
                               .fadeIn(duration: 600.ms, delay: 600.ms)
                               .slideY(begin: 0.3, end: 0, duration: 400.ms),
@@ -754,76 +806,77 @@ class _LoginScreenState extends State<LoginScreen>
 
                           // Login Button
                           Container(
-                            width: double.infinity,
-                            height: 60,
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(20),
-                              gradient: const LinearGradient(
-                                colors: [
-                                  AppColors.primaryOrange,
-                                  AppColors.lightOrange,
-                                ],
-                                begin: Alignment.centerLeft,
-                                end: Alignment.centerRight,
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color:
-                                      AppColors.primaryOrange.withOpacity(0.25),
-                                  blurRadius: 20,
-                                  offset: const Offset(0, 10),
-                                  spreadRadius: -5,
-                                ),
-                              ],
-                            ),
-                            child: ElevatedButton(
-                              onPressed: _isLoading ? null : _handleLogin,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.transparent,
-                                foregroundColor: Colors.white,
-                                disabledBackgroundColor: Colors.transparent,
-                                disabledForegroundColor:
-                                    Colors.white.withOpacity(0.8),
-                                shape: RoundedRectangleBorder(
+                                width: double.infinity,
+                                height: 60,
+                                decoration: BoxDecoration(
                                   borderRadius: BorderRadius.circular(20),
-                                ),
-                                elevation: 0,
-                                shadowColor: Colors.transparent,
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 16,
-                                ),
-                              ),
-                              child: _isLoading
-                                  ? SizedBox(
-                                      width: 24,
-                                      height: 24,
-                                      child: CircularProgressIndicator(
-                                        color: Colors.white,
-                                        strokeWidth: 2,
-                                      ),
-                                    )
-                                  : Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.center,
-                                      children: [
-                                        Text(
-                                          AppLocalizations.of(context)!
-                                              .signInCaps,
-                                          style: GoogleFonts.poppins(
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.w600,
-                                            letterSpacing: 1.2,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 10),
-                                        const Icon(
-                                          Icons.arrow_forward_rounded,
-                                          size: 20,
-                                        ),
-                                      ],
+                                  gradient: const LinearGradient(
+                                    colors: [
+                                      AppColors.primaryOrange,
+                                      AppColors.lightOrange,
+                                    ],
+                                    begin: Alignment.centerLeft,
+                                    end: Alignment.centerRight,
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: AppColors.primaryOrange
+                                          .withOpacity(0.25),
+                                      blurRadius: 20,
+                                      offset: const Offset(0, 10),
+                                      spreadRadius: -5,
                                     ),
-                            ),
-                          )
+                                  ],
+                                ),
+                                child: ElevatedButton(
+                                  onPressed: _isLoading ? null : _handleLogin,
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.transparent,
+                                    foregroundColor: Colors.white,
+                                    disabledBackgroundColor: Colors.transparent,
+                                    disabledForegroundColor: Colors.white
+                                        .withOpacity(0.8),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    elevation: 0,
+                                    shadowColor: Colors.transparent,
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 16,
+                                    ),
+                                  ),
+                                  child: _isLoading
+                                      ? SizedBox(
+                                          width: 24,
+                                          height: 24,
+                                          child: CircularProgressIndicator(
+                                            color: Colors.white,
+                                            strokeWidth: 2,
+                                          ),
+                                        )
+                                      : Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          children: [
+                                            Text(
+                                              AppLocalizations.of(
+                                                context,
+                                              )!.signInCaps,
+                                              style: GoogleFonts.poppins(
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.w600,
+                                                letterSpacing: 1.2,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 10),
+                                            const Icon(
+                                              Icons.arrow_forward_rounded,
+                                              size: 20,
+                                            ),
+                                          ],
+                                        ),
+                                ),
+                              )
                               .animate()
                               .fadeIn(duration: 600.ms, delay: 800.ms)
                               .slideY(
@@ -937,30 +990,30 @@ class _LoginScreenState extends State<LoginScreen>
               _buildHelpItem(
                 'Cannot login with correct credentials',
                 '• Check your internet connection\n'
-                '• Ensure email is typed correctly\n'
-                '• Password is case-sensitive\n'
-                '• Try resetting your password',
+                    '• Ensure email is typed correctly\n'
+                    '• Password is case-sensitive\n'
+                    '• Try resetting your password',
               ),
               const Divider(height: 24),
               _buildHelpItem(
                 'Account not found',
                 '• Verify you\'re using the right email\n'
-                '• Contact your supervisor to ensure your account was created\n'
-                '• Check if you registered with a different email',
+                    '• Contact your supervisor to ensure your account was created\n'
+                    '• Check if you registered with a different email',
               ),
               const Divider(height: 24),
               _buildHelpItem(
                 'Biometric login not working',
                 '• Ensure biometrics are enabled in phone settings\n'
-                '• Try adding fingerprint/face again\n'
-                '• Use password login as fallback',
+                    '• Try adding fingerprint/face again\n'
+                    '• Use password login as fallback',
               ),
               const Divider(height: 24),
               _buildHelpItem(
                 'App keeps crashing',
                 '• Update the app to latest version\n'
-                '• Clear app cache in phone settings\n'
-                '• Restart your device',
+                    '• Clear app cache in phone settings\n'
+                    '• Restart your device',
               ),
               const SizedBox(height: 16),
               Container(

@@ -17,7 +17,7 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final ImagePicker _imagePicker = ImagePicker();
-  
+
   bool _isLoading = true;
   bool _isSaving = false;
   String? _userId;
@@ -25,20 +25,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String? _userEmail = '';
   String? _userAvatar;
   String? _userRole;
-  
+
   // Settings state
   bool _locationSharing = false;
   bool _notificationsEnabled = true;
   bool _darkMode = false;
-  
+
   // Password change
-  bool _showChangePassword = false;
+  final bool _showChangePassword = false;
   final TextEditingController _oldPasswordController = TextEditingController();
   final TextEditingController _newPasswordController = TextEditingController();
-  final TextEditingController _confirmPasswordController = TextEditingController();
-  bool _obscureOldPassword = true;
-  bool _obscureNewPassword = true;
-  bool _obscureConfirmPassword = true;
+  final TextEditingController _confirmPasswordController =
+      TextEditingController();
+  final bool _obscureOldPassword = true;
+  final bool _obscureNewPassword = true;
+  final bool _obscureConfirmPassword = true;
 
   @override
   void initState() {
@@ -77,7 +78,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _userName = profileResponse['full_name'] as String? ?? '';
           _userAvatar = profileResponse['avatar_url'] as String?;
           _userRole = profileResponse['role'] as String?;
-          _locationSharing = profileResponse['location_sharing'] as bool? ?? false;
+          _locationSharing =
+              profileResponse['location_sharing'] as bool? ?? false;
         });
       }
 
@@ -92,7 +94,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         final settings = settingsResponse['settings'] as Map<String, dynamic>?;
         if (settings != null) {
           setState(() {
-            _notificationsEnabled = settings['notifications']?['enabled'] as bool? ?? true;
+            _notificationsEnabled =
+                settings['notifications']?['enabled'] as bool? ?? true;
             _darkMode = settings['appearance']?['darkMode'] as bool? ?? false;
           });
         }
@@ -137,15 +140,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
         'settings': {
           'notifications': {'enabled': _notificationsEnabled},
           'appearance': {'darkMode': _darkMode},
-        }
+        },
       };
 
-      await Supabase.instance.client
-          .from('user_settings')
-          .upsert({
-            'user_id': _userId!,
-            ...settingsData,
-          });
+      await Supabase.instance.client.from('user_settings').upsert({
+        'user_id': _userId!,
+        ...settingsData,
+      });
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -184,8 +185,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       // Upload to Supabase storage
       final file = File(image.path);
       final fileBytes = await file.readAsBytes();
-      final fileName = '${_userId}_${DateTime.now().millisecondsSinceEpoch}.jpg';
-      final filePath = '$fileName';
+      final fileName =
+          '${_userId}_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final filePath = fileName;
 
       await Supabase.instance.client.storage
           .from('avatars')
@@ -276,7 +278,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       final responseData = response.data;
       if (responseData != null && responseData is Map) {
         if (responseData['success'] != true) {
-          throw Exception(responseData['error']?.toString() ?? 'Password change failed');
+          throw Exception(
+            responseData['error']?.toString() ?? 'Password change failed',
+          );
         }
       }
 
@@ -395,10 +399,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
       readOnly: readOnly,
       decoration: InputDecoration(
         labelText: label,
-        prefixIcon: icon != null ? Icon(icon, color: AppColors.primaryBlue) : null,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
+        prefixIcon: icon != null
+            ? Icon(icon, color: AppColors.primaryBlue)
+            : null,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
         filled: readOnly,
         fillColor: readOnly ? AppColors.backgroundGray : Colors.white,
       ),
@@ -423,10 +427,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
       value: value,
       onChanged: onChanged,
-      secondary: icon != null
-          ? Icon(icon, color: AppColors.primaryBlue)
-          : null,
-      activeColor: AppColors.primaryBlue,
+      secondary: icon != null ? Icon(icon, color: AppColors.primaryBlue) : null,
+      activeThumbColor: AppColors.primaryBlue,
     );
   }
 
@@ -442,10 +444,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            ReusableAppBar(
-              title: 'Settings',
-              scaffoldKey: _scaffoldKey,
-            ),
+            ReusableAppBar(title: 'Settings', scaffoldKey: _scaffoldKey),
             Expanded(
               child: _isLoading
                   ? const Center(child: CircularProgressIndicator())
@@ -468,7 +467,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                       children: [
                                         CircleAvatar(
                                           radius: 50,
-                                          backgroundColor: AppColors.primaryBlue,
+                                          backgroundColor:
+                                              AppColors.primaryBlue,
                                           backgroundImage: _userAvatar != null
                                               ? NetworkImage(_userAvatar!)
                                               : null,
@@ -517,7 +517,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               _buildTextField(
                                 label: 'Full Name',
                                 value: _userName ?? '',
-                                onChanged: (value) => setState(() => _userName = value),
+                                onChanged: (value) =>
+                                    setState(() => _userName = value),
                                 icon: Icons.person,
                               ),
                               const SizedBox(height: 16),
@@ -550,9 +551,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             children: [
                               _buildSwitchTile(
                                 title: 'Share Location with Team',
-                                subtitle: 'Allow team members to see your location',
+                                subtitle:
+                                    'Allow team members to see your location',
                                 value: _locationSharing,
-                                onChanged: (value) => setState(() => _locationSharing = value),
+                                onChanged: (value) =>
+                                    setState(() => _locationSharing = value),
                                 icon: Icons.location_on,
                               ),
                             ],
@@ -570,7 +573,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 title: 'Enable Notifications',
                                 subtitle: 'Receive push notifications',
                                 value: _notificationsEnabled,
-                                onChanged: (value) => setState(() => _notificationsEnabled = value),
+                                onChanged: (value) => setState(
+                                  () => _notificationsEnabled = value,
+                                ),
                                 icon: Icons.notifications,
                               ),
                             ],
@@ -588,7 +593,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 title: 'Dark Mode',
                                 subtitle: 'Switch to dark theme',
                                 value: _darkMode,
-                                onChanged: (value) => setState(() => _darkMode = value),
+                                onChanged: (value) =>
+                                    setState(() => _darkMode = value),
                                 icon: Icons.dark_mode,
                               ),
                             ],
@@ -603,9 +609,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             color: AppColors.accentGreen,
                             children: [
                               ListTile(
-                                leading: const Icon(Icons.lock, color: AppColors.primaryBlue),
+                                leading: const Icon(
+                                  Icons.lock,
+                                  color: AppColors.primaryBlue,
+                                ),
                                 title: const Text('Change Password'),
-                                subtitle: const Text('Update your account password'),
+                                subtitle: const Text(
+                                  'Update your account password',
+                                ),
                                 trailing: const Icon(Icons.chevron_right),
                                 onTap: () => _showPasswordChangeDialog(),
                               ),
@@ -621,7 +632,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               onPressed: _isSaving ? null : _updateProfile,
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: AppColors.primaryBlue,
-                                padding: const EdgeInsets.symmetric(vertical: 16),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 16,
+                                ),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(12),
                                 ),
@@ -632,7 +645,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                       width: 20,
                                       child: CircularProgressIndicator(
                                         strokeWidth: 2,
-                                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                        valueColor:
+                                            AlwaysStoppedAnimation<Color>(
+                                              Colors.white,
+                                            ),
                                       ),
                                     )
                                   : Text(
@@ -743,9 +759,13 @@ class _PasswordChangeDialogState extends State<_PasswordChangeDialog> {
                 prefixIcon: const Icon(Icons.lock_outline),
                 suffixIcon: IconButton(
                   icon: Icon(
-                    _obscureOldPassword ? Icons.visibility : Icons.visibility_off,
+                    _obscureOldPassword
+                        ? Icons.visibility
+                        : Icons.visibility_off,
                   ),
-                  onPressed: () => setState(() => _obscureOldPassword = !_obscureOldPassword),
+                  onPressed: () => setState(
+                    () => _obscureOldPassword = !_obscureOldPassword,
+                  ),
                 ),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -762,9 +782,13 @@ class _PasswordChangeDialogState extends State<_PasswordChangeDialog> {
                 prefixIcon: const Icon(Icons.lock),
                 suffixIcon: IconButton(
                   icon: Icon(
-                    _obscureNewPassword ? Icons.visibility : Icons.visibility_off,
+                    _obscureNewPassword
+                        ? Icons.visibility
+                        : Icons.visibility_off,
                   ),
-                  onPressed: () => setState(() => _obscureNewPassword = !_obscureNewPassword),
+                  onPressed: () => setState(
+                    () => _obscureNewPassword = !_obscureNewPassword,
+                  ),
                 ),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -781,9 +805,13 @@ class _PasswordChangeDialogState extends State<_PasswordChangeDialog> {
                 prefixIcon: const Icon(Icons.lock),
                 suffixIcon: IconButton(
                   icon: Icon(
-                    _obscureConfirmPassword ? Icons.visibility : Icons.visibility_off,
+                    _obscureConfirmPassword
+                        ? Icons.visibility
+                        : Icons.visibility_off,
                   ),
-                  onPressed: () => setState(() => _obscureConfirmPassword = !_obscureConfirmPassword),
+                  onPressed: () => setState(
+                    () => _obscureConfirmPassword = !_obscureConfirmPassword,
+                  ),
                 ),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -800,10 +828,15 @@ class _PasswordChangeDialogState extends State<_PasswordChangeDialog> {
                 ),
                 const SizedBox(width: 8),
                 ElevatedButton(
-                  onPressed: widget.isSaving ? null : () => widget.onChangePassword(),
+                  onPressed: widget.isSaving
+                      ? null
+                      : () => widget.onChangePassword(),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primaryBlue,
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 12,
+                    ),
                   ),
                   child: widget.isSaving
                       ? const SizedBox(
@@ -811,7 +844,9 @@ class _PasswordChangeDialogState extends State<_PasswordChangeDialog> {
                           width: 20,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              Colors.white,
+                            ),
                           ),
                         )
                       : const Text('Change Password'),
@@ -824,4 +859,3 @@ class _PasswordChangeDialogState extends State<_PasswordChangeDialog> {
     );
   }
 }
-

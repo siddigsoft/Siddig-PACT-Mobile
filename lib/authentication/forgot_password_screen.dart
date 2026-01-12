@@ -1,7 +1,8 @@
-// lib/authentication/forgot_password_screen.dart
-
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
+import '../widgets/app_widgets.dart';
+import '../services/auth_service.dart';
+import 'reset_password_screen.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({super.key});
@@ -73,19 +74,36 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
         _isLoading = true;
       });
 
-      // Simulate API call
-      await Future.delayed(const Duration(seconds: 2));
+      try {
+        final authService = AuthService();
+        await authService.requestPasswordReset(_emailController.text.trim());
 
-      // TODO: Implement actual password reset logic
-      // Example: await AuthService.sendPasswordResetEmail(_emailController.text);
+        setState(() {
+          _isLoading = false;
+          _emailSent = true; // Mark email as sent
+        });
 
-      setState(() {
-        _isLoading = false;
-        _emailSent = true; // Mark email as sent
-      });
+        // Navigate to reset password screen instead of showing dialog
+        if (mounted) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) =>
+                  ResetPasswordScreen(email: _emailController.text.trim()),
+            ),
+          );
+        }
+      } catch (e) {
+        setState(() {
+          _isLoading = false;
+        });
 
-      // Show success dialog
-      _showSuccessDialog();
+        AppSnackBar.show(
+          context,
+          message: e.toString(),
+          type: SnackBarType.error,
+        );
+      }
     }
   }
 
@@ -192,20 +210,30 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
       _isLoading = true;
     });
 
-    // Simulate API call
-    await Future.delayed(const Duration(seconds: 2));
+    try {
+      final authService = AuthService();
+      await authService.requestPasswordReset(_emailController.text.trim());
 
-    setState(() {
-      _isLoading = false;
-    });
+      setState(() {
+        _isLoading = false;
+      });
 
-    // Show snackbar
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Password reset email has been resent!'),
-        backgroundColor: AppColors.primaryBlue,
-      ),
-    );
+      AppSnackBar.show(
+        context,
+        message: 'New verification code sent to your email',
+        type: SnackBarType.success,
+      );
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+      });
+
+      AppSnackBar.show(
+        context,
+        message: 'Failed to resend code',
+        type: SnackBarType.error,
+      );
+    }
   }
 
   @override

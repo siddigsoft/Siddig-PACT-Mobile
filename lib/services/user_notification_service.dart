@@ -80,8 +80,7 @@ class UserNotificationService {
     } catch (e) {
       debugPrint('UserNotificationService markAsRead error: $e');
     }
-    _notifications[index] =
-        _notifications[index].copyWith(isRead: true);
+    _notifications[index] = _notifications[index].copyWith(isRead: true);
     await _cacheNotification(_notifications[index]);
     _emit();
   }
@@ -105,8 +104,7 @@ class UserNotificationService {
     for (final id in ids) {
       final index = _notifications.indexWhere((item) => item.id == id);
       if (index != -1) {
-        _notifications[index] =
-            _notifications[index].copyWith(isRead: true);
+        _notifications[index] = _notifications[index].copyWith(isRead: true);
         unawaited(_cacheNotification(_notifications[index]));
       }
     }
@@ -124,22 +122,20 @@ class UserNotificationService {
           .order('created_at', ascending: false)
           .limit(_maxCachedNotifications);
 
-      debugPrint('UserNotificationService: Fetched ${response.length} notifications for user $userId');
+      debugPrint(
+        'UserNotificationService: Fetched ${response.length} notifications for user $userId',
+      );
 
-      if (response is List) {
-        for (final item in response) {
-          if (item is Map<String, dynamic>) {
-            _upsertNotification(UserNotification.fromJson(item));
-          } else if (item is Map) {
-            _upsertNotification(
-              UserNotification.fromJson(
-                Map<String, dynamic>.from(item as Map),
-              ),
-            );
-          }
+      for (final item in response) {
+        if (item is Map<String, dynamic>) {
+          _upsertNotification(UserNotification.fromJson(item));
+        } else if (item is Map) {
+          _upsertNotification(
+            UserNotification.fromJson(Map<String, dynamic>.from(item as Map)),
+          );
         }
-        await _writeCache();
       }
+      await _writeCache();
     } catch (e) {
       debugPrint('UserNotificationService fetch error: $e');
     }
@@ -156,22 +152,20 @@ class UserNotificationService {
         _notifications.add(UserNotification.fromJson(raw));
       } else if (raw is Map) {
         _notifications.add(
-          UserNotification.fromJson(
-            Map<String, dynamic>.from(raw as Map),
-          ),
+          UserNotification.fromJson(Map<String, dynamic>.from(raw)),
         );
       }
     }
-    _notifications.sort(
-      (a, b) => b.createdAt.compareTo(a.createdAt),
-    );
+    _notifications.sort((a, b) => b.createdAt.compareTo(a.createdAt));
   }
 
   void _subscribeToRealtime(String userId) {
     _realtimeChannel?.unsubscribe();
     _realtimeChannel = _supabase.channel('user_notifications_$userId');
 
-    debugPrint('UserNotificationService: Subscribing to realtime for user $userId');
+    debugPrint(
+      'UserNotificationService: Subscribing to realtime for user $userId',
+    );
 
     _realtimeChannel
       ?..onPostgresChanges(
@@ -180,15 +174,16 @@ class UserNotificationService {
         table: 'notifications',
         callback: (payload) {
           final data = payload.newRecord;
-          debugPrint('UserNotificationService: Received INSERT event: ${data?.keys.toList()}');
-          if (data == null) {
-            return;
-          }
+          debugPrint(
+            'UserNotificationService: Received INSERT event: ${data.keys.toList()}',
+          );
           // Check both user_id and recipient_id columns
           final notifUserId = data['user_id'];
           final notifRecipientId = data['recipient_id'];
           if (notifUserId != userId && notifRecipientId != userId) {
-            debugPrint('UserNotificationService: Notification not for this user (user_id: $notifUserId, recipient_id: $notifRecipientId)');
+            debugPrint(
+              'UserNotificationService: Notification not for this user (user_id: $notifUserId, recipient_id: $notifRecipientId)',
+            );
             return;
           }
           try {
@@ -208,9 +203,6 @@ class UserNotificationService {
         callback: (payload) {
           final data = payload.newRecord;
           debugPrint('UserNotificationService: Received UPDATE event');
-          if (data == null) {
-            return;
-          }
           // Check both user_id and recipient_id columns
           final notifUserId = data['user_id'];
           final notifRecipientId = data['recipient_id'];
@@ -228,13 +220,16 @@ class UserNotificationService {
         },
       )
       ..subscribe((status, error) {
-        debugPrint('UserNotificationService: Realtime subscription status: $status, error: $error');
+        debugPrint(
+          'UserNotificationService: Realtime subscription status: $status, error: $error',
+        );
       });
   }
 
   void _handleInsert(UserNotification notification) {
-    final alreadyExists =
-        _notifications.any((item) => item.id == notification.id);
+    final alreadyExists = _notifications.any(
+      (item) => item.id == notification.id,
+    );
     _upsertNotification(notification);
     if (!alreadyExists) {
       unawaited(
@@ -259,7 +254,9 @@ class UserNotificationService {
   }
 
   void _upsertNotification(UserNotification notification) {
-    final index = _notifications.indexWhere((item) => item.id == notification.id);
+    final index = _notifications.indexWhere(
+      (item) => item.id == notification.id,
+    );
     if (index >= 0) {
       _notifications[index] = notification;
     } else {
@@ -274,12 +271,10 @@ class UserNotificationService {
     if (_notifications.length <= _maxCachedNotifications) {
       return;
     }
-    final removed =
-        _notifications.sublist(_maxCachedNotifications).toList(growable: false);
-    _notifications.removeRange(
-      _maxCachedNotifications,
-      _notifications.length,
-    );
+    final removed = _notifications
+        .sublist(_maxCachedNotifications)
+        .toList(growable: false);
+    _notifications.removeRange(_maxCachedNotifications, _notifications.length);
     if (_cacheBox != null) {
       for (final notification in removed) {
         unawaited(_cacheBox!.delete(notification.id));
@@ -298,7 +293,8 @@ class UserNotificationService {
     if (_cacheBox == null) {
       return;
     }
-    final Map<String, Map<String, dynamic>> data = <String, Map<String, dynamic>>{};
+    final Map<String, Map<String, dynamic>> data =
+        <String, Map<String, dynamic>>{};
     for (final notification in _notifications) {
       data[notification.id] = notification.toJson();
     }

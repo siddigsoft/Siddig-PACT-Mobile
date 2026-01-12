@@ -2,19 +2,12 @@
 
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../widgets/custom_bottom_navigation_bar.dart';
 import 'dashboard_screen.dart';
 import 'field_operations_enhanced_screen.dart';
 // import 'forms_screen.dart'; // Removed forms screen
 // import 'equipment_screen.dart'; // Removed equipment screen
-import 'safety_hub_screen.dart';
-import 'chat_list_screen.dart';
-import 'reports_screen.dart';
 import 'wallet_screen.dart';
-import 'site_verification_screen.dart';
-import '../widgets/online_offline_toggle.dart';
 import '../widgets/network_status_indicator.dart';
-import '../widgets/movable_online_offline_toggle.dart';
 import '../widgets/incoming_call_dialog.dart';
 import '../services/webrtc_service.dart';
 import '../models/call_state.dart';
@@ -63,9 +56,10 @@ class _MainScreenState extends State<MainScreen> {
       if (response != null && mounted) {
         final role = (response['role'] as String?)?.toLowerCase() ?? '';
         setState(() {
-          _isCoordinator = role == 'coordinator' || 
-                           role == 'field_coordinator' ||
-                           role == 'state_coordinator';
+          _isCoordinator =
+              role == 'coordinator' ||
+              role == 'field_coordinator' ||
+              role == 'state_coordinator';
           _isLoadingRole = false;
         });
         debugPrint('✅ User role: $role, isCoordinator: $_isCoordinator');
@@ -97,7 +91,8 @@ class _MainScreenState extends State<MainScreen> {
       String? userAvatar;
 
       if (response != null) {
-        userName = (response['full_name'] as String?) ??
+        userName =
+            (response['full_name'] as String?) ??
             (response['username'] as String?) ??
             user.email?.split('@').first ??
             'User';
@@ -178,7 +173,7 @@ class _MainScreenState extends State<MainScreen> {
   Widget build(BuildContext context) {
     // Get safe area padding to position banner below status bar and app bar
     final topPadding = MediaQuery.of(context).padding.top;
-    
+
     return WillPopScope(
       onWillPop: _onWillPop,
       child: Scaffold(
@@ -190,15 +185,14 @@ class _MainScreenState extends State<MainScreen> {
               _buildCurrentScreen(),
               // Offline mode banner - positioned below status bar and app bar area
               Positioned(
-                top: topPadding + 56, // Below status bar + approximate app bar height
+                top:
+                    topPadding +
+                    56, // Below status bar + approximate app bar height
                 left: 0,
                 right: 0,
                 child: const OfflineModeBanner(),
               ),
-              // Movable Online/Offline toggle (only for data collectors)
-              MovableOnlineOfflineToggle(
-                variant: ToggleVariant.uber,
-              ),
+              // Movable Online/Offline toggle moved to MainLayout
             ],
           ),
         ),

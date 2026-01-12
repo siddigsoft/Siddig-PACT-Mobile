@@ -1,5 +1,3 @@
-import 'package:supabase_flutter/supabase_flutter.dart';
-
 /// Model for visit report stored in database
 class VisitReport {
   final String siteId;
@@ -40,4 +38,3 @@ class VisitReport {
     };
   }
 }
-

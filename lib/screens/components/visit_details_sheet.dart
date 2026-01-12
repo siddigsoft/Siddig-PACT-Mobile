@@ -2,9 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'dart:async'; // For TimeoutException
-import 'package:flutter_animate/flutter_animate.dart';
 import '../../models/site_visit.dart';
-import '../../models/visit_status.dart';
 import '../../theme/app_colors.dart';
 import 'package:geolocator/geolocator.dart';
 import '../../services/staff_tracking_service.dart';
@@ -114,8 +112,9 @@ class _VisitDetailsSheetState extends State<VisitDetailsSheet> {
       context: context,
       barrierDismissible: false,
       builder: (_) => const _ProgressDialog(
-          title: 'Ending visit',
-          message: 'Capturing site location and stopping tracking...'),
+        title: 'Ending visit',
+        message: 'Capturing site location and stopping tracking...',
+      ),
     );
 
     try {
@@ -133,7 +132,8 @@ class _VisitDetailsSheetState extends State<VisitDetailsSheet> {
         throw Exception('Location permission not granted');
       }
       final position = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.best);
+        desiredAccuracy: LocationAccuracy.best,
+      );
 
       // 2) Persist actual site coordinates in dedicated table
       // Reuse StaffTrackingService API which writes to `site_locations`
@@ -157,7 +157,8 @@ class _VisitDetailsSheetState extends State<VisitDetailsSheet> {
             .eq('site_id', _visit.id)
             .single();
         debugPrint(
-            '✅ Verified site location saved: lat=${row['latitude']}, lng=${row['longitude']}');
+          '✅ Verified site location saved: lat=${row['latitude']}, lng=${row['longitude']}',
+        );
       } catch (e) {
         debugPrint('⚠️ Verification read failed (may be blocked by RLS): $e');
       }
@@ -197,7 +198,9 @@ class _VisitDetailsSheetState extends State<VisitDetailsSheet> {
       context: context,
       barrierDismissible: false,
       builder: (_) => const _ProgressDialog(
-          title: 'Please wait', message: 'Updating visit status...'),
+        title: 'Please wait',
+        message: 'Updating visit status...',
+      ),
     );
 
     try {
@@ -206,7 +209,7 @@ class _VisitDetailsSheetState extends State<VisitDetailsSheet> {
       await widget
           .onStatusChanged(newStatus)
           .timeout(const Duration(seconds: 20));
-      
+
       // Update local state to reflect the change immediately
       if (mounted) {
         setState(() {
@@ -224,7 +227,8 @@ class _VisitDetailsSheetState extends State<VisitDetailsSheet> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
-                'Updating took too long. Please check network and try again.'),
+              'Updating took too long. Please check network and try again.',
+            ),
             backgroundColor: Colors.orange,
           ),
         );
@@ -266,30 +270,33 @@ class _VisitDetailsSheetState extends State<VisitDetailsSheet> {
   Future<void> _updateVisitStatusAndShowReport() async {
     // 1. Update status to Completed
     // We can't easily await _updateVisitStatus because it returns void.
-    // But we can replicate its logic or just call it and hope for the best, 
+    // But we can replicate its logic or just call it and hope for the best,
     // OR better, we can use the widget.onStatusChanged directly which returns Future<void>.
-    
+
     if (_isUpdating) return;
     setState(() => _isUpdating = true);
-    
+
     // Show progress
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (_) => const _ProgressDialog(title: 'Updating', message: 'Completing visit...'),
+      builder: (_) => const _ProgressDialog(
+        title: 'Updating',
+        message: 'Completing visit...',
+      ),
     );
 
     try {
       // Call the parent callback directly to await it
       await widget.onStatusChanged('Completed');
-      
+
       // Also stop tracking if needed (logic usually in parent, but let's be safe)
       // The parent _handleVisitStatusChanged handles stopTracking for 'Completed'.
-      
+
       if (mounted) {
         Navigator.pop(context); // Close progress dialog
         setState(() => _isUpdating = false);
-        
+
         // 2. Show Report Form immediately
         _showReportForm();
       }
@@ -297,9 +304,9 @@ class _VisitDetailsSheetState extends State<VisitDetailsSheet> {
       if (mounted) {
         Navigator.pop(context); // Close progress dialog
         setState(() => _isUpdating = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error completing visit: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error completing visit: $e')));
       }
     }
   }
@@ -410,7 +417,9 @@ class _VisitDetailsSheetState extends State<VisitDetailsSheet> {
                     icon: Icons.qr_code,
                     iconColor: Colors.purple.shade400,
                     title: 'Site Code',
-                    content: _visit.siteCode.isNotEmpty ? _visit.siteCode : 'N/A',
+                    content: _visit.siteCode.isNotEmpty
+                        ? _visit.siteCode
+                        : 'N/A',
                   ),
                   const Divider(),
 
@@ -419,18 +428,26 @@ class _VisitDetailsSheetState extends State<VisitDetailsSheet> {
                     icon: Icons.location_on,
                     iconColor: Colors.red.shade400,
                     title: 'Location',
-                    content: _visit.locationString.isNotEmpty 
+                    content: _visit.locationString.isNotEmpty
                         ? _visit.locationString
                         : '${_visit.locality}, ${_visit.state}',
                   ),
-                  
+
                   // GPS Coordinates (if available)
                   if (_visit.latitude != null && _visit.longitude != null)
                     Padding(
-                      padding: const EdgeInsets.only(left: 44, top: 4, bottom: 8),
+                      padding: const EdgeInsets.only(
+                        left: 44,
+                        top: 4,
+                        bottom: 8,
+                      ),
                       child: Row(
                         children: [
-                          Icon(Icons.gps_fixed, size: 14, color: Colors.grey.shade600),
+                          Icon(
+                            Icons.gps_fixed,
+                            size: 14,
+                            color: Colors.grey.shade600,
+                          ),
                           const SizedBox(width: 4),
                           Text(
                             'GPS: ${_visit.latitude!.toStringAsFixed(6)}, ${_visit.longitude!.toStringAsFixed(6)}',
@@ -495,7 +512,8 @@ class _VisitDetailsSheetState extends State<VisitDetailsSheet> {
                       icon: Icons.visibility,
                       iconColor: Colors.indigo.shade400,
                       title: 'Monitoring By',
-                      content: _visit.additionalData!['monitoring_by'].toString(),
+                      content: _visit.additionalData!['monitoring_by']
+                          .toString(),
                     ),
                     const Divider(),
                   ],
@@ -523,7 +541,8 @@ class _VisitDetailsSheetState extends State<VisitDetailsSheet> {
                   ],
 
                   // Fee Breakdown
-                  if (_visit.enumeratorFee != null || _visit.transportFee != null) ...[
+                  if (_visit.enumeratorFee != null ||
+                      _visit.transportFee != null) ...[
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
@@ -536,7 +555,11 @@ class _VisitDetailsSheetState extends State<VisitDetailsSheet> {
                         children: [
                           Row(
                             children: [
-                              Icon(Icons.attach_money, color: Colors.blue.shade700, size: 20),
+                              Icon(
+                                Icons.attach_money,
+                                color: Colors.blue.shade700,
+                                size: 20,
+                              ),
                               const SizedBox(width: 8),
                               Text(
                                 'Fee Breakdown',
@@ -551,7 +574,8 @@ class _VisitDetailsSheetState extends State<VisitDetailsSheet> {
                           const SizedBox(height: 8),
                           _buildFeeRow(
                             'Total Payment',
-                            (_visit.enumeratorFee ?? 0) + (_visit.transportFee ?? 0),
+                            (_visit.enumeratorFee ?? 0) +
+                                (_visit.transportFee ?? 0),
                             isBold: true,
                           ),
                         ],
@@ -866,12 +890,15 @@ class _VisitDetailsSheetState extends State<VisitDetailsSheet> {
     // Different buttons based on current status
     final visitStatus = (_visit.status ?? '').toString().trim().toLowerCase();
     final currentUserId = Supabase.instance.client.auth.currentUser?.id;
-    final isAccepted = _visit.acceptedBy != null && _visit.acceptedBy == currentUserId;
+    final isAccepted =
+        _visit.acceptedBy != null && _visit.acceptedBy == currentUserId;
     final isCompleted = visitStatus == 'completed';
     final isInProgress = visitStatus == 'in_progress';
-    
-    debugPrint('🔍 Visit Details - Status: $visitStatus, claimedBy: ${_visit.claimedBy}, acceptedBy: ${_visit.acceptedBy}, isAccepted: $isAccepted, isCompleted: $isCompleted, currentUser: $currentUserId');
-    
+
+    debugPrint(
+      '🔍 Visit Details - Status: $visitStatus, claimedBy: ${_visit.claimedBy}, acceptedBy: ${_visit.acceptedBy}, isAccepted: $isAccepted, isCompleted: $isCompleted, currentUser: $currentUserId',
+    );
+
     final actionWidgets = <Widget>[];
 
     // If completed, show completed state - no action buttons needed
@@ -966,17 +993,20 @@ class _VisitDetailsSheetState extends State<VisitDetailsSheet> {
       );
     } else {
       switch (visitStatus) {
-      case 'dispatched':
-      case 'available':
-      case 'pending': // Add more status variants
-        final isClaimedByCurrentUser = _visit.claimedBy == currentUserId && currentUserId != null;
-        
-        // If already claimed by current user, show Accept button
-        // Otherwise show Claim button
-        if (isClaimedByCurrentUser) {
-          // PHASE 2: Accept assignment with cost acknowledgment
-          debugPrint('✅ Showing Accept button (site already claimed by user)');
-          actionWidgets.addAll([
+        case 'dispatched':
+        case 'available':
+        case 'pending': // Add more status variants
+          final isClaimedByCurrentUser =
+              _visit.claimedBy == currentUserId && currentUserId != null;
+
+          // If already claimed by current user, show Accept button
+          // Otherwise show Claim button
+          if (isClaimedByCurrentUser) {
+            // PHASE 2: Accept assignment with cost acknowledgment
+            debugPrint(
+              '✅ Showing Accept button (site already claimed by user)',
+            );
+            actionWidgets.addAll([
               // Time limit warning for claimed sites
               if (_visit.claimedAt != null)
                 Container(
@@ -989,7 +1019,11 @@ class _VisitDetailsSheetState extends State<VisitDetailsSheet> {
                   ),
                   child: Row(
                     children: [
-                      Icon(Icons.access_time, color: Colors.orange.shade700, size: 20),
+                      Icon(
+                        Icons.access_time,
+                        color: Colors.orange.shade700,
+                        size: 20,
+                      ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Column(
@@ -1046,10 +1080,10 @@ class _VisitDetailsSheetState extends State<VisitDetailsSheet> {
                 filled: false,
               ),
             ]);
-        } else {
-          // PHASE 1: Claim the site first (or Accept directly if no claim required)
-          debugPrint('✅ Showing Claim/Accept buttons');
-          actionWidgets.addAll([
+          } else {
+            // PHASE 1: Claim the site first (or Accept directly if no claim required)
+            debugPrint('✅ Showing Claim/Accept buttons');
+            actionWidgets.addAll([
               // For now, show BOTH Claim and Accept buttons to ensure user can proceed
               ClaimSiteButton(
                 siteEntryId: _visit.id,
@@ -1102,13 +1136,13 @@ class _VisitDetailsSheetState extends State<VisitDetailsSheet> {
                 filled: false,
               ),
             ]);
-        }
-        break;
-      case 'assigned':
-      case 'claimed':
-        // PHASE 2: Accept assignment with cost acknowledgment
-        // Site has been claimed, now show Accept Assignment button
-        actionWidgets.addAll([
+          }
+          break;
+        case 'assigned':
+        case 'claimed':
+          // PHASE 2: Accept assignment with cost acknowledgment
+          // Site has been claimed, now show Accept Assignment button
+          actionWidgets.addAll([
             // Time limit warning for claimed sites
             if (_visit.claimedAt != null)
               Container(
@@ -1121,7 +1155,11 @@ class _VisitDetailsSheetState extends State<VisitDetailsSheet> {
                 ),
                 child: Row(
                   children: [
-                    Icon(Icons.access_time, color: Colors.orange.shade700, size: 20),
+                    Icon(
+                      Icons.access_time,
+                      color: Colors.orange.shade700,
+                      size: 20,
+                    ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Column(
@@ -1170,13 +1208,13 @@ class _VisitDetailsSheetState extends State<VisitDetailsSheet> {
               },
             ),
           ]);
-        break;
+          break;
 
-      case 'accept':
-      case 'accepted':
-        // PHASE 3: Start the visit
-        // Assignment accepted, show Start Visit button
-        actionWidgets.addAll([
+        case 'accept':
+        case 'accepted':
+          // PHASE 3: Start the visit
+          // Assignment accepted, show Start Visit button
+          actionWidgets.addAll([
             StartVisitButton(
               visit: _visit,
               onStartSuccess: () {
@@ -1190,10 +1228,10 @@ class _VisitDetailsSheetState extends State<VisitDetailsSheet> {
               },
             ),
           ]);
-        break;
-      case 'ongoing':
-      case 'in_progress':
-        actionWidgets.addAll([
+          break;
+        case 'ongoing':
+        case 'in_progress':
+          actionWidgets.addAll([
             CompleteVisitButton(
               visit: _visit,
               onCompleteSuccess: () {
@@ -1207,31 +1245,31 @@ class _VisitDetailsSheetState extends State<VisitDetailsSheet> {
               },
             ),
           ]);
-        break;
-      case 'completed':
-      case 'complete':
-        actionWidgets.add(
-          _buildButton(
-          label: _hasReport ? 'View Report' : 'Submit Report',
-          icon: _hasReport ? Icons.description : Icons.assignment,
-          color: _hasReport ? Colors.grey : Colors.green,
-          onPressed: () {
-            if (_hasReport) {
-              // View report logic (maybe open PDF or details)
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Report already submitted')),
-              );
-            } else {
-              _showReportForm();
-            }
-          },
-          filled: !_hasReport,
-          ),
-        );
-        break;
-      default:
-        actionWidgets.add(defaultButton);
-        break;
+          break;
+        case 'completed':
+        case 'complete':
+          actionWidgets.add(
+            _buildButton(
+              label: _hasReport ? 'View Report' : 'Submit Report',
+              icon: _hasReport ? Icons.description : Icons.assignment,
+              color: _hasReport ? Colors.grey : Colors.green,
+              onPressed: () {
+                if (_hasReport) {
+                  // View report logic (maybe open PDF or details)
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Report already submitted')),
+                  );
+                } else {
+                  _showReportForm();
+                }
+              },
+              filled: !_hasReport,
+            ),
+          );
+          break;
+        default:
+          actionWidgets.add(defaultButton);
+          break;
       }
     }
 
@@ -1251,12 +1289,7 @@ class _VisitDetailsSheetState extends State<VisitDetailsSheet> {
       );
     }
 
-    return Column(
-      children: [
-        ...prefixWidgets,
-        ...actionWidgets,
-      ],
-    );
+    return Column(children: [...prefixWidgets, ...actionWidgets]);
   }
 
   Future<void> _showRejectionDialog() async {
@@ -1304,9 +1337,9 @@ class _VisitDetailsSheetState extends State<VisitDetailsSheet> {
         if (mounted) Navigator.pop(context);
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error rejecting visit: $e')),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('Error rejecting visit: $e')));
         }
       } finally {
         if (mounted) setState(() => _isUpdating = false);
@@ -1332,12 +1365,15 @@ class _ProgressDialog extends StatelessWidget {
           children: [
             const CircularProgressIndicator(),
             const SizedBox(height: 16),
-            Text(title,
-                style:
-                    const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+            Text(
+              title,
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+            ),
             const SizedBox(height: 8),
-            Text(message,
-                style: TextStyle(fontSize: 14, color: Colors.grey.shade700)),
+            Text(
+              message,
+              style: TextStyle(fontSize: 14, color: Colors.grey.shade700),
+            ),
           ],
         ),
       ),

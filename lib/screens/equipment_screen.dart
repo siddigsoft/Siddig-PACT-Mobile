@@ -12,7 +12,6 @@ import '../theme/app_colors.dart';
 import '../l10n/app_localizations.dart';
 import '../theme/app_design_system.dart';
 import '../widgets/app_widgets.dart';
-import '../utils/error_handler.dart';
 
 class EquipmentScreen extends StatefulWidget {
   const EquipmentScreen({super.key});
@@ -61,8 +60,9 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
     }
     if (_searchQuery.isNotEmpty) {
       filteredEquipment = filteredEquipment
-          .where((eq) =>
-              eq.name.toLowerCase().contains(_searchQuery.toLowerCase()))
+          .where(
+            (eq) => eq.name.toLowerCase().contains(_searchQuery.toLowerCase()),
+          )
           .toList();
     }
 
@@ -108,7 +108,8 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
                   selectedStatus = value!;
                 },
                 decoration: InputDecoration(
-                    labelText: AppLocalizations.of(context)!.status),
+                  labelText: AppLocalizations.of(context)!.status,
+                ),
               ),
               const SizedBox(height: 16),
               TextField(
@@ -226,11 +227,13 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
                 );
 
                 // Get current equipment and add inspection
-                final currentEquipment =
-                    _localStorage.getEquipment(equipment.id);
+                final currentEquipment = _localStorage.getEquipment(
+                  equipment.id,
+                );
                 if (currentEquipment != null) {
-                  final updatedInspections =
-                      List<Inspection>.from(currentEquipment.inspections ?? []);
+                  final updatedInspections = List<Inspection>.from(
+                    currentEquipment.inspections ?? [],
+                  );
                   updatedInspections.add(inspection);
 
                   final updatedEquipment = Equipment(
@@ -301,8 +304,9 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
                                       inspections:
                                           _equipment[index].inspections,
                                     );
-                                    await _localStorage
-                                        .saveEquipment(updatedEquipment);
+                                    await _localStorage.saveEquipment(
+                                      updatedEquipment,
+                                    );
                                     _loadEquipment();
                                   },
                                   onTap: () =>
@@ -312,14 +316,16 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
                             if (_equipment.isEmpty)
                               Center(
                                 child: Padding(
-                                  padding:
-                                      EdgeInsets.all(AppDesignSystem.spaceLG),
+                                  padding: EdgeInsets.all(
+                                    AppDesignSystem.spaceLG,
+                                  ),
                                   child: Column(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
                                       Container(
                                         padding: EdgeInsets.all(
-                                            AppDesignSystem.spaceLG),
+                                          AppDesignSystem.spaceLG,
+                                        ),
                                         decoration: BoxDecoration(
                                           color: AppColors.primaryOrange
                                               .withOpacity(0.1),
@@ -331,22 +337,25 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
                                           color: AppColors.primaryOrange,
                                         ),
                                       ).animate().scale(
-                                          duration: 600.ms,
-                                          curve: Curves.elasticOut),
+                                        duration: 600.ms,
+                                        curve: Curves.elasticOut,
+                                      ),
                                       SizedBox(height: AppDesignSystem.spaceMD),
                                       Text(
-                                        AppLocalizations.of(context)!
-                                            .noEquipmentFound,
+                                        AppLocalizations.of(
+                                          context,
+                                        )!.noEquipmentFound,
                                         style: AppDesignSystem.headlineMedium,
                                       ).animate().fadeIn(delay: 200.ms),
                                       SizedBox(height: AppDesignSystem.spaceSM),
                                       Text(
-                                        AppLocalizations.of(context)!
-                                            .tapPlusButtonToAddEquipment,
-                                        style:
-                                            AppDesignSystem.bodyMedium.copyWith(
-                                          color: AppColors.textLight,
-                                        ),
+                                        AppLocalizations.of(
+                                          context,
+                                        )!.tapPlusButtonToAddEquipment,
+                                        style: AppDesignSystem.bodyMedium
+                                            .copyWith(
+                                              color: AppColors.textLight,
+                                            ),
                                       ).animate().fadeIn(delay: 300.ms),
                                     ],
                                   ),
@@ -450,8 +459,9 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
                       _loadEquipment();
                     },
                     decoration: InputDecoration(
-                      hintText: AppLocalizations.of(context)!
-                          .enterEquipmentNameSearch,
+                      hintText: AppLocalizations.of(
+                        context,
+                      )!.enterEquipmentNameSearch,
                       prefixIcon: Icon(Icons.search),
                     ),
                   ),
@@ -481,7 +491,9 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
           _buildFilterChip(AppLocalizations.of(context)!.available, false),
           _buildFilterChip(AppLocalizations.of(context)!.inUse, false),
           _buildFilterChip(
-              AppLocalizations.of(context)!.needsMaintenance, false),
+            AppLocalizations.of(context)!.needsMaintenance,
+            false,
+          ),
         ],
       ),
     ).animate().fadeIn(duration: 500.ms, delay: 100.ms);

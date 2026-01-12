@@ -52,7 +52,8 @@ class AuthService {
         // Create new user profile if doesn't exist
         await supabase.from('Users').insert({
           'UID': user.id,
-          'Display name': user.userMetadata?['full_name'] ??
+          'Display name':
+              user.userMetadata?['full_name'] ??
               user.email?.split('@')[0] ??
               'User',
           'Email': user.email,
@@ -65,9 +66,10 @@ class AuthService {
         });
       } else {
         // Update last sign in time
-        await supabase.from('Users').update({
-          'Last sign in at': DateTime.now().toIso8601String(),
-        }).eq('UID', user.id);
+        await supabase
+            .from('Users')
+            .update({'Last sign in at': DateTime.now().toIso8601String()})
+            .eq('UID', user.id);
       }
 
       // Ensure user has worker role
@@ -202,12 +204,83 @@ class AuthService {
   /// Resend verification email
   Future<void> resendVerificationEmail(String email) async {
     try {
-      await supabase.auth.resend(
-        type: OtpType.signup,
-        email: email,
-      );
+      await supabase.auth.resend(type: OtpType.signup, email: email);
     } catch (e) {
       throw AuthException('Failed to resend verification email');
+    }
+  }
+
+  /// Request password reset with OTP
+  Future<void> requestPasswordReset(String email) async {
+    try {
+      // Call the verify-reset-otp edge function with 'generate' action
+      final response = await supabase.functions.invoke(
+        'verify-reset-otp',
+        body: {'email': email.toLowerCase(), 'action': 'generate'},
+      );
+
+      if (response.status != 200) {
+        throw AuthException('Failed to send reset code');
+      }
+
+      // The function returns success even if user doesn't exist (security)
+    } catch (e) {
+      debugPrint('Error requesting password reset: $e');
+      throw AuthException('Failed to send reset code. Please try again.');
+    }
+  }
+
+  /// Verify OTP for password reset
+  Future<void> verifyPasswordResetOTP(String email, String otp) async {
+    try {
+      final response = await supabase.functions.invoke(
+        'verify-reset-otp',
+        body: {'email': email.toLowerCase(), 'otp': otp},
+      );
+
+      if (response.status != 200) {
+        throw AuthException('Invalid or expired verification code');
+      }
+
+      final data = response.data;
+      if (data == null || !(data['success'] as bool)) {
+        throw AuthException('Invalid or expired verification code');
+      }
+    } catch (e) {
+      debugPrint('Error verifying OTP: $e');
+      if (e is AuthException) rethrow;
+      throw AuthException('Failed to verify code. Please try again.');
+    }
+  }
+
+  /// Reset password with OTP
+  Future<void> resetPasswordWithOTP(
+    String email,
+    String otp,
+    String newPassword,
+  ) async {
+    try {
+      final response = await supabase.functions.invoke(
+        'reset-password-with-otp',
+        body: {
+          'email': email.toLowerCase(),
+          'otp': otp,
+          'newPassword': newPassword,
+        },
+      );
+
+      if (response.status != 200) {
+        throw AuthException('Failed to reset password');
+      }
+
+      final data = response.data;
+      if (data == null || !(data['success'] as bool)) {
+        throw AuthException('Failed to reset password');
+      }
+    } catch (e) {
+      debugPrint('Error resetting password: $e');
+      if (e is AuthException) rethrow;
+      throw AuthException('Failed to reset password. Please try again.');
     }
   }
 
@@ -246,7 +319,9 @@ class AuthService {
       await prefs.setString('user_id', session.user.id);
       await prefs.setString('user_email', session.user.email ?? '');
       await prefs.setString(
-          'user_name', session.user.userMetadata?['full_name'] ?? '');
+        'user_name',
+        session.user.userMetadata?['full_name'] ?? '',
+      );
       await prefs.setBool('is_logged_in', true);
       await prefs.setInt('token_expires_at', session.expiresAt ?? 0);
     } catch (e) {
@@ -327,11 +402,7 @@ class AuthService {
 
       if (userId == null) return null;
 
-      return {
-        'id': userId,
-        'email': userEmail,
-        'name': userName,
-      };
+      return {'id': userId, 'email': userEmail, 'name': userName};
     } catch (e) {
       debugPrint('Error getting local user profile: $e');
       return null;

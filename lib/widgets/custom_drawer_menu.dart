@@ -10,14 +10,15 @@ import '../providers/profile_provider.dart';
 import '../theme/app_design_system.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_widgets.dart';
-import '../utils/error_handler.dart';
 import '../screens/profile_screen.dart';
-import '../screens/help_screen.dart';
 import '../screens/settings_screen.dart';
 import '../screens/field_operations_enhanced_screen.dart';
 import '../screens/dashboard_screen.dart';
 import '../screens/wallet_screen.dart';
 import '../screens/site_verification_screen.dart';
+import '../screens/chats_screen.dart';
+import '../screens/help_screen.dart';
+import '../screens/support_screen.dart';
 
 class CustomDrawerMenu extends ConsumerStatefulWidget {
   final User? currentUser;
@@ -72,7 +73,7 @@ class _CustomDrawerMenuState extends ConsumerState<CustomDrawerMenu> {
           .select('role')
           .eq('user_id', widget.currentUser!.id)
           .maybeSingle();
-      
+
       if (response != null && mounted) {
         setState(() {
           _userRole = response['role'] as String;
@@ -84,7 +85,10 @@ class _CustomDrawerMenuState extends ConsumerState<CustomDrawerMenu> {
   }
 
   Future<void> _launchUrl(
-      BuildContext context, String urlString, String errorMessage) async {
+    BuildContext context,
+    String urlString,
+    String errorMessage,
+  ) async {
     final url = Uri.parse(urlString);
     try {
       if (await canLaunchUrl(url)) {
@@ -128,7 +132,7 @@ class _CustomDrawerMenuState extends ConsumerState<CustomDrawerMenu> {
       queryParameters: {
         'subject': 'PACT Mobile App Feedback',
         'body':
-            'Dear Developer,\n\nI would like to provide feedback about the PACT Mobile app:\n\n'
+            'Dear Developer,\n\nI would like to provide feedback about the PACT Mobile app:\n\n',
       },
     );
 
@@ -192,13 +196,18 @@ class _CustomDrawerMenuState extends ConsumerState<CustomDrawerMenu> {
   Widget build(BuildContext context) {
     // Get profile data from Riverpod provider
     final profile = ref.watch(currentUserProfileProvider);
-    
+
     // Use profile data if available, fallback to auth metadata
-    final userName = profile?.displayName ?? widget.currentUser?.userMetadata?['full_name'] ?? 'User';
+    final userName =
+        profile?.displayName ??
+        widget.currentUser?.userMetadata?['full_name'] ??
+        'User';
     final userEmail = profile?.email ?? widget.currentUser?.email ?? '';
-    final userInitial = profile?.initials ?? (userName.isNotEmpty ? userName[0].toUpperCase() : 'U');
+    final userInitial =
+        profile?.initials ??
+        (userName.isNotEmpty ? userName[0].toUpperCase() : 'U');
     final avatarUrl = profile?.avatarUrl;
-    
+
     return Drawer(
       width: MediaQuery.of(context).size.width * 0.75, // 75% of screen width
       child: Container(
@@ -206,10 +215,7 @@ class _CustomDrawerMenuState extends ConsumerState<CustomDrawerMenu> {
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [
-              Colors.white,
-              AppColors.primaryWhite,
-            ],
+            colors: [Colors.white, AppColors.primaryWhite],
           ),
         ),
         child: Column(
@@ -345,9 +351,6 @@ class _CustomDrawerMenuState extends ConsumerState<CustomDrawerMenu> {
                     context,
                     title: 'Quick Access',
                     items: [
-
-
-
                       _MenuItemData(
                         icon: Icons.dashboard_rounded,
                         title: 'PACT Dashboard',
@@ -364,7 +367,6 @@ class _CustomDrawerMenuState extends ConsumerState<CustomDrawerMenu> {
                         },
                       ),
 
-
                       _MenuItemData(
                         icon: Icons.assignment_rounded,
                         title: 'Site Management',
@@ -374,7 +376,8 @@ class _CustomDrawerMenuState extends ConsumerState<CustomDrawerMenu> {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (context) => FieldOperationsEnhancedScreen(),
+                              builder: (context) =>
+                                  FieldOperationsEnhancedScreen(),
                             ),
                           );
                           widget.onClose();
@@ -392,7 +395,8 @@ class _CustomDrawerMenuState extends ConsumerState<CustomDrawerMenu> {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (context) => const SiteVerificationScreen(),
+                                builder: (context) =>
+                                    const SiteVerificationScreen(),
                               ),
                             );
                             widget.onClose();
@@ -440,6 +444,51 @@ class _CustomDrawerMenuState extends ConsumerState<CustomDrawerMenu> {
                             context,
                             MaterialPageRoute(
                               builder: (context) => const SettingsScreen(),
+                            ),
+                          );
+                          widget.onClose();
+                        },
+                      ),
+                      _MenuItemData(
+                        icon: Icons.chat_rounded,
+                        title: 'Chats',
+                        subtitle: 'Messages and conversations',
+                        iconColor: Colors.blue,
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const ChatsScreen(),
+                            ),
+                          );
+                          widget.onClose();
+                        },
+                      ),
+                      _MenuItemData(
+                        icon: Icons.help_rounded,
+                        title: 'Help',
+                        subtitle: 'Get help and find answers',
+                        iconColor: Colors.purple,
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const HelpScreen(),
+                            ),
+                          );
+                          widget.onClose();
+                        },
+                      ),
+                      _MenuItemData(
+                        icon: Icons.support_rounded,
+                        title: 'Support',
+                        subtitle: 'Contact support team',
+                        iconColor: Colors.teal,
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const SupportScreen(),
                             ),
                           );
                           widget.onClose();
@@ -538,10 +587,7 @@ class _CustomDrawerMenuState extends ConsumerState<CustomDrawerMenu> {
               margin: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [
-                    Colors.red.shade400,
-                    Colors.red.shade600,
-                  ],
+                  colors: [Colors.red.shade400, Colors.red.shade600],
                 ),
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: [
@@ -560,8 +606,9 @@ class _CustomDrawerMenuState extends ConsumerState<CustomDrawerMenu> {
                       context: context,
                       builder: (context) => AlertDialog(
                         title: const Text('Sign Out'),
-                        content:
-                            const Text('Are you sure you want to sign out?'),
+                        content: const Text(
+                          'Are you sure you want to sign out?',
+                        ),
                         actions: [
                           TextButton(
                             onPressed: () => Navigator.pop(context, false),
@@ -618,8 +665,8 @@ class _CustomDrawerMenuState extends ConsumerState<CustomDrawerMenu> {
             //   child: Column(
             //     children: [
             //       Text(
-            //         _appVersion.isNotEmpty 
-            //             ? 'PACT Mobile v$_appVersion' 
+            //         _appVersion.isNotEmpty
+            //             ? 'PACT Mobile v$_appVersion'
             //             : 'PACT Mobile',
             //         style: TextStyle(
             //           color: Colors.grey.shade500,
@@ -687,11 +734,7 @@ class _CustomDrawerMenuState extends ConsumerState<CustomDrawerMenu> {
                     color: item.iconColor.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: Icon(
-                    item.icon,
-                    color: item.iconColor,
-                    size: 24,
-                  ),
+                  child: Icon(item.icon, color: item.iconColor, size: 24),
                 ),
                 const SizedBox(width: 16),
                 Expanded(

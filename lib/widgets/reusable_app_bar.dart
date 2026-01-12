@@ -7,7 +7,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'modern_app_header.dart';
 import 'language_switcher.dart';
 import '../services/user_notification_service.dart';
-import '../services/notification_service.dart';
 import '../services/auth_service.dart';
 import '../models/user_notification.dart';
 import '../theme/app_colors.dart';
@@ -15,7 +14,7 @@ import '../screens/profile_screen.dart';
 import '../screens/settings_screen.dart';
 
 /// A reusable AppBar widget that can be used across all pages.
-/// 
+///
 /// This widget automatically handles:
 /// - Displaying the page title
 /// - Showing drawer icon if scaffoldKey is provided
@@ -24,11 +23,11 @@ import '../screens/settings_screen.dart';
 /// - Optional notifications icon with badge
 /// - Optional user avatar
 /// - Accepting custom actions for additional buttons
-/// 
+///
 /// Example usage with all features:
 /// ```dart
 /// final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
-/// 
+///
 /// Scaffold(
 ///   key: _scaffoldKey,
 ///   drawer: CustomDrawerMenu(...),
@@ -48,7 +47,7 @@ import '../screens/settings_screen.dart';
 ///   ),
 /// )
 /// ```
-/// 
+///
 /// Example usage with minimal features:
 /// ```dart
 /// ReusableAppBar(
@@ -59,48 +58,48 @@ import '../screens/settings_screen.dart';
 class ReusableAppBar extends StatelessWidget {
   /// The page title to display
   final String title;
-  
+
   /// Optional scaffold key to control drawer opening/closing
   /// If provided, a drawer icon will be shown on the left
   final GlobalKey<ScaffoldState>? scaffoldKey;
-  
+
   /// Optional list of action buttons to display on the right
   /// These will be shown before the built-in actions (notifications, language, avatar)
   final List<Widget>? actions;
-  
+
   /// Whether to center the title
   final bool centerTitle;
-  
+
   /// Background color of the AppBar
   final Color? backgroundColor;
-  
+
   /// Text color of the title
   final Color? textColor;
-  
+
   /// Custom callback for leading icon press (overrides default drawer/back behavior)
   final VoidCallback? onLeadingIconPressed;
-  
+
   /// Whether to show a back button explicitly
   final bool showBackButton;
-  
+
   /// Whether to show the language switcher
   final bool showLanguageSwitcher;
-  
+
   /// Whether to show the notifications icon
   final bool showNotifications;
-  
+
   /// Callback when notification icon is tapped
   final VoidCallback? onNotificationTap;
-  
+
   /// Whether to show the user avatar
   final bool showUserAvatar;
-  
+
   /// Callback when user avatar is tapped
   final VoidCallback? onAvatarTap;
-  
+
   /// Optional user avatar URL (if not provided, will fetch from profile)
   final String? avatarUrl;
-  
+
   /// Optional user name for avatar fallback (if not provided, will fetch from profile)
   final String? userName;
 
@@ -151,7 +150,7 @@ class ReusableAppBar extends StatelessWidget {
 
     // Build actions list with built-in features
     final List<Widget> allActions = [];
-    
+
     // Add custom actions first
     if (actions != null) {
       allActions.addAll(actions!);
@@ -159,24 +158,24 @@ class ReusableAppBar extends StatelessWidget {
         allActions.add(const SizedBox(width: 8));
       }
     }
-    
+
     // Add notifications icon if enabled
     if (showNotifications) {
       allActions.add(_buildNotificationIcon(context));
       allActions.add(const SizedBox(width: 8));
     }
-    
+
     // Add language switcher if enabled
     if (showLanguageSwitcher) {
       allActions.add(const LanguageSwitcher());
       allActions.add(const SizedBox(width: 8));
     }
-    
+
     // Add user avatar if enabled
     if (showUserAvatar) {
       allActions.add(_buildUserAvatar(context));
     }
-    
+
     // Remove trailing SizedBox if exists
     if (allActions.isNotEmpty && allActions.last is SizedBox) {
       allActions.removeLast();
@@ -197,12 +196,12 @@ class ReusableAppBar extends StatelessWidget {
   /// Build notification icon with badge
   Widget _buildNotificationIcon(BuildContext context) {
     final notificationService = UserNotificationService();
-    
+
     return StreamBuilder<List<UserNotification>>(
       stream: notificationService.watchNotifications(),
       builder: (context, snapshot) {
         final unreadCount = notificationService.unreadCount;
-        
+
         return Stack(
           clipBehavior: Clip.none,
           children: [
@@ -251,33 +250,34 @@ class ReusableAppBar extends StatelessWidget {
   /// Build user avatar
   Widget _buildUserAvatar(BuildContext context) {
     final currentUser = Supabase.instance.client.auth.currentUser;
-    
+
     // If avatar URL is provided, use it directly
     if (avatarUrl != null && avatarUrl!.isNotEmpty) {
       return _buildAvatarWidget(context, avatarUrl, userName);
     }
-    
+
     // Otherwise, fetch from profiles table
     if (currentUser == null) {
       return _buildAvatarWidget(context, null, userName ?? 'User');
     }
-    
+
     return FutureBuilder<Map<String, dynamic>?>(
       future: _fetchUserProfile(currentUser.id),
       builder: (context, snapshot) {
         final profile = snapshot.data;
         final profileAvatarUrl = profile?['avatar_url'] as String?;
-        final profileName = profile?['full_name'] as String? ??
-                           profile?['username'] as String? ??
-                           userName ??
-                           currentUser.email?.split('@').first ??
-                           'User';
-        
+        final profileName =
+            profile?['full_name'] as String? ??
+            profile?['username'] as String? ??
+            userName ??
+            currentUser.email?.split('@').first ??
+            'User';
+
         return _buildAvatarWidget(context, profileAvatarUrl, profileName);
       },
     );
   }
-  
+
   /// Fetch user profile from profiles table
   Future<Map<String, dynamic>?> _fetchUserProfile(String userId) async {
     try {
@@ -292,12 +292,16 @@ class ReusableAppBar extends StatelessWidget {
       return null;
     }
   }
-  
+
   /// Build the actual avatar widget
-  Widget _buildAvatarWidget(BuildContext context, String? avatarUrl, String? userName) {
+  Widget _buildAvatarWidget(
+    BuildContext context,
+    String? avatarUrl,
+    String? userName,
+  ) {
     final String finalUserName = userName ?? 'User';
-    final String userInitial = finalUserName.isNotEmpty 
-        ? finalUserName[0].toUpperCase() 
+    final String userInitial = finalUserName.isNotEmpty
+        ? finalUserName[0].toUpperCase()
         : 'U';
 
     return GestureDetector(
@@ -315,10 +319,7 @@ class ReusableAppBar extends StatelessWidget {
         height: 40,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          border: Border.all(
-            color: Colors.white,
-            width: 2,
-          ),
+          border: Border.all(color: Colors.white, width: 2),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(0.1),
@@ -363,18 +364,14 @@ class ReusableAppBar extends StatelessWidget {
             Navigator.of(context).pop();
             Navigator.push(
               context,
-              MaterialPageRoute(
-                builder: (context) => const ProfileScreen(),
-              ),
+              MaterialPageRoute(builder: (context) => const ProfileScreen()),
             );
           },
           onSettingsTap: () {
             Navigator.of(context).pop();
             Navigator.push(
               context,
-              MaterialPageRoute(
-                builder: (context) => const SettingsScreen(),
-              ),
+              MaterialPageRoute(builder: (context) => const SettingsScreen()),
             );
           },
           onLogoutTap: () {
@@ -388,14 +385,8 @@ class ReusableAppBar extends StatelessWidget {
           position: Tween<Offset>(
             begin: const Offset(0, -0.1),
             end: Offset.zero,
-          ).animate(CurvedAnimation(
-            parent: animation,
-            curve: Curves.easeOut,
-          )),
-          child: FadeTransition(
-            opacity: animation,
-            child: child,
-          ),
+          ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOut)),
+          child: FadeTransition(opacity: animation, child: child),
         );
       },
     );
@@ -410,11 +401,7 @@ class ReusableAppBar extends StatelessWidget {
   }) {
     return Row(
       children: [
-        Icon(
-          icon,
-          size: 20,
-          color: iconColor ?? Colors.grey.shade700,
-        ),
+        Icon(icon, size: 20, color: iconColor ?? Colors.grey.shade700),
         const SizedBox(width: 12),
         Text(
           title,
@@ -428,7 +415,6 @@ class ReusableAppBar extends StatelessWidget {
     );
   }
 
-
   /// Show logout confirmation dialog
   void _showLogoutConfirmation(BuildContext context) {
     showDialog(
@@ -440,9 +426,7 @@ class ReusableAppBar extends StatelessWidget {
           ),
           title: Text(
             'Log Out',
-            style: GoogleFonts.poppins(
-              fontWeight: FontWeight.bold,
-            ),
+            style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
           ),
           content: Text(
             'Are you sure you want to log out?',
@@ -453,9 +437,7 @@ class ReusableAppBar extends StatelessWidget {
               onPressed: () => Navigator.of(dialogContext).pop(),
               child: Text(
                 'Cancel',
-                style: GoogleFonts.poppins(
-                  color: Colors.grey.shade700,
-                ),
+                style: GoogleFonts.poppins(color: Colors.grey.shade700),
               ),
             ),
             ElevatedButton(
@@ -467,10 +449,7 @@ class ReusableAppBar extends StatelessWidget {
                 backgroundColor: AppColors.accentRed,
                 foregroundColor: Colors.white,
               ),
-              child: Text(
-                'Log Out',
-                style: GoogleFonts.poppins(),
-              ),
+              child: Text('Log Out', style: GoogleFonts.poppins()),
             ),
           ],
         );
@@ -483,13 +462,12 @@ class ReusableAppBar extends StatelessWidget {
     try {
       final authService = AuthService();
       await authService.signOut();
-      
+
       // Navigate to login screen
       if (context.mounted) {
-        Navigator.of(context).pushNamedAndRemoveUntil(
-          '/login',
-          (route) => false,
-        );
+        Navigator.of(
+          context,
+        ).pushNamedAndRemoveUntil('/login', (route) => false);
       }
     } catch (e) {
       debugPrint('Error logging out: $e');
@@ -526,11 +504,13 @@ class _AccountDropdownMenu extends StatelessWidget {
   Widget build(BuildContext context) {
     final Size screenSize = MediaQuery.of(context).size;
     final double dropdownWidth = 200.0;
-    
+
     // Position at top right, below the app bar (aligned with avatar position)
     // App bar is typically around 56-60px, plus status bar
-    final double topOffset = MediaQuery.of(context).padding.top + 56 + 8; // App bar + spacing
-    final double rightOffset = 16.0; // Margin from right edge (aligned with avatar)
+    final double topOffset =
+        MediaQuery.of(context).padding.top + 56 + 8; // App bar + spacing
+    final double rightOffset =
+        16.0; // Margin from right edge (aligned with avatar)
 
     return Stack(
       children: [
@@ -642,11 +622,7 @@ class _AccountDropdownMenu extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         child: Row(
           children: [
-            Icon(
-              icon,
-              size: 20,
-              color: iconColor ?? Colors.grey.shade700,
-            ),
+            Icon(icon, size: 20, color: iconColor ?? Colors.grey.shade700),
             const SizedBox(width: 12),
             Text(
               title,
@@ -662,4 +638,3 @@ class _AccountDropdownMenu extends StatelessWidget {
     );
   }
 }
-

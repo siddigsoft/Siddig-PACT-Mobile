@@ -50,15 +50,20 @@ class _ReportsScreenState extends State<ReportsScreen> {
   bool _isLoading = true;
   bool _isOffline = false;
   String? _userId;
-  Map<String, Map<String, dynamic>> _siteLocations = {}; // site_id -> location data
-  final Map<String, _VisitReportData> _reportByVisitId = {}; // site_visit_id -> report data
+  Map<String, Map<String, dynamic>> _siteLocations =
+      {}; // site_id -> location data
+  final Map<String, _VisitReportData> _reportByVisitId =
+      {}; // site_visit_id -> report data
 
   // Filter state
   String _filterType = 'Date'; // Date, Month, Year
   DateTime _selectedDate = DateTime.now();
 
   DateTime? _effectiveCompletedAt(SiteVisit visit) {
-    return visit.completedAt ?? visit.visitCompletedAt ?? visit.updatedAt ?? visit.createdAt;
+    return visit.completedAt ??
+        visit.visitCompletedAt ??
+        visit.updatedAt ??
+        visit.createdAt;
   }
 
   @override
@@ -72,10 +77,10 @@ class _ReportsScreenState extends State<ReportsScreen> {
     try {
       _userId = Supabase.instance.client.auth.currentUser?.id;
       if (_userId == null) return;
-      
+
       // Check if we're online
       _isOffline = !(await _offlineDataService.isOnline());
-      
+
       if (_isOffline) {
         // Load from cache when offline
         await _loadFromCache();
@@ -83,7 +88,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
         // Load from server and cache
         await _loadFromServer();
       }
-      
+
       _applyFilter();
     } catch (e) {
       // On any error, try loading from cache
@@ -93,26 +98,30 @@ class _ReportsScreenState extends State<ReportsScreen> {
         _applyFilter();
       }
       if (mounted && _allVisits.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error loading visits: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error loading visits: $e')));
       }
     } finally {
       setState(() => _isLoading = false);
     }
   }
-  
+
   Future<void> _loadFromCache() async {
     debugPrint('📦 Loading reports from offline cache...');
-    
+
     // Load cached visits
-    final cachedVisits = await _offlineDataService.getCachedCompletedVisits(_userId!);
+    final cachedVisits = await _offlineDataService.getCachedCompletedVisits(
+      _userId!,
+    );
     if (cachedVisits.isNotEmpty) {
       _allVisits = cachedVisits.map((v) => SiteVisit.fromJson(v)).toList();
     }
-    
+
     // Load cached reports
-    final cachedReports = await _offlineDataService.getCachedReportsData(_userId!);
+    final cachedReports = await _offlineDataService.getCachedReportsData(
+      _userId!,
+    );
     if (cachedReports != null) {
       _reportByVisitId.clear();
       cachedReports.forEach((visitId, data) {
@@ -123,20 +132,22 @@ class _ReportsScreenState extends State<ReportsScreen> {
           activities: data['activities']?.toString(),
           durationMinutes: data['durationMinutes'] as int?,
           coordinates: data['coordinates'] as Map<String, dynamic>?,
-          submittedAt: data['submittedAt'] != null 
-              ? DateTime.tryParse(data['submittedAt'].toString()) 
+          submittedAt: data['submittedAt'] != null
+              ? DateTime.tryParse(data['submittedAt'].toString())
               : null,
           photoUrls: (data['photoUrls'] as List?)?.cast<String>() ?? [],
         );
       });
     }
-    
+
     // Load cached site locations
-    final cachedLocations = await _offlineDataService.getCachedSiteLocations(_userId!);
+    final cachedLocations = await _offlineDataService.getCachedSiteLocations(
+      _userId!,
+    );
     if (cachedLocations != null) {
       _siteLocations = cachedLocations;
     }
-    
+
     if (mounted && _allVisits.isNotEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -146,24 +157,24 @@ class _ReportsScreenState extends State<ReportsScreen> {
       );
     }
   }
-  
+
   Future<void> _loadFromServer() async {
     _allVisits = await _siteVisitService.getCompletedSiteVisits(_userId!);
     await _loadReportsForVisits();
     await _loadSiteLocations();
-    
+
     // Cache data for offline use
     await _cacheDataForOffline();
   }
-  
+
   Future<void> _cacheDataForOffline() async {
     if (_userId == null) return;
-    
+
     try {
       // Cache visits
       final visitsJson = _allVisits.map((v) => v.toJson()).toList();
       await _offlineDataService.cacheCompletedVisits(_userId!, visitsJson);
-      
+
       // Cache reports
       final reportsJson = <String, Map<String, dynamic>>{};
       _reportByVisitId.forEach((visitId, report) {
@@ -178,7 +189,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
         };
       });
       await _offlineDataService.cacheReports(_userId!, reportsJson);
-      
+
       // Cache site locations
       await _offlineDataService.cacheSiteLocations(_userId!, _siteLocations);
     } catch (e) {
@@ -196,7 +207,9 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
       final reportsResponse = await supabase
           .from('reports')
-          .select('id, site_visit_id, notes, activities, duration_minutes, coordinates, submitted_at')
+          .select(
+            'id, site_visit_id, notes, activities, duration_minutes, coordinates, submitted_at',
+          )
           .eq('submitted_by', _userId!)
           .inFilter('site_visit_id', visitIds)
           .order('submitted_at', ascending: false);
@@ -235,21 +248,23 @@ class _ReportsScreenState extends State<ReportsScreen> {
       latestReportRowByVisitId.forEach((siteVisitId, row) {
         final reportId = row['id']?.toString() ?? '';
         final submittedAtRaw = row['submitted_at'];
-        final submittedAt = submittedAtRaw is String ? DateTime.tryParse(submittedAtRaw) : null;
+        final submittedAt = submittedAtRaw is String
+            ? DateTime.tryParse(submittedAtRaw)
+            : null;
 
         final durationRaw = row['duration_minutes'];
         final durationMinutes = durationRaw is int
             ? durationRaw
             : durationRaw is num
-                ? durationRaw.toInt()
-                : null;
+            ? durationRaw.toInt()
+            : null;
 
         final coordinatesRaw = row['coordinates'];
         final coordinates = coordinatesRaw is Map<String, dynamic>
             ? coordinatesRaw
             : coordinatesRaw is Map
-                ? coordinatesRaw.map((k, v) => MapEntry(k.toString(), v))
-                : null;
+            ? coordinatesRaw.map((k, v) => MapEntry(k.toString(), v))
+            : null;
 
         _reportByVisitId[siteVisitId] = _VisitReportData(
           reportId: reportId,
@@ -270,7 +285,9 @@ class _ReportsScreenState extends State<ReportsScreen> {
       print('Error loading reports (Postgrest): ${e.message}');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Unable to load report details: ${e.message}')),
+          SnackBar(
+            content: Text('Unable to load report details: ${e.message}'),
+          ),
         );
       }
     } catch (e) {
@@ -285,7 +302,9 @@ class _ReportsScreenState extends State<ReportsScreen> {
       final report = _reportByVisitId[visit.id];
       if (report == null) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No report details found for this visit.')),
+          const SnackBar(
+            content: Text('No report details found for this visit.'),
+          ),
         );
         return;
       }
@@ -317,11 +336,13 @@ class _ReportsScreenState extends State<ReportsScreen> {
       final coordinatesText = location != null
           ? '${location['latitude']?.toStringAsFixed(6) ?? 'N/A'}, ${location['longitude']?.toStringAsFixed(6) ?? 'N/A'}'
           : (report.coordinates != null
-              ? '${report.coordinates?['latitude'] ?? 'N/A'}, ${report.coordinates?['longitude'] ?? 'N/A'}'
-              : 'Not recorded');
+                ? '${report.coordinates?['latitude'] ?? 'N/A'}, ${report.coordinates?['longitude'] ?? 'N/A'}'
+                : 'Not recorded');
       final accuracyText = location != null
           ? '${location['accuracy']?.toStringAsFixed(1) ?? 'N/A'}m'
-          : (report.coordinates?['accuracy'] != null ? '${report.coordinates?['accuracy']}m' : 'N/A');
+          : (report.coordinates?['accuracy'] != null
+                ? '${report.coordinates?['accuracy']}m'
+                : 'N/A');
 
       final completedAt = visit.completedAt;
       final submittedAt = report.submittedAt;
@@ -336,7 +357,10 @@ class _ReportsScreenState extends State<ReportsScreen> {
                 child: pw.Row(
                   mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                   children: [
-                    pw.Text('Visit Report', style: pw.TextStyle(font: boldFont, fontSize: 24)),
+                    pw.Text(
+                      'Visit Report',
+                      style: pw.TextStyle(font: boldFont, fontSize: 24),
+                    ),
                     pw.Text(
                       DateFormat('yyyy-MM-dd').format(DateTime.now()),
                       style: pw.TextStyle(font: font, fontSize: 12),
@@ -344,62 +368,126 @@ class _ReportsScreenState extends State<ReportsScreen> {
                   ],
                 ),
               ),
-              pw.Text('Site: ${visit.siteName}', style: pw.TextStyle(font: boldFont, fontSize: 14)),
-              pw.Text('Code: ${visit.siteCode}', style: pw.TextStyle(font: font, fontSize: 12)),
+              pw.Text(
+                'Site: ${visit.siteName}',
+                style: pw.TextStyle(font: boldFont, fontSize: 14),
+              ),
+              pw.Text(
+                'Code: ${visit.siteCode}',
+                style: pw.TextStyle(font: font, fontSize: 12),
+              ),
               if (completedAt != null)
-                pw.Text('Completed At: ${DateFormat('yyyy-MM-dd HH:mm').format(completedAt)}', style: pw.TextStyle(font: font, fontSize: 12)),
+                pw.Text(
+                  'Completed At: ${DateFormat('yyyy-MM-dd HH:mm').format(completedAt)}',
+                  style: pw.TextStyle(font: font, fontSize: 12),
+                ),
               if (submittedAt != null)
-                pw.Text('Submitted At: ${DateFormat('yyyy-MM-dd HH:mm').format(submittedAt)}', style: pw.TextStyle(font: font, fontSize: 12)),
+                pw.Text(
+                  'Submitted At: ${DateFormat('yyyy-MM-dd HH:mm').format(submittedAt)}',
+                  style: pw.TextStyle(font: font, fontSize: 12),
+                ),
               if (report.durationMinutes != null)
-                pw.Text('Duration: ${report.durationMinutes} min', style: pw.TextStyle(font: font, fontSize: 12)),
+                pw.Text(
+                  'Duration: ${report.durationMinutes} min',
+                  style: pw.TextStyle(font: font, fontSize: 12),
+                ),
               pw.SizedBox(height: 10),
-              pw.Text('Final Location', style: pw.TextStyle(font: boldFont, fontSize: 13)),
-              pw.Text('Coordinates: $coordinatesText', style: pw.TextStyle(font: font, fontSize: 12)),
-              pw.Text('Accuracy: $accuracyText', style: pw.TextStyle(font: font, fontSize: 12)),
+              pw.Text(
+                'Final Location',
+                style: pw.TextStyle(font: boldFont, fontSize: 13),
+              ),
+              pw.Text(
+                'Coordinates: $coordinatesText',
+                style: pw.TextStyle(font: font, fontSize: 12),
+              ),
+              pw.Text(
+                'Accuracy: $accuracyText',
+                style: pw.TextStyle(font: font, fontSize: 12),
+              ),
               pw.SizedBox(height: 12),
-              pw.Text('Notes', style: pw.TextStyle(font: boldFont, fontSize: 13)),
-              pw.Text(report.notes.isEmpty ? 'No notes' : report.notes, style: pw.TextStyle(font: font, fontSize: 12)),
-              if (report.activities != null && report.activities!.trim().isNotEmpty) ...[
+              pw.Text(
+                'Notes',
+                style: pw.TextStyle(font: boldFont, fontSize: 13),
+              ),
+              pw.Text(
+                report.notes.isEmpty ? 'No notes' : report.notes,
+                style: pw.TextStyle(font: font, fontSize: 12),
+              ),
+              if (report.activities != null &&
+                  report.activities!.trim().isNotEmpty) ...[
                 pw.SizedBox(height: 12),
-                pw.Text('Activities', style: pw.TextStyle(font: boldFont, fontSize: 13)),
-                pw.Text(report.activities!, style: pw.TextStyle(font: font, fontSize: 12)),
+                pw.Text(
+                  'Activities',
+                  style: pw.TextStyle(font: boldFont, fontSize: 13),
+                ),
+                pw.Text(
+                  report.activities!,
+                  style: pw.TextStyle(font: font, fontSize: 12),
+                ),
               ],
               pw.SizedBox(height: 12),
-              pw.Text('Photos (${report.photoUrls.length})', style: pw.TextStyle(font: boldFont, fontSize: 13)),
+              pw.Text(
+                'Photos (${report.photoUrls.length})',
+                style: pw.TextStyle(font: boldFont, fontSize: 13),
+              ),
               if (images.isNotEmpty)
                 pw.Wrap(
                   spacing: 8,
                   runSpacing: 8,
                   children: images
-                      .map((img) => pw.Container(
-                            width: 160,
-                            height: 120,
-                            decoration: pw.BoxDecoration(border: pw.Border.all(color: PdfColors.grey300)),
-                            child: pw.Image(img, fit: pw.BoxFit.cover),
-                          ))
+                      .map(
+                        (img) => pw.Container(
+                          width: 160,
+                          height: 120,
+                          decoration: pw.BoxDecoration(
+                            border: pw.Border.all(color: PdfColors.grey300),
+                          ),
+                          child: pw.Image(img, fit: pw.BoxFit.cover),
+                        ),
+                      )
                       .toList(),
                 )
               else
                 pw.Column(
                   crossAxisAlignment: pw.CrossAxisAlignment.start,
                   children: report.photoUrls
-                      .map((u) => pw.Text(u, style: pw.TextStyle(font: font, fontSize: 9, color: PdfColors.blue)))
+                      .map(
+                        (u) => pw.Text(
+                          u,
+                          style: pw.TextStyle(
+                            font: font,
+                            fontSize: 9,
+                            color: PdfColors.blue,
+                          ),
+                        ),
+                      )
                       .toList(),
                 ),
               pw.SizedBox(height: 20),
-              pw.Text('Generated by PACT Mobile', style: pw.TextStyle(font: font, fontSize: 10, color: PdfColors.grey)),
+              pw.Text(
+                'Generated by PACT Mobile',
+                style: pw.TextStyle(
+                  font: font,
+                  fontSize: 10,
+                  color: PdfColors.grey,
+                ),
+              ),
             ];
           },
         ),
       );
 
-      final safeCode = visit.siteCode.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
-      final fileName = 'visit_report_${safeCode}_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}.pdf';
+      final safeCode = visit.siteCode.replaceAll(
+        RegExp(r'[^a-zA-Z0-9_-]'),
+        '_',
+      );
+      final fileName =
+          'visit_report_${safeCode}_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}.pdf';
       await Printing.sharePdf(bytes: await pdf.save(), filename: fileName);
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error downloading report: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error downloading report: $e')));
     }
   }
 
@@ -454,7 +542,11 @@ class _ReportsScreenState extends State<ReportsScreen> {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final startOfWeek = now.subtract(Duration(days: now.weekday - 1));
-    final startOfWeekDate = DateTime(startOfWeek.year, startOfWeek.month, startOfWeek.day);
+    final startOfWeekDate = DateTime(
+      startOfWeek.year,
+      startOfWeek.month,
+      startOfWeek.day,
+    );
     final startOfMonth = DateTime(now.year, now.month, 1);
 
     int daily = 0;
@@ -468,7 +560,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
       if (date.isAfter(today) || date.isAtSameMomentAs(today)) {
         daily++;
       }
-      if (date.isAfter(startOfWeekDate) || date.isAtSameMomentAs(startOfWeekDate)) {
+      if (date.isAfter(startOfWeekDate) ||
+          date.isAtSameMomentAs(startOfWeekDate)) {
         weekly++;
       }
       if (date.isAfter(startOfMonth) || date.isAtSameMomentAs(startOfMonth)) {
@@ -497,11 +590,11 @@ class _ReportsScreenState extends State<ReportsScreen> {
   // Improved PDF Generation
   Future<String> _generateAndSavePDF() async {
     final pdf = pw.Document();
-    
+
     // Load fonts with fallback
     pw.Font? font;
     pw.Font? boldFont;
-    
+
     try {
       font = await PdfGoogleFonts.nunitoRegular();
       boldFont = await PdfGoogleFonts.nunitoBold();
@@ -521,18 +614,34 @@ class _ReportsScreenState extends State<ReportsScreen> {
               child: pw.Row(
                 mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                 children: [
-                  pw.Text('Site Visit Report', style: pw.TextStyle(font: boldFont, fontSize: 24)),
-                  pw.Text(DateFormat('yyyy-MM-dd').format(DateTime.now()), style: pw.TextStyle(font: font, fontSize: 12)),
+                  pw.Text(
+                    'Site Visit Report',
+                    style: pw.TextStyle(font: boldFont, fontSize: 24),
+                  ),
+                  pw.Text(
+                    DateFormat('yyyy-MM-dd').format(DateTime.now()),
+                    style: pw.TextStyle(font: font, fontSize: 12),
+                  ),
                 ],
               ),
             ),
             pw.SizedBox(height: 20),
-            pw.Text('Filter: $_filterType - ${DateFormat('yyyy-MM-dd').format(_selectedDate)}', style: pw.TextStyle(font: font, fontSize: 14)),
-            pw.Text('Total Visits: ${_filteredVisits.length}', style: pw.TextStyle(font: boldFont, fontSize: 14)),
+            pw.Text(
+              'Filter: $_filterType - ${DateFormat('yyyy-MM-dd').format(_selectedDate)}',
+              style: pw.TextStyle(font: font, fontSize: 14),
+            ),
+            pw.Text(
+              'Total Visits: ${_filteredVisits.length}',
+              style: pw.TextStyle(font: boldFont, fontSize: 14),
+            ),
             pw.SizedBox(height: 20),
             pw.Table.fromTextArray(
               border: pw.TableBorder.all(color: PdfColors.grey),
-              headerStyle: pw.TextStyle(font: boldFont, fontSize: 10, color: PdfColors.white),
+              headerStyle: pw.TextStyle(
+                font: boldFont,
+                fontSize: 10,
+                color: PdfColors.white,
+              ),
               headerDecoration: const pw.BoxDecoration(color: PdfColors.blue),
               cellStyle: pw.TextStyle(font: font, fontSize: 10),
               cellAlignments: {
@@ -543,30 +652,50 @@ class _ReportsScreenState extends State<ReportsScreen> {
                 4: pw.Alignment.centerLeft,
                 5: pw.Alignment.centerLeft,
               },
-              headers: ['Site Name', 'Site Code', 'Completed At', 'Coordinates', 'Accuracy', 'Notes'],
+              headers: [
+                'Site Name',
+                'Site Code',
+                'Completed At',
+                'Coordinates',
+                'Accuracy',
+                'Notes',
+              ],
               data: _filteredVisits.map((visit) {
                 final location = _siteLocations[visit.id];
                 final report = _reportByVisitId[visit.id];
-                final coordinates = location != null 
-                  ? '${location['latitude']?.toStringAsFixed(6) ?? 'N/A'}, ${location['longitude']?.toStringAsFixed(6) ?? 'N/A'}'
-                  : 'Not recorded';
-                final accuracy = location != null 
-                  ? '${location['accuracy']?.toStringAsFixed(1) ?? 'N/A'}m'
-                  : 'N/A';
-                
+                final coordinates = location != null
+                    ? '${location['latitude']?.toStringAsFixed(6) ?? 'N/A'}, ${location['longitude']?.toStringAsFixed(6) ?? 'N/A'}'
+                    : 'Not recorded';
+                final accuracy = location != null
+                    ? '${location['accuracy']?.toStringAsFixed(1) ?? 'N/A'}m'
+                    : 'N/A';
+
                 return [
                   visit.siteName ?? 'N/A',
                   visit.siteCode ?? 'N/A',
-                  visit.completedAt != null ? DateFormat('yyyy-MM-dd HH:mm').format(visit.completedAt!) : 'N/A',
+                  visit.completedAt != null
+                      ? DateFormat(
+                          'yyyy-MM-dd HH:mm',
+                        ).format(visit.completedAt!)
+                      : 'N/A',
                   coordinates,
                   accuracy,
-                  (report != null && report.notes.isNotEmpty) ? report.notes : (visit.notes ?? 'No notes'),
+                  (report != null && report.notes.isNotEmpty)
+                      ? report.notes
+                      : (visit.notes ?? 'No notes'),
                 ];
               }).toList(),
             ),
             pw.Footer(
               margin: const pw.EdgeInsets.only(top: 20),
-              title: pw.Text('Generated by PACT Mobile', style: pw.TextStyle(font: font, fontSize: 10, color: PdfColors.grey)),
+              title: pw.Text(
+                'Generated by PACT Mobile',
+                style: pw.TextStyle(
+                  font: font,
+                  fontSize: 10,
+                  color: PdfColors.grey,
+                ),
+              ),
             ),
           ];
         },
@@ -576,12 +705,18 @@ class _ReportsScreenState extends State<ReportsScreen> {
     // Handle file saving based on platform
     if (kIsWeb) {
       // For web, use printing package to handle PDF
-      await Printing.sharePdf(bytes: await pdf.save(), filename: 'site_visit_report_${DateTime.now().millisecondsSinceEpoch}.pdf');
+      await Printing.sharePdf(
+        bytes: await pdf.save(),
+        filename:
+            'site_visit_report_${DateTime.now().millisecondsSinceEpoch}.pdf',
+      );
       return ''; // Return empty string for web since we don't save to file
     } else {
       // For mobile/desktop, save to temporary directory
       final output = await getTemporaryDirectory();
-      final file = File('${output.path}/site_visit_report_${DateTime.now().millisecondsSinceEpoch}.pdf');
+      final file = File(
+        '${output.path}/site_visit_report_${DateTime.now().millisecondsSinceEpoch}.pdf',
+      );
       await file.writeAsBytes(await pdf.save());
       return file.path;
     }
@@ -592,11 +727,11 @@ class _ReportsScreenState extends State<ReportsScreen> {
       if (kIsWeb) {
         // For web, generate PDF directly and print
         final pdf = pw.Document();
-        
+
         // Load fonts with fallback
         pw.Font? font;
         pw.Font? boldFont;
-        
+
         try {
           font = await PdfGoogleFonts.nunitoRegular();
           boldFont = await PdfGoogleFonts.nunitoBold();
@@ -615,19 +750,37 @@ class _ReportsScreenState extends State<ReportsScreen> {
                   child: pw.Row(
                     mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                     children: [
-                      pw.Text('Site Visit Report', style: pw.TextStyle(font: boldFont, fontSize: 24)),
-                      pw.Text(DateFormat('yyyy-MM-dd').format(DateTime.now()), style: pw.TextStyle(font: font, fontSize: 12)),
+                      pw.Text(
+                        'Site Visit Report',
+                        style: pw.TextStyle(font: boldFont, fontSize: 24),
+                      ),
+                      pw.Text(
+                        DateFormat('yyyy-MM-dd').format(DateTime.now()),
+                        style: pw.TextStyle(font: font, fontSize: 12),
+                      ),
                     ],
                   ),
                 ),
                 pw.SizedBox(height: 20),
-                pw.Text('Filter: $_filterType - ${DateFormat('yyyy-MM-dd').format(_selectedDate)}', style: pw.TextStyle(font: font, fontSize: 14)),
-                pw.Text('Total Visits: ${_filteredVisits.length}', style: pw.TextStyle(font: boldFont, fontSize: 14)),
+                pw.Text(
+                  'Filter: $_filterType - ${DateFormat('yyyy-MM-dd').format(_selectedDate)}',
+                  style: pw.TextStyle(font: font, fontSize: 14),
+                ),
+                pw.Text(
+                  'Total Visits: ${_filteredVisits.length}',
+                  style: pw.TextStyle(font: boldFont, fontSize: 14),
+                ),
                 pw.SizedBox(height: 20),
                 pw.Table.fromTextArray(
                   border: pw.TableBorder.all(color: PdfColors.grey),
-                  headerStyle: pw.TextStyle(font: boldFont, fontSize: 10, color: PdfColors.white),
-                  headerDecoration: const pw.BoxDecoration(color: PdfColors.blue),
+                  headerStyle: pw.TextStyle(
+                    font: boldFont,
+                    fontSize: 10,
+                    color: PdfColors.white,
+                  ),
+                  headerDecoration: const pw.BoxDecoration(
+                    color: PdfColors.blue,
+                  ),
                   cellStyle: pw.TextStyle(font: font, fontSize: 10),
                   cellAlignments: {
                     0: pw.Alignment.centerLeft,
@@ -637,51 +790,77 @@ class _ReportsScreenState extends State<ReportsScreen> {
                     4: pw.Alignment.centerLeft,
                     5: pw.Alignment.centerLeft,
                   },
-                  headers: ['Site Name', 'Site Code', 'Completed At', 'Coordinates', 'Accuracy', 'Notes'],
+                  headers: [
+                    'Site Name',
+                    'Site Code',
+                    'Completed At',
+                    'Coordinates',
+                    'Accuracy',
+                    'Notes',
+                  ],
                   data: _filteredVisits.map((visit) {
                     final location = _siteLocations[visit.id];
                     final report = _reportByVisitId[visit.id];
-                    final coordinates = location != null 
-                      ? '${location['latitude']?.toStringAsFixed(6) ?? 'N/A'}, ${location['longitude']?.toStringAsFixed(6) ?? 'N/A'}'
-                      : 'Not recorded';
-                    final accuracy = location != null 
-                      ? '${location['accuracy']?.toStringAsFixed(1) ?? 'N/A'}m'
-                      : 'N/A';
-                    
+                    final coordinates = location != null
+                        ? '${location['latitude']?.toStringAsFixed(6) ?? 'N/A'}, ${location['longitude']?.toStringAsFixed(6) ?? 'N/A'}'
+                        : 'Not recorded';
+                    final accuracy = location != null
+                        ? '${location['accuracy']?.toStringAsFixed(1) ?? 'N/A'}m'
+                        : 'N/A';
+
                     return [
                       visit.siteName ?? 'N/A',
                       visit.siteCode ?? 'N/A',
-                      visit.completedAt != null ? DateFormat('yyyy-MM-dd HH:mm').format(visit.completedAt!) : 'N/A',
+                      visit.completedAt != null
+                          ? DateFormat(
+                              'yyyy-MM-dd HH:mm',
+                            ).format(visit.completedAt!)
+                          : 'N/A',
                       coordinates,
                       accuracy,
-                      (report != null && report.notes.isNotEmpty) ? report.notes : (visit.notes ?? 'No notes'),
+                      (report != null && report.notes.isNotEmpty)
+                          ? report.notes
+                          : (visit.notes ?? 'No notes'),
                     ];
                   }).toList(),
                 ),
                 pw.Footer(
                   margin: const pw.EdgeInsets.only(top: 20),
-                  title: pw.Text('Generated by PACT Mobile', style: pw.TextStyle(font: font, fontSize: 10, color: PdfColors.grey)),
+                  title: pw.Text(
+                    'Generated by PACT Mobile',
+                    style: pw.TextStyle(
+                      font: font,
+                      fontSize: 10,
+                      color: PdfColors.grey,
+                    ),
+                  ),
                 ),
               ];
             },
           ),
         );
 
-        await Printing.layoutPdf(onLayout: (PdfPageFormat format) async {
-          return pdf.save();
-        });
+        await Printing.layoutPdf(
+          onLayout: (PdfPageFormat format) async {
+            return pdf.save();
+          },
+        );
       } else {
         // For mobile/desktop
         final pdfPath = await _generateAndSavePDF();
         if (pdfPath.isNotEmpty) {
-          await Printing.layoutPdf(onLayout: (PdfPageFormat format) async {
-            final file = File(pdfPath);
-            return file.readAsBytesSync();
-          });
+          await Printing.layoutPdf(
+            onLayout: (PdfPageFormat format) async {
+              final file = File(pdfPath);
+              return file.readAsBytesSync();
+            },
+          );
         }
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error printing: $e')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error printing: $e')));
     }
   }
 
@@ -690,16 +869,20 @@ class _ReportsScreenState extends State<ReportsScreen> {
       if (kIsWeb) {
         // For web, show a message that email with attachment is not supported
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Email with PDF attachment is not supported on web. Please use the PDF download feature instead.')),
+          const SnackBar(
+            content: Text(
+              'Email with PDF attachment is not supported on web. Please use the PDF download feature instead.',
+            ),
+          ),
         );
         return;
       }
 
       final pdfPath = await _generateAndSavePDF();
       if (pdfPath.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to generate PDF')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Failed to generate PDF')));
         return;
       }
 
@@ -711,7 +894,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
       if (email != null && email.isNotEmpty) {
         final Email emailToSend = Email(
           body: 'Please find attached the site visit report.',
-          subject: 'Site Visit Report - ${DateFormat('yyyy-MM-dd').format(DateTime.now())}',
+          subject:
+              'Site Visit Report - ${DateFormat('yyyy-MM-dd').format(DateTime.now())}',
           recipients: [email],
           attachmentPaths: [pdfPath],
           isHTML: false,
@@ -726,9 +910,9 @@ class _ReportsScreenState extends State<ReportsScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error sending email: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error sending email: $e')));
       }
     }
   }
@@ -741,10 +925,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
       appBar: AppBar(
         title: const Text(
           'Reports & Analytics',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
+          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
         ),
         elevation: 0,
         backgroundColor: const Color(0xFF1976D2), // Deep blue
@@ -770,18 +951,33 @@ class _ReportsScreenState extends State<ReportsScreen> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: [
-                      _buildSummaryCard('Today', counts['daily']!, const Color(0xFF1976D2)), // Deep blue
-                      _buildSummaryCard('This Week', counts['weekly']!, const Color(0xFFFF9800)), // Orange
-                      _buildSummaryCard('This Month', counts['monthly']!, const Color(0xFF4CAF50)), // Green
+                      _buildSummaryCard(
+                        'Today',
+                        counts['daily']!,
+                        const Color(0xFF1976D2),
+                      ), // Deep blue
+                      _buildSummaryCard(
+                        'This Week',
+                        counts['weekly']!,
+                        const Color(0xFFFF9800),
+                      ), // Orange
+                      _buildSummaryCard(
+                        'This Month',
+                        counts['monthly']!,
+                        const Color(0xFF4CAF50),
+                      ), // Green
                     ],
                   ),
                 ),
-                
+
                 const Divider(height: 1),
 
                 // Filter Section
                 Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  margin: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
                     color: Colors.white,
@@ -811,23 +1007,32 @@ class _ReportsScreenState extends State<ReportsScreen> {
                           Expanded(
                             flex: 1,
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                              ),
                               decoration: BoxDecoration(
                                 color: const Color(0xFFF8F9FA),
                                 borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: const Color(0xFFE0E0E0)),
+                                border: Border.all(
+                                  color: const Color(0xFFE0E0E0),
+                                ),
                               ),
                               child: DropdownButton<String>(
                                 value: _filterType,
                                 isExpanded: true,
                                 underline: const SizedBox(),
-                                icon: Icon(Icons.arrow_drop_down, color: const Color(0xFF1976D2)),
+                                icon: Icon(
+                                  Icons.arrow_drop_down,
+                                  color: const Color(0xFF1976D2),
+                                ),
                                 style: TextStyle(
                                   color: const Color(0xFF263238),
                                   fontSize: 14,
                                   fontWeight: FontWeight.w500,
                                 ),
-                                items: ['Date', 'Month', 'Year'].map((String value) {
+                                items: ['Date', 'Month', 'Year'].map((
+                                  String value,
+                                ) {
                                   return DropdownMenuItem<String>(
                                     value: value,
                                     child: Text(value),
@@ -850,24 +1055,36 @@ class _ReportsScreenState extends State<ReportsScreen> {
                             child: InkWell(
                               onTap: () => _selectDate(context),
                               child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 14,
+                                ),
                                 decoration: BoxDecoration(
                                   color: const Color(0xFFF8F9FA),
                                   borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(color: const Color(0xFFE0E0E0)),
+                                  border: Border.all(
+                                    color: const Color(0xFFE0E0E0),
+                                  ),
                                 ),
                                 child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
                                   children: [
                                     Text(
-                                      DateFormat('yyyy-MM-dd').format(_selectedDate),
+                                      DateFormat(
+                                        'yyyy-MM-dd',
+                                      ).format(_selectedDate),
                                       style: TextStyle(
                                         color: const Color(0xFF263238),
                                         fontSize: 14,
                                         fontWeight: FontWeight.w500,
                                       ),
                                     ),
-                                    Icon(Icons.calendar_today, color: const Color(0xFFFF9800), size: 20),
+                                    Icon(
+                                      Icons.calendar_today,
+                                      color: const Color(0xFFFF9800),
+                                      size: 20,
+                                    ),
                                   ],
                                 ),
                               ),
@@ -881,12 +1098,17 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
                 // Results Header
                 Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  margin: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       colors: [
-                        const Color(0xFFFF9800).withOpacity(0.1), // Light orange
+                        const Color(
+                          0xFFFF9800,
+                        ).withOpacity(0.1), // Light orange
                         const Color(0xFF1976D2).withOpacity(0.1), // Light blue
                       ],
                       begin: Alignment.topLeft,
@@ -920,17 +1142,24 @@ class _ReportsScreenState extends State<ReportsScreen> {
                 // List
                 Expanded(
                   child: _filteredVisits.isEmpty
-                      ? const Center(child: Text('No visits found for this period'))
+                      ? const Center(
+                          child: Text('No visits found for this period'),
+                        )
                       : ListView.builder(
                           itemCount: _filteredVisits.length,
                           itemBuilder: (context, index) {
                             final visit = _filteredVisits[index];
                             final location = _siteLocations[visit.id];
                             final report = _reportByVisitId[visit.id];
-                            final effectiveCompletedAt = _effectiveCompletedAt(visit);
-                            
+                            final effectiveCompletedAt = _effectiveCompletedAt(
+                              visit,
+                            );
+
                             return Container(
-                              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                              margin: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 6,
+                              ),
                               decoration: BoxDecoration(
                                 color: Colors.white,
                                 borderRadius: BorderRadius.circular(16),
@@ -942,7 +1171,9 @@ class _ReportsScreenState extends State<ReportsScreen> {
                                   ),
                                 ],
                                 border: Border.all(
-                                  color: const Color(0xFFFF9800).withOpacity(0.1), // Light orange border
+                                  color: const Color(
+                                    0xFFFF9800,
+                                  ).withOpacity(0.1), // Light orange border
                                   width: 1,
                                 ),
                               ),
@@ -952,193 +1183,276 @@ class _ReportsScreenState extends State<ReportsScreen> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Row(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         // Leading icon
                                         Container(
                                           width: 44,
                                           height: 44,
-                                      decoration: BoxDecoration(
-                                        gradient: LinearGradient(
-                                          colors: [
-                                            const Color(0xFF1976D2).withOpacity(0.8), // Blue gradient
-                                            const Color(0xFF42A5F5),
-                                          ],
-                                          begin: Alignment.topLeft,
-                                          end: Alignment.bottomRight,
-                                        ),
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      child: Center(
-                                        child: Text(
-                                          visit.siteCode.length >= 2 
-                                            ? visit.siteCode.substring(0, 2).toUpperCase()
-                                            : visit.siteCode.toUpperCase(),
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 16,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 16),
-                                    // Content
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          // Title
-                                          Text(
-                                            visit.siteName ?? 'Unknown Site',
-                                            style: const TextStyle(
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 16,
-                                              color: Color(0xFF263238),
+                                          decoration: BoxDecoration(
+                                            gradient: LinearGradient(
+                                              colors: [
+                                                const Color(
+                                                  0xFF1976D2,
+                                                ).withOpacity(
+                                                  0.8,
+                                                ), // Blue gradient
+                                                const Color(0xFF42A5F5),
+                                              ],
+                                              begin: Alignment.topLeft,
+                                              end: Alignment.bottomRight,
                                             ),
-                                            overflow: TextOverflow.ellipsis,
-                                            maxLines: 1,
+                                            borderRadius: BorderRadius.circular(
+                                              12,
+                                            ),
                                           ),
-                                          const SizedBox(height: 8),
-                                          // Site code
-                                          Row(
-                                            children: [
-                                              Icon(Icons.location_on, size: 16, color: const Color(0xFFFF9800)),
-                                              const SizedBox(width: 4),
-                                              Expanded(
-                                                child: Text(
-                                                  'Code: ${visit.siteCode}',
-                                                  style: TextStyle(
-                                                    color: Colors.grey.shade700,
-                                                    fontSize: 14,
-                                                    fontWeight: FontWeight.w500,
-                                                  ),
-                                                  overflow: TextOverflow.ellipsis,
-                                                ),
+                                          child: Center(
+                                            child: Text(
+                                              visit.siteCode.length >= 2
+                                                  ? visit.siteCode
+                                                        .substring(0, 2)
+                                                        .toUpperCase()
+                                                  : visit.siteCode
+                                                        .toUpperCase(),
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 16,
                                               ),
-                                            ],
+                                            ),
                                           ),
-                                          const SizedBox(height: 4),
-                                          // Date
-                                          Row(
+                                        ),
+                                        const SizedBox(width: 16),
+                                        // Content
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
                                             children: [
-                                              Icon(Icons.access_time, size: 16, color: const Color(0xFF1976D2)),
-                                              const SizedBox(width: 4),
-                                              Expanded(
-                                                child: Text(
-                                                  effectiveCompletedAt != null
-                                                      ? DateFormat('MMM dd, yyyy HH:mm').format(effectiveCompletedAt)
-                                                      : 'No Date',
-                                                  style: TextStyle(
-                                                    color: Colors.grey.shade600,
-                                                    fontSize: 13,
-                                                  ),
-                                                  overflow: TextOverflow.ellipsis,
+                                              // Title
+                                              Text(
+                                                visit.siteName ??
+                                                    'Unknown Site',
+                                                style: const TextStyle(
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 16,
+                                                  color: Color(0xFF263238),
                                                 ),
+                                                overflow: TextOverflow.ellipsis,
+                                                maxLines: 1,
                                               ),
-                                            ],
-                                          ),
-                                          // Location (if available)
-                                          if (location != null) ...[
-                                            const SizedBox(height: 4),
-                                            Row(
-                                              children: [
-                                                Icon(Icons.gps_fixed, size: 16, color: const Color(0xFF4CAF50)),
-                                                const SizedBox(width: 4),
-                                                Expanded(
-                                                  child: Text(
-                                                    '${location['latitude']?.toStringAsFixed(4) ?? 'N/A'}, ${location['longitude']?.toStringAsFixed(4) ?? 'N/A'} (±${location['accuracy']?.toStringAsFixed(0) ?? 'N/A'}m)',
-                                                    style: TextStyle(
-                                                      color: Colors.grey.shade600,
-                                                      fontSize: 12,
+                                              const SizedBox(height: 8),
+                                              // Site code
+                                              Row(
+                                                children: [
+                                                  Icon(
+                                                    Icons.location_on,
+                                                    size: 16,
+                                                    color: const Color(
+                                                      0xFFFF9800,
                                                     ),
-                                                    overflow: TextOverflow.ellipsis,
                                                   ),
+                                                  const SizedBox(width: 4),
+                                                  Expanded(
+                                                    child: Text(
+                                                      'Code: ${visit.siteCode}',
+                                                      style: TextStyle(
+                                                        color: Colors
+                                                            .grey
+                                                            .shade700,
+                                                        fontSize: 14,
+                                                        fontWeight:
+                                                            FontWeight.w500,
+                                                      ),
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                              const SizedBox(height: 4),
+                                              // Date
+                                              Row(
+                                                children: [
+                                                  Icon(
+                                                    Icons.access_time,
+                                                    size: 16,
+                                                    color: const Color(
+                                                      0xFF1976D2,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 4),
+                                                  Expanded(
+                                                    child: Text(
+                                                      effectiveCompletedAt !=
+                                                              null
+                                                          ? DateFormat(
+                                                              'MMM dd, yyyy HH:mm',
+                                                            ).format(
+                                                              effectiveCompletedAt,
+                                                            )
+                                                          : 'No Date',
+                                                      style: TextStyle(
+                                                        color: Colors
+                                                            .grey
+                                                            .shade600,
+                                                        fontSize: 13,
+                                                      ),
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                              // Location (if available)
+                                              if (location != null) ...[
+                                                const SizedBox(height: 4),
+                                                Row(
+                                                  children: [
+                                                    Icon(
+                                                      Icons.gps_fixed,
+                                                      size: 16,
+                                                      color: const Color(
+                                                        0xFF4CAF50,
+                                                      ),
+                                                    ),
+                                                    const SizedBox(width: 4),
+                                                    Expanded(
+                                                      child: Text(
+                                                        '${location['latitude']?.toStringAsFixed(4) ?? 'N/A'}, ${location['longitude']?.toStringAsFixed(4) ?? 'N/A'} (±${location['accuracy']?.toStringAsFixed(0) ?? 'N/A'}m)',
+                                                        style: TextStyle(
+                                                          color: Colors
+                                                              .grey
+                                                              .shade600,
+                                                          fontSize: 12,
+                                                        ),
+                                                        overflow: TextOverflow
+                                                            .ellipsis,
+                                                      ),
+                                                    ),
+                                                  ],
                                                 ),
                                               ],
-                                            ),
-                                          ],
 
-                                          if (report != null && report.notes.trim().isNotEmpty) ...[
-                                            const SizedBox(height: 8),
-                                            Text(
-                                              report.notes,
-                                              style: TextStyle(
-                                                color: Colors.grey.shade700,
-                                                fontSize: 13,
-                                              ),
-                                              maxLines: 2,
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                          ],
-
-                                          if (report != null && report.activities != null && report.activities!.trim().isNotEmpty) ...[
-                                            const SizedBox(height: 4),
-                                            Text(
-                                              'Activities: ${report.activities}',
-                                              style: TextStyle(
-                                                color: Colors.grey.shade600,
-                                                fontSize: 12,
-                                              ),
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                          ],
-
-                                          if (report != null) ...[
-                                            const SizedBox(height: 8),
-                                            Wrap(
-                                              spacing: 8,
-                                              runSpacing: 4,
-                                              crossAxisAlignment: WrapCrossAlignment.center,
-                                              children: [
+                                              if (report != null &&
+                                                  report.notes
+                                                      .trim()
+                                                      .isNotEmpty) ...[
+                                                const SizedBox(height: 8),
                                                 Text(
-                                                  '📷 ${report.photoUrls.length}',
+                                                  report.notes,
+                                                  style: TextStyle(
+                                                    color: Colors.grey.shade700,
+                                                    fontSize: 13,
+                                                  ),
+                                                  maxLines: 2,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                ),
+                                              ],
+
+                                              if (report != null &&
+                                                  report.activities != null &&
+                                                  report.activities!
+                                                      .trim()
+                                                      .isNotEmpty) ...[
+                                                const SizedBox(height: 4),
+                                                Text(
+                                                  'Activities: ${report.activities}',
                                                   style: TextStyle(
                                                     color: Colors.grey.shade600,
                                                     fontSize: 12,
                                                   ),
-                                                ),
-                                                TextButton.icon(
-                                                  style: TextButton.styleFrom(
-                                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                                    minimumSize: Size.zero,
-                                                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                                  ),
-                                                  onPressed: () => _downloadVisitReport(visit),
-                                                  icon: const Icon(Icons.picture_as_pdf, size: 16),
-                                                  label: const Text('PDF', style: TextStyle(fontSize: 12)),
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
                                                 ),
                                               ],
+
+                                              if (report != null) ...[
+                                                const SizedBox(height: 8),
+                                                Wrap(
+                                                  spacing: 8,
+                                                  runSpacing: 4,
+                                                  crossAxisAlignment:
+                                                      WrapCrossAlignment.center,
+                                                  children: [
+                                                    Text(
+                                                      '📷 ${report.photoUrls.length}',
+                                                      style: TextStyle(
+                                                        color: Colors
+                                                            .grey
+                                                            .shade600,
+                                                        fontSize: 12,
+                                                      ),
+                                                    ),
+                                                    TextButton.icon(
+                                                      style: TextButton.styleFrom(
+                                                        padding:
+                                                            const EdgeInsets.symmetric(
+                                                              horizontal: 8,
+                                                              vertical: 4,
+                                                            ),
+                                                        minimumSize: Size.zero,
+                                                        tapTargetSize:
+                                                            MaterialTapTargetSize
+                                                                .shrinkWrap,
+                                                      ),
+                                                      onPressed: () =>
+                                                          _downloadVisitReport(
+                                                            visit,
+                                                          ),
+                                                      icon: const Icon(
+                                                        Icons.picture_as_pdf,
+                                                        size: 16,
+                                                      ),
+                                                      label: const Text(
+                                                        'PDF',
+                                                        style: TextStyle(
+                                                          fontSize: 12,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ],
+                                            ],
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        // Trailing status
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 8,
+                                            vertical: 4,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: const Color(
+                                              0xFF4CAF50,
+                                            ).withOpacity(0.1),
+                                            borderRadius: BorderRadius.circular(
+                                              12,
                                             ),
-                                          ],
-                                        ],
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    // Trailing status
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFF4CAF50).withOpacity(0.1),
-                                        borderRadius: BorderRadius.circular(12),
-                                        border: Border.all(
-                                          color: const Color(0xFF4CAF50).withOpacity(0.3),
+                                            border: Border.all(
+                                              color: const Color(
+                                                0xFF4CAF50,
+                                              ).withOpacity(0.3),
+                                            ),
+                                          ),
+                                          child: const Text(
+                                            '✓',
+                                            style: TextStyle(
+                                              color: Color(0xFF4CAF50),
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
                                         ),
-                                      ),
-                                      child: const Text(
-                                        '✓',
-                                        style: TextStyle(
-                                          color: Color(0xFF4CAF50),
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
+                                      ],
                                     ),
                                   ],
                                 ),
-                              ],
-                            ),
                               ),
                             );
                           },
@@ -1162,10 +1476,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
             offset: const Offset(0, 4),
           ),
         ],
-        border: Border.all(
-          color: color.withOpacity(0.2),
-          width: 1,
-        ),
+        border: Border.all(color: color.withOpacity(0.2), width: 1),
       ),
       child: Column(
         children: [
@@ -1196,6 +1507,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
 int min(int a, int b) => a < b ? a : b;
 
 class EmailDialog extends StatefulWidget {
+  const EmailDialog({super.key});
+
   @override
   _EmailDialogState createState() => _EmailDialogState();
 }

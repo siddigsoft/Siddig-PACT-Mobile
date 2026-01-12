@@ -1,15 +1,10 @@
-import 'package:sqflite/sqflite.dart';
 import 'dart:io';
 import '../models/incident_report.dart';
 import 'base_repository.dart';
 
 class IncidentRepository extends BaseRepository<IncidentReport> {
-  IncidentRepository({
-    required super.database,
-    required super.supabaseService,
-  }) : super(
-          tableName: 'incidents',
-        );
+  IncidentRepository({required super.database, required super.supabaseService})
+    : super(tableName: 'incidents');
 
   @override
   Map<String, dynamic> toMap(IncidentReport item) => item.toJson();
@@ -20,7 +15,9 @@ class IncidentRepository extends BaseRepository<IncidentReport> {
 
   // Add new incident report with media files
   Future<void> addIncidentReport(
-      IncidentReport report, List<String>? imagePaths) async {
+    IncidentReport report,
+    List<String>? imagePaths,
+  ) async {
     // First, upload any media files to Supabase storage
     List<String>? mediaUrls;
     if (imagePaths != null && imagePaths.isNotEmpty) {
@@ -33,7 +30,10 @@ class IncidentRepository extends BaseRepository<IncidentReport> {
 
         // Upload to Supabase storage
         final url = await supabaseService.uploadFile(
-            'incident-media', storageKey, bytes);
+          'incident-media',
+          storageKey,
+          bytes,
+        );
         mediaUrls.add(url);
       }
     }

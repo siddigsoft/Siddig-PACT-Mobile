@@ -6,6 +6,7 @@ import '../widgets/reusable_app_bar.dart';
 import '../widgets/custom_drawer_menu.dart';
 import '../theme/app_colors.dart';
 import '../widgets/main_layout.dart';
+import '../services/wallet_service.dart';
 
 class WalletScreen extends StatefulWidget {
   const WalletScreen({super.key});
@@ -16,10 +17,10 @@ class WalletScreen extends StatefulWidget {
 
 class _WalletScreenState extends State<WalletScreen> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
-  
+
   bool _isLoading = true;
   String? _userId;
-  
+
   // Wallet data
   double _currentBalance = 0.0;
   double _totalEarned = 0.0;
@@ -27,18 +28,20 @@ class _WalletScreenState extends State<WalletScreen> {
   double _pendingWithdrawals = 0.0;
   double _thisMonthEarnings = 0.0;
   double _thisWeekEarnings = 0.0;
-  
+
   List<Map<String, dynamic>> _transactions = [];
   List<Map<String, dynamic>> _withdrawalRequests = [];
-  
+
   String _activeTab = 'overview';
   String _transactionFilter = 'all';
   String _withdrawalFilter = 'all';
-  
+
   // Withdrawal dialog
   bool _showWithdrawalDialog = false;
-  final TextEditingController _withdrawalAmountController = TextEditingController();
-  final TextEditingController _withdrawalReasonController = TextEditingController();
+  final TextEditingController _withdrawalAmountController =
+      TextEditingController();
+  final TextEditingController _withdrawalReasonController =
+      TextEditingController();
   String _selectedPaymentMethod = '';
   List<Map<String, dynamic>> _paymentMethods = [];
   bool _isSubmittingWithdrawal = false;
@@ -87,7 +90,7 @@ class _WalletScreenState extends State<WalletScreen> {
   void _setupRealtimeSubscription() {
     try {
       _realtimeChannel?.unsubscribe();
-      
+
       _realtimeChannel = Supabase.instance.client
           .channel('wallet_realtime')
           .onPostgresChanges(
@@ -140,9 +143,10 @@ class _WalletScreenState extends State<WalletScreen> {
         _totalEarned = (data['total_earned'] as num?)?.toDouble() ?? 0.0;
       } else {
         // Create wallet if it doesn't exist
-        await Supabase.instance.client
-            .from('wallets')
-            .insert({'user_id': _userId!, 'balances': {'SDG': 0}});
+        await Supabase.instance.client.from('wallets').insert({
+          'user_id': _userId!,
+          'balances': {'SDG': 0},
+        });
         _currentBalance = 0.0;
         _totalEarned = 0.0;
       }
@@ -164,7 +168,7 @@ class _WalletScreenState extends State<WalletScreen> {
           .order('created_at', ascending: false)
           .limit(100);
 
-      _transactions = (data ?? []).map((t) => t as Map<String, dynamic>).toList();
+      _transactions = (data ?? []).map((t) => t).toList();
 
       // Calculate stats
       final now = DateTime.now();
@@ -175,7 +179,7 @@ class _WalletScreenState extends State<WalletScreen> {
           .where((t) {
             final date = DateTime.parse(t['created_at'] as String);
             return date.isAfter(startOfMonth) &&
-                   (t['type'] == 'earning' || t['type'] == 'site_visit_fee');
+                (t['type'] == 'earning' || t['type'] == 'site_visit_fee');
           })
           .fold(0.0, (sum, t) => sum + (t['amount'] as num).toDouble());
 
@@ -183,7 +187,7 @@ class _WalletScreenState extends State<WalletScreen> {
           .where((t) {
             final date = DateTime.parse(t['created_at'] as String);
             return date.isAfter(startOfWeek) &&
-                   (t['type'] == 'earning' || t['type'] == 'site_visit_fee');
+                (t['type'] == 'earning' || t['type'] == 'site_visit_fee');
           })
           .fold(0.0, (sum, t) => sum + (t['amount'] as num).toDouble());
 
@@ -204,7 +208,7 @@ class _WalletScreenState extends State<WalletScreen> {
           .order('created_at', ascending: false)
           .limit(50);
 
-      _withdrawalRequests = (data ?? []).map((w) => w as Map<String, dynamic>).toList();
+      _withdrawalRequests = (data ?? []).map((w) => w).toList();
 
       _pendingWithdrawals = _withdrawalRequests
           .where((w) => w['status'] == 'pending')
@@ -230,7 +234,7 @@ class _WalletScreenState extends State<WalletScreen> {
           .eq('user_id', _userId!)
           .order('created_at', ascending: false);
 
-      _paymentMethods = (data ?? []).map((p) => p as Map<String, dynamic>).toList();
+      _paymentMethods = (data ?? []).map((p) => p).toList();
       if (mounted) setState(() {});
     } catch (e) {
       debugPrint('Error loading payment methods: $e');
@@ -252,18 +256,15 @@ class _WalletScreenState extends State<WalletScreen> {
     setState(() => _isSubmittingWithdrawal = true);
 
     try {
-      await Supabase.instance.client
-          .from('withdrawal_requests')
-          .insert({
-            'user_id': _userId!,
-            'amount': amount,
-            'currency': 'SDG',
-            'request_reason': _withdrawalReasonController.text,
-            'payment_method': _selectedPaymentMethod.isNotEmpty
-                ? _selectedPaymentMethod
-                : 'Other',
-            'status': 'pending',
-          });
+      // Use the wallet service to create withdrawal request (includes wallet_id)
+      final walletService = WalletService();
+      await walletService.createWithdrawalRequest(
+        amount: amount,
+        requestReason: _withdrawalReasonController.text,
+        paymentMethod: _selectedPaymentMethod.isNotEmpty
+            ? _selectedPaymentMethod
+            : 'Other',
+      );
 
       setState(() {
         _showWithdrawalDialog = false;
@@ -330,7 +331,7 @@ class _WalletScreenState extends State<WalletScreen> {
   }
 
   String _formatCurrency(double amount) {
-    return NumberFormat.currency(symbol: '', decimalDigits: 2).format(amount) + ' SDG';
+    return '${NumberFormat.currency(symbol: '', decimalDigits: 2).format(amount)} SDG';
   }
 
   List<Map<String, dynamic>> _getFilteredTransactions() {
@@ -383,7 +384,7 @@ class _WalletScreenState extends State<WalletScreen> {
   Widget _buildStatusBadge(String status) {
     Color color;
     IconData icon;
-    
+
     switch (status) {
       case 'pending':
         color = Colors.orange;
@@ -447,175 +448,192 @@ class _WalletScreenState extends State<WalletScreen> {
             SafeArea(
               child: Column(
                 children: [
-                  ReusableAppBar(
-                    title: 'Wallet',
-                    scaffoldKey: _scaffoldKey,
-                  ),
+                  ReusableAppBar(title: 'Wallet', scaffoldKey: _scaffoldKey),
                   Expanded(
-              child: _isLoading
-                  ? const Center(child: CircularProgressIndicator())
-                  : RefreshIndicator(
-                      onRefresh: _initializeWallet,
-                      child: SingleChildScrollView(
-                        physics: const AlwaysScrollableScrollPhysics(),
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // Balance Card
-                            Container(
-                              padding: const EdgeInsets.all(24),
-                              decoration: BoxDecoration(
-                                gradient: const LinearGradient(
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                  colors: [Color(0xFF3B82F6), Color(0xFF1D4ED8)],
-                                ),
-                                borderRadius: BorderRadius.circular(20),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.blue.withOpacity(0.3),
-                                    blurRadius: 20,
-                                    offset: const Offset(0, 10),
-                                  ),
-                                ],
-                              ),
+                    child: _isLoading
+                        ? const Center(child: CircularProgressIndicator())
+                        : RefreshIndicator(
+                            onRefresh: _initializeWallet,
+                            child: SingleChildScrollView(
+                              physics: const AlwaysScrollableScrollPhysics(),
+                              padding: const EdgeInsets.all(16),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
+                                  // Balance Card
+                                  Container(
+                                    padding: const EdgeInsets.all(24),
+                                    decoration: BoxDecoration(
+                                      gradient: const LinearGradient(
+                                        begin: Alignment.topLeft,
+                                        end: Alignment.bottomRight,
+                                        colors: [
+                                          Color(0xFF3B82F6),
+                                          Color(0xFF1D4ED8),
+                                        ],
+                                      ),
+                                      borderRadius: BorderRadius.circular(20),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.blue.withOpacity(0.3),
+                                          blurRadius: 20,
+                                          offset: const Offset(0, 10),
+                                        ),
+                                      ],
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            Text(
+                                              'Current Balance',
+                                              style: GoogleFonts.poppins(
+                                                fontSize: 14,
+                                                color: Colors.white.withOpacity(
+                                                  0.9,
+                                                ),
+                                              ),
+                                            ),
+                                            Icon(
+                                              Icons.account_balance_wallet,
+                                              color: Colors.white.withOpacity(
+                                                0.9,
+                                              ),
+                                              size: 24,
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 8),
+                                        Text(
+                                          _formatCurrency(_currentBalance),
+                                          style: GoogleFonts.poppins(
+                                            fontSize: 36,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          'Available for withdrawal',
+                                          style: GoogleFonts.poppins(
+                                            fontSize: 12,
+                                            color: Colors.white.withOpacity(
+                                              0.8,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+
+                                  const SizedBox(height: 24),
+
+                                  // Stats Grid
                                   Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                     children: [
-                                      Text(
-                                        'Current Balance',
-                                        style: GoogleFonts.poppins(
-                                          fontSize: 14,
-                                          color: Colors.white.withOpacity(0.9),
+                                      Expanded(
+                                        child: _buildStatCard(
+                                          'Total Earned',
+                                          _formatCurrency(_totalEarned),
+                                          Icons.trending_up,
+                                          Colors.green,
                                         ),
                                       ),
-                                      Icon(
-                                        Icons.account_balance_wallet,
-                                        color: Colors.white.withOpacity(0.9),
-                                        size: 24,
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: _buildStatCard(
+                                          'This Month',
+                                          _formatCurrency(_thisMonthEarnings),
+                                          Icons.calendar_today,
+                                          Colors.purple,
+                                        ),
                                       ),
                                     ],
                                   ),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    _formatCurrency(_currentBalance),
-                                    style: GoogleFonts.poppins(
-                                      fontSize: 36,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.white,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    'Available for withdrawal',
-                                    style: GoogleFonts.poppins(
-                                      fontSize: 12,
-                                      color: Colors.white.withOpacity(0.8),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
 
-                            const SizedBox(height: 24),
+                                  const SizedBox(height: 12),
 
-                            // Stats Grid
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: _buildStatCard(
-                                    'Total Earned',
-                                    _formatCurrency(_totalEarned),
-                                    Icons.trending_up,
-                                    Colors.green,
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: _buildStatCard(
-                                    'This Month',
-                                    _formatCurrency(_thisMonthEarnings),
-                                    Icons.calendar_today,
-                                    Colors.purple,
-                                  ),
-                                ),
-                              ],
-                            ),
-
-                            const SizedBox(height: 12),
-
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: _buildStatCard(
-                                    'Pending',
-                                    _formatCurrency(_pendingWithdrawals),
-                                    Icons.pending,
-                                    Colors.orange,
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: _buildStatCard(
-                                    'Withdrawn',
-                                    _formatCurrency(_totalWithdrawn),
-                                    Icons.check_circle,
-                                    Colors.cyan,
-                                  ),
-                                ),
-                              ],
-                            ),
-
-                            const SizedBox(height: 24),
-
-                            // Tabs
-                            Container(
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(16),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.05),
-                                    blurRadius: 10,
-                                    offset: const Offset(0, 2),
-                                  ),
-                                ],
-                              ),
-                              child: Column(
-                                children: [
-                                  // Tab Buttons
                                   Row(
                                     children: [
                                       Expanded(
-                                        child: _buildTabButton('overview', 'Overview'),
+                                        child: _buildStatCard(
+                                          'Pending',
+                                          _formatCurrency(_pendingWithdrawals),
+                                          Icons.pending,
+                                          Colors.orange,
+                                        ),
                                       ),
+                                      const SizedBox(width: 12),
                                       Expanded(
-                                        child: _buildTabButton('transactions', 'Transactions'),
-                                      ),
-                                      Expanded(
-                                        child: _buildTabButton('withdrawals', 'Withdrawals'),
+                                        child: _buildStatCard(
+                                          'Withdrawn',
+                                          _formatCurrency(_totalWithdrawn),
+                                          Icons.check_circle,
+                                          Colors.cyan,
+                                        ),
                                       ),
                                     ],
                                   ),
-                                  const Divider(height: 1),
-                                  // Tab Content
-                                  Padding(
-                                    padding: const EdgeInsets.all(16),
-                                    child: _buildTabContent(),
+
+                                  const SizedBox(height: 24),
+
+                                  // Tabs
+                                  Container(
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(16),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withOpacity(0.05),
+                                          blurRadius: 10,
+                                          offset: const Offset(0, 2),
+                                        ),
+                                      ],
+                                    ),
+                                    child: Column(
+                                      children: [
+                                        // Tab Buttons
+                                        Row(
+                                          children: [
+                                            Expanded(
+                                              child: _buildTabButton(
+                                                'overview',
+                                                'Overview',
+                                              ),
+                                            ),
+                                            Expanded(
+                                              child: _buildTabButton(
+                                                'transactions',
+                                                'Transactions',
+                                              ),
+                                            ),
+                                            Expanded(
+                                              child: _buildTabButton(
+                                                'withdrawals',
+                                                'Withdrawals',
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const Divider(height: 1),
+                                        // Tab Content
+                                        Padding(
+                                          padding: const EdgeInsets.all(16),
+                                          child: _buildTabContent(),
+                                        ),
+                                      ],
+                                    ),
                                   ),
+
+                                  const SizedBox(height: 24),
                                 ],
                               ),
                             ),
-
-                            const SizedBox(height: 24),
-                          ],
-                        ),
-                      ),
-                    ),
+                          ),
                   ),
                 ],
               ),
@@ -624,19 +642,19 @@ class _WalletScreenState extends State<WalletScreen> {
           ],
         ),
         floatingActionButton: _currentBalance > 0
-          ? FloatingActionButton.extended(
-              onPressed: () => setState(() => _showWithdrawalDialog = true),
-              backgroundColor: AppColors.primaryBlue,
-              icon: const Icon(Icons.arrow_downward, color: Colors.white),
-              label: Text(
-                'Request Withdrawal',
-                style: GoogleFonts.poppins(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w600,
+            ? FloatingActionButton.extended(
+                onPressed: () => setState(() => _showWithdrawalDialog = true),
+                backgroundColor: AppColors.primaryBlue,
+                icon: const Icon(Icons.arrow_downward, color: Colors.white),
+                label: Text(
+                  'Request Withdrawal',
+                  style: GoogleFonts.poppins(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
-              ),
-            )
-          : null,
+              )
+            : null,
       ),
     );
   }
@@ -681,7 +699,9 @@ class _WalletScreenState extends State<WalletScreen> {
             // Amount
             TextField(
               controller: _withdrawalAmountController,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
               decoration: InputDecoration(
                 labelText: 'Amount (SDG)',
                 prefixIcon: const Icon(Icons.attach_money),
@@ -689,7 +709,9 @@ class _WalletScreenState extends State<WalletScreen> {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 helperText: 'Available: ${_formatCurrency(_currentBalance)}',
-                errorText: amount > _currentBalance ? 'Insufficient funds' : null,
+                errorText: amount > _currentBalance
+                    ? 'Insufficient funds'
+                    : null,
               ),
               onChanged: (_) => setState(() {}),
             ),
@@ -697,7 +719,9 @@ class _WalletScreenState extends State<WalletScreen> {
             // Payment Method
             if (_paymentMethods.isNotEmpty) ...[
               DropdownButtonFormField<String>(
-                value: _selectedPaymentMethod.isEmpty ? null : _selectedPaymentMethod,
+                initialValue: _selectedPaymentMethod.isEmpty
+                    ? null
+                    : _selectedPaymentMethod,
                 decoration: InputDecoration(
                   labelText: 'Payment Method',
                   prefixIcon: const Icon(Icons.payment),
@@ -706,16 +730,21 @@ class _WalletScreenState extends State<WalletScreen> {
                   ),
                 ),
                 items: [
-                  ..._paymentMethods.map((method) => DropdownMenuItem(
-                        value: method['name'] as String,
-                        child: Text('${method['name']} (${(method['type'] as String).replaceAll('_', ' ')})'),
-                      )),
+                  ..._paymentMethods.map(
+                    (method) => DropdownMenuItem(
+                      value: method['name'] as String,
+                      child: Text(
+                        '${method['name']} (${(method['type'] as String).replaceAll('_', ' ')})',
+                      ),
+                    ),
+                  ),
                   const DropdownMenuItem(
                     value: 'other',
                     child: Text('Other (specify in reason)'),
                   ),
                 ],
-                onChanged: (value) => setState(() => _selectedPaymentMethod = value ?? ''),
+                onChanged: (value) =>
+                    setState(() => _selectedPaymentMethod = value ?? ''),
               ),
               const SizedBox(height: 16),
             ],
@@ -752,7 +781,10 @@ class _WalletScreenState extends State<WalletScreen> {
                       : null,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primaryBlue,
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 12,
+                    ),
                   ),
                   child: _isSubmittingWithdrawal
                       ? const SizedBox(
@@ -760,7 +792,9 @@ class _WalletScreenState extends State<WalletScreen> {
                           width: 20,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              Colors.white,
+                            ),
                           ),
                         )
                       : const Text('Submit Request'),
@@ -773,7 +807,12 @@ class _WalletScreenState extends State<WalletScreen> {
     );
   }
 
-  Widget _buildStatCard(String title, String value, IconData icon, Color color) {
+  Widget _buildStatCard(
+    String title,
+    String value,
+    IconData icon,
+    Color color,
+  ) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -869,10 +908,7 @@ class _WalletScreenState extends State<WalletScreen> {
       children: [
         Text(
           'Recent Transactions',
-          style: GoogleFonts.poppins(
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-          ),
+          style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 16),
         if (recentTransactions.isEmpty)
@@ -881,21 +917,18 @@ class _WalletScreenState extends State<WalletScreen> {
               padding: const EdgeInsets.all(32),
               child: Text(
                 'No transactions yet',
-                style: GoogleFonts.poppins(
-                  color: AppColors.textLight,
-                ),
+                style: GoogleFonts.poppins(color: AppColors.textLight),
               ),
             ),
           )
         else
-          ...recentTransactions.map((transaction) => _buildTransactionItem(transaction)),
+          ...recentTransactions.map(
+            (transaction) => _buildTransactionItem(transaction),
+          ),
         const SizedBox(height: 24),
         Text(
           'Recent Earnings',
-          style: GoogleFonts.poppins(
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-          ),
+          style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 16),
         if (earningsTransactions.isEmpty)
@@ -904,14 +937,14 @@ class _WalletScreenState extends State<WalletScreen> {
               padding: const EdgeInsets.all(32),
               child: Text(
                 'No earnings yet',
-                style: GoogleFonts.poppins(
-                  color: AppColors.textLight,
-                ),
+                style: GoogleFonts.poppins(color: AppColors.textLight),
               ),
             ),
           )
         else
-          ...earningsTransactions.map((transaction) => _buildTransactionItem(transaction)),
+          ...earningsTransactions.map(
+            (transaction) => _buildTransactionItem(transaction),
+          ),
       ],
     );
   }
@@ -940,7 +973,8 @@ class _WalletScreenState extends State<WalletScreen> {
               DropdownMenuItem(value: 'bonus', child: Text('Bonuses')),
               DropdownMenuItem(value: 'penalty', child: Text('Penalties')),
             ],
-            onChanged: (value) => setState(() => _transactionFilter = value ?? 'all'),
+            onChanged: (value) =>
+                setState(() => _transactionFilter = value ?? 'all'),
           ),
         ),
         const SizedBox(height: 16),
@@ -950,9 +984,7 @@ class _WalletScreenState extends State<WalletScreen> {
               padding: const EdgeInsets.all(32),
               child: Text(
                 'No transactions found',
-                style: GoogleFonts.poppins(
-                  color: AppColors.textLight,
-                ),
+                style: GoogleFonts.poppins(color: AppColors.textLight),
               ),
             ),
           )
@@ -985,7 +1017,8 @@ class _WalletScreenState extends State<WalletScreen> {
               DropdownMenuItem(value: 'approved', child: Text('Approved')),
               DropdownMenuItem(value: 'rejected', child: Text('Rejected')),
             ],
-            onChanged: (value) => setState(() => _withdrawalFilter = value ?? 'all'),
+            onChanged: (value) =>
+                setState(() => _withdrawalFilter = value ?? 'all'),
           ),
         ),
         const SizedBox(height: 16),
@@ -995,9 +1028,7 @@ class _WalletScreenState extends State<WalletScreen> {
               padding: const EdgeInsets.all(32),
               child: Text(
                 'No withdrawal requests found',
-                style: GoogleFonts.poppins(
-                  color: AppColors.textLight,
-                ),
+                style: GoogleFonts.poppins(color: AppColors.textLight),
               ),
             ),
           )
@@ -1042,7 +1073,9 @@ class _WalletScreenState extends State<WalletScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  description.isNotEmpty ? description : type.replaceAll('_', ' ').toUpperCase(),
+                  description.isNotEmpty
+                      ? description
+                      : type.replaceAll('_', ' ').toUpperCase(),
                   style: GoogleFonts.poppins(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
@@ -1128,10 +1161,9 @@ class _WalletScreenState extends State<WalletScreen> {
               ),
               if (isPending)
                 TextButton(
-                  onPressed: () => _cancelWithdrawalRequest(withdrawal['id'] as String),
-                  style: TextButton.styleFrom(
-                    foregroundColor: Colors.red,
-                  ),
+                  onPressed: () =>
+                      _cancelWithdrawalRequest(withdrawal['id'] as String),
+                  style: TextButton.styleFrom(foregroundColor: Colors.red),
                   child: const Text('Cancel'),
                 ),
             ],
@@ -1141,4 +1173,3 @@ class _WalletScreenState extends State<WalletScreen> {
     );
   }
 }
-

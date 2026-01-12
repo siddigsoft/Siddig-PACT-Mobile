@@ -16,14 +16,12 @@ class PaymentMethodService {
 
       final response = await _supabase
           .from('payment_methods')
-          .select('id, user_id, type, name, account_number, bank_name, phone_number, card_number, is_default, created_at, updated_at')
+          .select(
+            'id, user_id, type, name, account_number, bank_name, phone_number, card_number, is_default, created_at, updated_at',
+          )
           .eq('user_id', userId)
           .order('is_default', ascending: false)
           .order('created_at', ascending: false);
-
-      if (response == null) {
-        return [];
-      }
 
       final List<PaymentMethod> methods = [];
       for (final json in (response as List)) {
@@ -61,7 +59,9 @@ class PaymentMethodService {
       // Table columns: id, user_id, type, name, account_number, bank_name, phone_number, card_number, is_default, created_at, updated_at
       final data = <String, dynamic>{
         'user_id': userId,
-        'type': _paymentTypeToString(request.type), // 'bank', 'mobile_money', 'card'
+        'type': _paymentTypeToString(
+          request.type,
+        ), // 'bank', 'mobile_money', 'card'
         'is_default': false, // Default to false, user can set later
       };
 
@@ -154,7 +154,9 @@ class PaymentMethodService {
       final methods = await fetchPaymentMethods();
       return methods.firstWhere(
         (method) => method.isDefault,
-        orElse: () => methods.isNotEmpty ? methods.first : throw PaymentMethodException('No payment methods found'),
+        orElse: () => methods.isNotEmpty
+            ? methods.first
+            : throw PaymentMethodException('No payment methods found'),
       );
     } catch (e) {
       return null;
@@ -209,7 +211,10 @@ class PaymentMethodService {
             error: 'Card number is required',
           );
         }
-        final cleanCardNumber = request.cardNumber!.replaceAll(RegExp(r'\s+'), '');
+        final cleanCardNumber = request.cardNumber!.replaceAll(
+          RegExp(r'\s+'),
+          '',
+        );
         if (cleanCardNumber.length != 16) {
           return PaymentMethodValidationResult(
             isValid: false,
@@ -267,14 +272,14 @@ class PaymentMethodService {
   String formatCardNumber(String cardNumber) {
     final clean = cardNumber.replaceAll(RegExp(r'\s+'), '');
     final buffer = StringBuffer();
-    
+
     for (int i = 0; i < clean.length; i++) {
       if (i > 0 && i % 4 == 0) {
         buffer.write(' ');
       }
       buffer.write(clean[i]);
     }
-    
+
     return buffer.toString();
   }
 

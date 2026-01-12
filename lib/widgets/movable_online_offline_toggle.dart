@@ -8,7 +8,8 @@ import 'online_offline_toggle.dart';
 class MovableOnlineOfflineToggle extends ConsumerStatefulWidget {
   final ToggleVariant variant;
   final Offset? initialPosition;
-  final bool snappy; // If true, disables drag-time animations for maximum responsiveness
+  final bool
+  snappy; // If true, disables drag-time animations for maximum responsiveness
 
   const MovableOnlineOfflineToggle({
     super.key,
@@ -94,20 +95,29 @@ class _MovableOnlineOfflineToggleState
   Offset _validateAndAdjustPosition(Offset position, Size screenSize) {
     // Constrain to screen bounds with some padding
     const double padding = 10.0;
-    const double toggleWidth = 200.0;  // Approximate width of the toggle
-    const double toggleHeight = 56.0;  // Height of uber variant
+    const double toggleWidth = 200.0; // Approximate width of the toggle
+    const double toggleHeight = 56.0; // Height of uber variant
 
     final maxX = screenSize.width - toggleWidth - padding;
     final maxY = screenSize.height - toggleHeight - padding;
 
-    final constrainedX = position.dx.clamp(padding, maxX > padding ? maxX : padding);
-    final constrainedY = position.dy.clamp(padding, maxY > padding ? maxY : padding);
+    final constrainedX = position.dx.clamp(
+      padding,
+      maxX > padding ? maxX : padding,
+    );
+    final constrainedY = position.dy.clamp(
+      padding,
+      maxY > padding ? maxY : padding,
+    );
 
     return Offset(constrainedX, constrainedY);
   }
 
   void _updatePosition(Offset newPosition, Size screenSize) {
-    final constrainedPosition = _validateAndAdjustPosition(newPosition, screenSize);
+    final constrainedPosition = _validateAndAdjustPosition(
+      newPosition,
+      screenSize,
+    );
 
     // Apply new position immediately for responsive dragging.
     // Persisting to storage each frame is expensive; save once onPanEnd instead.
@@ -135,7 +145,10 @@ class _MovableOnlineOfflineToggleState
       }
     } else if (_lastScreenSize != null && _lastScreenSize != newScreenSize) {
       // Screen size changed, validate current position and adjust if necessary.
-      final adjustedPosition = _validateAndAdjustPosition(_position, newScreenSize);
+      final adjustedPosition = _validateAndAdjustPosition(
+        _position,
+        newScreenSize,
+      );
       if (adjustedPosition != _position) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           setState(() {
@@ -159,7 +172,7 @@ class _MovableOnlineOfflineToggleState
 
         // Ensure position is always valid for current screen size
         // Only validate if position has been initialized
-        final validPosition = _positionInitialized 
+        final validPosition = _positionInitialized
             ? _validateAndAdjustPosition(_position, screenSize)
             : _position;
 
@@ -178,10 +191,7 @@ class _MovableOnlineOfflineToggleState
                   },
                   onPanUpdate: (details) {
                     // Use current _position for delta updates to avoid clamping/jitter
-                    _updatePosition(
-                      _position + details.delta,
-                      screenSize,
-                    );
+                    _updatePosition(_position + details.delta, screenSize);
                   },
                   onPanEnd: (_) {
                     setState(() {
@@ -241,10 +251,7 @@ class _MovableOnlineOfflineToggleState
                     });
                   },
                   onPanUpdate: (details) {
-                    _updatePosition(
-                      _position + details.delta,
-                      screenSize,
-                    );
+                    _updatePosition(_position + details.delta, screenSize);
                   },
                   onPanEnd: (_) {
                     setState(() {
