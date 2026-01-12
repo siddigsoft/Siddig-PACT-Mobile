@@ -38,13 +38,23 @@ class PermitStatus {
   requirement; // 'required_have_it', 'required_dont_have_it', 'not_required'
   final String? canWorkWithout; // 'yes', 'no'
   final bool uploaded;
+  final String? issueDate; // YYYY-MM-DD
+  final String? expiryDate; // YYYY-MM-DD
 
-  PermitStatus({this.requirement, this.canWorkWithout, this.uploaded = false});
+  PermitStatus({
+    this.requirement,
+    this.canWorkWithout,
+    this.uploaded = false,
+    this.issueDate,
+    this.expiryDate,
+  });
 
   Map<String, dynamic> toJson() => {
     'requirement': requirement,
     'canWorkWithout': canWorkWithout,
     'uploaded': uploaded,
+    'issueDate': issueDate,
+    'expiryDate': expiryDate,
   };
 
   factory PermitStatus.fromJson(Map<String, dynamic> json) {
@@ -52,6 +62,8 @@ class PermitStatus {
       requirement: json['requirement'],
       canWorkWithout: json['canWorkWithout'],
       uploaded: json['uploaded'] ?? false,
+      issueDate: json['issueDate'],
+      expiryDate: json['expiryDate'],
     );
   }
 }
@@ -204,7 +216,72 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
         debugPrint('Error fetching by forwarded_to_user_id: $e');
       }
 
-      debugPrint('Total sites fetched: ${sites.length}');
+      // SECONDARY APPROACH: Also check additional_data for assigned_to
+      // Fetch all sites and filter in memory (more reliable than JSONB query)
+      if (sites.length < 50) {
+        // Only do this if we got few results, to avoid performance issues
+        try {
+          final response2 = await _supabase
+              .from('mmp_site_entries')
+              .select('*, mmp_files(name, workflow)')
+              .order('created_at', ascending: false)
+              .limit(500);
+
+          if (response2 != null) {
+            // Filter in memory for sites where additional_data contains assigned_to
+            final additionalSites = (response2 as List).where((site) {
+              final additionalData =
+                  site['additional_data'] as Map<String, dynamic>?;
+              if (additionalData == null) return false;
+              final assignedTo = additionalData['assigned_to']?.toString();
+              return assignedTo == _userId;
+            }).toList();
+
+            // Add sites not already in list (avoid duplicates)
+            for (final site in additionalSites) {
+              final exists = sites.any((s) => s['id'] == site['id']);
+              if (!exists) {
+                sites.add(Map<String, dynamic>.from(site));
+              }
+            }
+            debugPrint(
+              'Sites added from additional_data assigned_to: ${additionalSites.length}',
+            );
+            debugPrint('Total sites after both queries: ${sites.length}');
+          }
+        } catch (e) {
+          debugPrint('Error fetching by additional_data assigned_to: $e');
+        }
+      }
+
+      // FALLBACK: If still no sites and user has state, try by state/hub
+      if (sites.isEmpty && _userState != null && _userState!.isNotEmpty) {
+        try {
+          debugPrint(
+            'No sites found by user assignment, trying by state/hub...',
+          );
+          var query = _supabase
+              .from('mmp_site_entries')
+              .select('*, mmp_files(name, workflow)')
+              .eq('state', _userState!);
+
+          if (_userHub != null && _userHub!.isNotEmpty) {
+            query = query.eq('hub_office', _userHub!);
+          }
+
+          final response3 = await query
+              .order('created_at', ascending: false)
+              .limit(1000);
+          if (response3 != null) {
+            sites.addAll(List<Map<String, dynamic>>.from(response3));
+            debugPrint('Sites found by state/hub: ${sites.length}');
+          }
+        } catch (e) {
+          debugPrint('Error fetching by state/hub: $e');
+        }
+      }
+
+      debugPrint('Total sites fetched before filtering: ${sites.length}');
 
       // Do not filter by locality; show all sites forwarded/assigned to the coordinator.
       // This matches the dashboard behavior and avoids hiding sites when locality differs.
@@ -216,7 +293,9 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
         statusCounts[status] = (statusCounts[status] ?? 0) + 1;
       }
       debugPrint('Site status breakdown: $statusCounts');
-      debugPrint('Sample site IDs: ${sites.take(5).map((s) => s['id']).toList()}');
+      debugPrint(
+        'Sample site IDs: ${sites.take(5).map((s) => s['id']).toList()}',
+      );
 
       // ============================================================================
       // CATEGORIZE SITES INTO 6 TABS (matching web app CoordinatorSites.tsx)
@@ -235,18 +314,19 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
             additionalData['locality_permit_attached'] == true;
 
         // New sites: Pending/Dispatched/assigned that need permit verification
-        final isNewStatus = status == 'pending' ||
+        final isNewStatus =
+            status == 'pending' ||
             status == 'dispatched' ||
             status == 'assigned' ||
             status == 'in_progress' ||
             status == 'inprogress' ||
             status == 'in progress';
-        
+
         final needsPermits = !hasStatePermit || !hasLocalityPermit;
-        
+
         return isNewStatus && needsPermits;
       }).toList();
-      
+
       debugPrint('New sites count: ${_newSites.length}');
 
       // Tab 2: CP VERIFICATION - Sites with permits attached, ready for verification
@@ -294,6 +374,42 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
       debugPrint(
         'Tab counts - New: ${_newSites.length}, CP Verification: ${_cpVerificationSites.length}, Verified: ${_verifiedSites.length}, Approved: ${_approvedSites.length}, Completed: ${_completedSites.length}, Rejected: ${_rejectedSites.length}',
       );
+
+      // FALLBACK: If we have sites but they're not categorized, add them to "New" tab
+      // This ensures sites are visible even if status/permit logic doesn't match exactly
+      if (sites.isNotEmpty) {
+        final categorizedCount =
+            _newSites.length +
+            _cpVerificationSites.length +
+            _verifiedSites.length +
+            _approvedSites.length +
+            _completedSites.length +
+            _rejectedSites.length;
+        if (categorizedCount < sites.length) {
+          final uncategorized = sites.where((s) {
+            final id = s['id'];
+            return !_newSites.any((ns) => ns['id'] == id) &&
+                !_cpVerificationSites.any((cps) => cps['id'] == id) &&
+                !_verifiedSites.any((vs) => vs['id'] == id) &&
+                !_approvedSites.any((as) => as['id'] == id) &&
+                !_completedSites.any((cs) => cs['id'] == id) &&
+                !_rejectedSites.any((rs) => rs['id'] == id);
+          }).toList();
+
+          debugPrint(
+            'WARNING: ${uncategorized.length} sites were not categorized!',
+          );
+          debugPrint(
+            'Uncategorized sites: ${uncategorized.map((s) => '${s['id']}: status="${s['status']}"').join(', ')}',
+          );
+
+          // Add uncategorized sites to "New" tab as fallback
+          _newSites.addAll(uncategorized);
+          debugPrint(
+            'Added ${uncategorized.length} uncategorized sites to New tab (fallback)',
+          );
+        }
+      }
 
       if (mounted) {
         setState(() {});
@@ -383,7 +499,9 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
       }
     }
 
-    // Check 4: If coordinator assigned to specific locality, must match (normalized comparison)
+    // Check 4: If coordinator assigned to specific locality, normally we'd enforce match,
+    // but coordinators should be able to verify any site within their state regardless
+    // of locality. We'll log a mismatch but not block verification based on locality.
     if (_userLocality != null && _userLocality!.isNotEmpty) {
       final userLocalityNorm = _userLocality!.toLowerCase().replaceAll(
         RegExp(r'[-_\s]'),
@@ -397,9 +515,9 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
           !siteLocalityNorm.contains(userLocalityNorm) &&
           !userLocalityNorm.contains(siteLocalityNorm)) {
         debugPrint(
-          'Locality mismatch: user locality "$_userLocality" ($userLocalityNorm) vs site locality "$siteLocality" ($siteLocalityNorm)',
+          'Locality mismatch (ignored): user locality "$_userLocality" ($userLocalityNorm) vs site locality "$siteLocality" ($siteLocalityNorm)',
         );
-        return 'This site is not in your assigned locality ($_userLocality)';
+        // Do NOT return here; coordinators are allowed to verify sites anywhere in their state.
       }
     }
 
@@ -726,8 +844,10 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
                 hintText: 'Search by site name, code, state, or locality',
                 filled: true,
                 fillColor: Colors.white,
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 0,
+                ),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(24),
                   borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
@@ -2293,9 +2413,17 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
             'metadata': {'source': 'mobile_coordinator'},
           });
         } catch (e) {
+          final err = e.toString();
           debugPrint(
-            'Could not insert coordinator_locality_permits record: $e',
+            'Could not insert coordinator_locality_permits record: $err',
           );
+          if (err.contains(
+            "Could not find the table 'public.coordinator_locality_permits'",
+          )) {
+            debugPrint(
+              'coordinator_locality_permits table not found; skipping insert.',
+            );
+          }
         }
 
         if (mounted) {
@@ -2350,6 +2478,14 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
         site['additional_data'] as Map<String, dynamic>? ?? {},
       );
 
+      // Attachable mmp_files/permits metadata
+      final mmpFiles = Map<String, dynamic>.from(
+        site['mmp_files'] as Map<String, dynamic>? ?? {},
+      );
+      final permits = Map<String, dynamic>.from(
+        mmpFiles['permits'] as Map<String, dynamic>? ?? {},
+      );
+
       // ========================================================================
       // CONSTRAINT 2: PERMIT GATE LOGIC
       // ========================================================================
@@ -2379,6 +2515,36 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
         additionalData['state_permit_verified_at'] = DateTime.now()
             .toIso8601String();
         additionalData['state_permit_verified_by'] = _userId;
+
+        // If coordinator supplied dates with the decision, persist them
+        if (decision.statePermit.issueDate != null) {
+          additionalData['state_permit_issue_date'] =
+              decision.statePermit.issueDate;
+        }
+        if (decision.statePermit.expiryDate != null) {
+          additionalData['state_permit_expiry_date'] =
+              decision.statePermit.expiryDate;
+        }
+
+        // Attach metadata into mmp_files.permits.statePermits for discoverability/search
+        final statePermits = List<Map<String, dynamic>>.from(
+          permits['statePermits'] as List? ?? [],
+        );
+
+        final newStatePermit = {
+          'uploaded_at': additionalData['state_permit_verified_at'],
+          'uploaded_by': additionalData['state_permit_verified_by'],
+          if (additionalData['state_permit_issue_date'] != null)
+            'issue_date': additionalData['state_permit_issue_date'],
+          if (additionalData['state_permit_expiry_date'] != null)
+            'expiry_date': additionalData['state_permit_expiry_date'],
+          'state': site['state']?.toString() ?? '',
+          'source': 'coordinator',
+        };
+
+        statePermits.add(newStatePermit);
+        permits['statePermits'] = statePermits;
+        mmpFiles['permits'] = permits;
 
         // Check locality permit
         if (decision.localityPermit.uploaded) {
@@ -2435,15 +2601,52 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
         }
       }
 
-      // Update the site entry
-      await _supabase
-          .from('mmp_site_entries')
-          .update({
-            'status': newStatus,
-            'additional_data': additionalData,
-            'updated_at': DateTime.now().toIso8601String(),
-          })
-          .eq('id', siteId);
+      // Update the site entry (include mmp_files when available)
+      try {
+        await _supabase
+            .from('mmp_site_entries')
+            .update({
+              'status': newStatus,
+              'additional_data': additionalData,
+              'mmp_files': mmpFiles,
+              'updated_at': DateTime.now().toIso8601String(),
+            })
+            .eq('id', siteId);
+      } catch (e) {
+        final err = e.toString();
+        debugPrint('Failed updating mmp_files: $err');
+
+        if (err.contains("Could not find the 'mmp_files' column")) {
+          // Fallback to update ONLY additional_data
+          await _supabase
+              .from('mmp_site_entries')
+              .update({
+                'status': newStatus,
+                'additional_data': additionalData,
+                'updated_at': DateTime.now().toIso8601String(),
+              })
+              .eq('id', siteId);
+        } else {
+          rethrow;
+        }
+      }
+
+      // If a state permit was uploaded, try to insert a coordinator_state_permits record (best-effort)
+      if (decision.statePermit.uploaded) {
+        try {
+          await _supabase.from('coordinator_state_permits').insert({
+            'site_entry_id': siteId,
+            'uploaded_at': additionalData['state_permit_verified_at'],
+            'uploaded_by': additionalData['state_permit_verified_by'],
+            'issue_date': additionalData['state_permit_issue_date'],
+            'expiry_date': additionalData['state_permit_expiry_date'],
+            'state': site['state']?.toString() ?? '',
+            'metadata': {'source': 'mobile_coordinator'},
+          });
+        } catch (e) {
+          debugPrint('Could not insert coordinator_state_permits record: $e');
+        }
+      }
 
       // Locality permit info is stored in additional_data on mmp_site_entries
       // No need for separate coordinator_locality_permits table
@@ -2561,6 +2764,15 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
           additionalData['state_permit_verified_at'] = DateTime.now()
               .toIso8601String();
           additionalData['state_permit_verified_by'] = _userId;
+
+          if (decision.statePermit.issueDate != null) {
+            additionalData['state_permit_issue_date'] =
+                decision.statePermit.issueDate;
+          }
+          if (decision.statePermit.expiryDate != null) {
+            additionalData['state_permit_expiry_date'] =
+                decision.statePermit.expiryDate;
+          }
           // Do not change status here; wait for locality permits
         } else if (stateReq == 'not_required') {
           additionalData['state_permit_not_required'] = true;
@@ -2683,6 +2895,10 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
       }).toList();
 
       int updated = 0;
+      // Track whether we've observed missing DB schema to avoid repeated attempts/log noise
+      bool mmpFilesColumnMissing = false;
+      bool coordLocalityTableMissing = false;
+
       for (final site in targetSites) {
         final siteId = site['id'].toString();
         final additionalData = Map<String, dynamic>.from(
@@ -2728,49 +2944,74 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
         permits['localPermits'] = localPermits;
         mmpFiles['permits'] = permits;
 
-        try {
-          await _supabase
-              .from('mmp_site_entries')
-              .update({
-                'status': 'permits_attached',
-                'additional_data': additionalData,
-                'mmp_files': mmpFiles,
-                'updated_at': DateTime.now().toIso8601String(),
-              })
-              .eq('id', siteId);
-        } catch (e) {
-          final err = e.toString();
-          debugPrint(
-            'Failed updating mmp_files during bulk locality update: $err',
-          );
-          if (err.contains("Could not find the 'mmp_files' column")) {
+        if (!mmpFilesColumnMissing) {
+          try {
             await _supabase
                 .from('mmp_site_entries')
                 .update({
                   'status': 'permits_attached',
                   'additional_data': additionalData,
+                  'mmp_files': mmpFiles,
                   'updated_at': DateTime.now().toIso8601String(),
                 })
                 .eq('id', siteId);
-          } else {
-            rethrow;
+          } catch (e) {
+            final err = e.toString();
+            debugPrint(
+              'Failed updating mmp_files during bulk locality update: $err',
+            );
+            if (err.contains("Could not find the 'mmp_files' column")) {
+              mmpFilesColumnMissing = true;
+              // Fallback to update without mmp_files
+              await _supabase
+                  .from('mmp_site_entries')
+                  .update({
+                    'status': 'permits_attached',
+                    'additional_data': additionalData,
+                    'updated_at': DateTime.now().toIso8601String(),
+                  })
+                  .eq('id', siteId);
+            } else {
+              rethrow;
+            }
           }
+        } else {
+          // Column already known to be missing; do the simpler update
+          await _supabase
+              .from('mmp_site_entries')
+              .update({
+                'status': 'permits_attached',
+                'additional_data': additionalData,
+                'updated_at': DateTime.now().toIso8601String(),
+              })
+              .eq('id', siteId);
         }
 
         // Try to insert a coordinator_locality_permits record (best-effort)
-        try {
-          await _supabase.from('coordinator_locality_permits').insert({
-            'site_entry_id': siteId,
-            'uploaded_at': additionalData['locality_permit_uploaded_at'],
-            'uploaded_by': additionalData['locality_permit_uploaded_by'],
-            'issue_date': additionalData['locality_permit_issue_date'],
-            'expiry_date': additionalData['locality_permit_expiry_date'],
-            'metadata': {'source': 'mobile_coordinator_bulk'},
-          });
-        } catch (e) {
-          debugPrint(
-            'Could not insert coordinator_locality_permits record during bulk: $e',
-          );
+        if (!coordLocalityTableMissing) {
+          try {
+            await _supabase.from('coordinator_locality_permits').insert({
+              'site_entry_id': siteId,
+              'uploaded_at': additionalData['locality_permit_uploaded_at'],
+              'uploaded_by': additionalData['locality_permit_uploaded_by'],
+              'issue_date': additionalData['locality_permit_issue_date'],
+              'expiry_date': additionalData['locality_permit_expiry_date'],
+              'metadata': {'source': 'mobile_coordinator_bulk'},
+            });
+          } catch (e) {
+            final err = e.toString();
+            debugPrint(
+              'Could not insert coordinator_locality_permits record during bulk: $err',
+            );
+            if (err.contains(
+              "Could not find the table 'public.coordinator_locality_permits'",
+            )) {
+              coordLocalityTableMissing = true;
+              debugPrint(
+                'coordinator_locality_permits table not found; skipping further inserts.',
+              );
+            }
+          }
         }
 
         updated++;
@@ -3436,8 +3677,7 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
         );
 
         workflow['coordinatorVerified'] = true;
-        workflow['coordinatorVerifiedAt'] =
-            DateTime.now().toIso8601String();
+        workflow['coordinatorVerifiedAt'] = DateTime.now().toIso8601String();
         workflow['coordinatorVerifiedBy'] = _userId;
         workflow['currentStage'] = 'verified';
 
@@ -3583,9 +3823,10 @@ class _SiteDetailsSheet extends StatelessWidget {
         ? DateTime.tryParse(verifiedAtRaw)
         : null;
     final verifiedBy = site['verified_by']?.toString() ?? '';
-    final verificationNotes = (site['verification_notes']?.toString() ??
-            additionalData['verification_notes']?.toString() ??
-            '');
+    final verificationNotes =
+        (site['verification_notes']?.toString() ??
+        additionalData['verification_notes']?.toString() ??
+        '');
     final surveyTool = additionalData['survey_tool']?.toString() ?? '';
     final marketDiversion = additionalData['market_diversion_monitoring'];
     final warehouseMonitoring = additionalData['warehouse_monitoring'];
@@ -3999,6 +4240,9 @@ enum _PermitStep {
   stateQuestion,
   stateUpload,
   stateFollowUp,
+  localityQuestion,
+  localityUpload,
+  localityFollowUp,
   complete,
 }
 
@@ -4008,12 +4252,52 @@ class _PermitVerificationDialogState extends State<_PermitVerificationDialog> {
   String? _canWorkWithoutStatePermit;
   bool _statePermitUploaded = false;
   File? _statePermitImage;
+  DateTime? _statePermitIssueDate;
+  DateTime? _statePermitExpiryDate;
   final ImagePicker _imagePicker = ImagePicker();
-  
+
+  // Locality permit state
+  String? _localityPermitRequirement;
+  String? _canWorkWithoutLocalityPermit;
+  bool _localityPermitUploaded = false;
+  File? _localityPermitImage;
+  DateTime? _localityPermitIssueDate;
+  DateTime? _localityPermitExpiryDate;
+
+  @override
+  void initState() {
+    super.initState();
+    // Initialize dates from persisted additional_data if present
+    final additional =
+        widget.site['additional_data'] as Map<String, dynamic>? ?? {};
+    try {
+      final sIssue = additional['state_permit_issue_date'] as String?;
+      final sExpiry = additional['state_permit_expiry_date'] as String?;
+      if (sIssue != null) _statePermitIssueDate = DateTime.tryParse(sIssue);
+      if (sExpiry != null) _statePermitExpiryDate = DateTime.tryParse(sExpiry);
+
+      final lIssue = additional['locality_permit_issue_date'] as String?;
+      final lExpiry = additional['locality_permit_expiry_date'] as String?;
+      if (lIssue != null) _localityPermitIssueDate = DateTime.tryParse(lIssue);
+      if (lExpiry != null)
+        _localityPermitExpiryDate = DateTime.tryParse(lExpiry);
+
+      if (additional['state_permit_attached'] == true)
+        _statePermitUploaded = true;
+      if (additional['locality_permit_attached'] == true)
+        _localityPermitUploaded = true;
+    } catch (e) {
+      debugPrint('Failed to parse permit dates from additional_data: $e');
+    }
+  }
+
   // Confirmation dialog state
   bool _confirmationDialogOpen = false;
   String _confirmationMessage = '';
   PermitDecision? _pendingDecision;
+
+  String _formatDate(DateTime date) =>
+      '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
 
   /// Helper to build a placeholder for broken/unavailable images
   Widget _buildImagePlaceholder() {
@@ -4041,28 +4325,30 @@ class _PermitVerificationDialogState extends State<_PermitVerificationDialog> {
   @override
   Widget build(BuildContext context) {
     final state = widget.site['state']?.toString() ?? '';
-    
+
     return Stack(
       children: [
         Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      child: Container(
-            constraints: const BoxConstraints(maxWidth: 600, maxHeight: 700),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(20),
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Colors.white, AppColors.primaryBlue.withOpacity(0.02)],
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
           ),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 600, maxHeight: 700),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Colors.white, AppColors.primaryBlue.withOpacity(0.02)],
+              ),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
                 // Content
                 Flexible(
                   child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
+                    padding: const EdgeInsets.all(24),
                     child: _buildCurrentStep(state),
                   ),
                 ),
@@ -4081,13 +4367,17 @@ class _PermitVerificationDialogState extends State<_PermitVerificationDialog> {
                 children: [
                   Row(
                     children: [
-                      const Icon(Icons.check_circle, color: Colors.green, size: 28),
+                      const Icon(
+                        Icons.check_circle,
+                        color: Colors.green,
+                        size: 28,
+                      ),
                       const SizedBox(width: 12),
                       Text(
                         'Process Completed',
-                          style: GoogleFonts.poppins(
+                        style: GoogleFonts.poppins(
                           fontSize: 18,
-                            fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ],
@@ -4095,7 +4385,10 @@ class _PermitVerificationDialogState extends State<_PermitVerificationDialog> {
                   const SizedBox(height: 16),
                   Text(
                     _confirmationMessage,
-                    style: GoogleFonts.poppins(fontSize: 14, color: Colors.grey[700]),
+                    style: GoogleFonts.poppins(
+                      fontSize: 14,
+                      color: Colors.grey[700],
+                    ),
                   ),
                   const SizedBox(height: 24),
                   SizedBox(
@@ -4118,13 +4411,21 @@ class _PermitVerificationDialogState extends State<_PermitVerificationDialog> {
   }
 
   Widget _buildCurrentStep(String state) {
+    final locality = widget.site['locality']?.toString() ?? '';
+
     switch (_currentStep) {
       case _PermitStep.stateQuestion:
         return _buildStatePermitQuestion(state);
       case _PermitStep.stateUpload:
-          return _buildStatePermitUpload();
+        return _buildStatePermitUpload();
       case _PermitStep.stateFollowUp:
         return _buildCanWorkWithoutQuestion(state);
+      case _PermitStep.localityQuestion:
+        return _buildLocalityPermitQuestion(locality);
+      case _PermitStep.localityUpload:
+        return _buildLocalityPermitUpload();
+      case _PermitStep.localityFollowUp:
+        return _buildCanWorkWithoutLocalityQuestion(locality);
       case _PermitStep.complete:
         return const SizedBox.shrink();
     }
@@ -4149,13 +4450,13 @@ class _PermitVerificationDialogState extends State<_PermitVerificationDialog> {
         child: Padding(
           padding: const EdgeInsets.all(20),
           child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
               Row(
                 children: [
                   Icon(Icons.warning_amber, color: Colors.blue[600], size: 24),
                   const SizedBox(width: 8),
-        Text(
+                  Text(
                     'State Permit Verification',
                     style: GoogleFonts.poppins(
                       fontSize: 18,
@@ -4181,29 +4482,29 @@ class _PermitVerificationDialogState extends State<_PermitVerificationDialog> {
                   fontWeight: FontWeight.w500,
                   color: Colors.grey[800],
                 ),
-        ),
-        const SizedBox(height: 16),
+              ),
+              const SizedBox(height: 16),
               _buildOptionWithDescription(
-          'Yes, it\'s required and I will upload it',
+                'Yes, it\'s required and I will upload it',
                 'I have the state permit and will upload it now',
-          'required_have_it',
-          _statePermitRequirement,
-          (value) => setState(() => _statePermitRequirement = value),
-        ),
+                'required_have_it',
+                _statePermitRequirement,
+                (value) => setState(() => _statePermitRequirement = value),
+              ),
               _buildOptionWithDescription(
-          'Yes, it\'s required but I don\'t have it',
+                'Yes, it\'s required but I don\'t have it',
                 'The state permit is required but not available',
-          'required_dont_have_it',
-          _statePermitRequirement,
-          (value) => setState(() => _statePermitRequirement = value),
-        ),
+                'required_dont_have_it',
+                _statePermitRequirement,
+                (value) => setState(() => _statePermitRequirement = value),
+              ),
               _buildOptionWithDescription(
-          'No, it\'s not a requirement',
+                'No, it\'s not a requirement',
                 'State permit is not required in this state',
-          'not_required',
-          _statePermitRequirement,
-          (value) => setState(() => _statePermitRequirement = value),
-        ),
+                'not_required',
+                _statePermitRequirement,
+                (value) => setState(() => _statePermitRequirement = value),
+              ),
               const SizedBox(height: 24),
               Row(
                 children: [
@@ -4230,9 +4531,16 @@ class _PermitVerificationDialogState extends State<_PermitVerificationDialog> {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Text('Next', style: GoogleFonts.poppins(color: Colors.white)),
+                          Text(
+                            'Next',
+                            style: GoogleFonts.poppins(color: Colors.white),
+                          ),
                           const SizedBox(width: 8),
-                          const Icon(Icons.arrow_forward, size: 18, color: Colors.white),
+                          const Icon(
+                            Icons.arrow_forward,
+                            size: 18,
+                            color: Colors.white,
+                          ),
                         ],
                       ),
                     ),
@@ -4254,8 +4562,8 @@ class _PermitVerificationDialogState extends State<_PermitVerificationDialog> {
     } else if (_statePermitRequirement == 'required_dont_have_it') {
       setState(() => _currentStep = _PermitStep.stateFollowUp);
     } else {
-      // Not required - complete immediately
-      _handleComplete();
+      // Not required - complete state and proceed to locality
+      _handleStateComplete();
     }
   }
 
@@ -4278,13 +4586,17 @@ class _PermitVerificationDialogState extends State<_PermitVerificationDialog> {
         child: Padding(
           padding: const EdgeInsets.all(20),
           child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
               Row(
                 children: [
-                  Icon(Icons.warning_amber, color: Colors.orange[600], size: 24),
+                  Icon(
+                    Icons.warning_amber,
+                    color: Colors.orange[600],
+                    size: 24,
+                  ),
                   const SizedBox(width: 8),
-        Text(
+                  Text(
                     'State Permit Not Available',
                     style: GoogleFonts.poppins(
                       fontSize: 18,
@@ -4301,8 +4613,8 @@ class _PermitVerificationDialogState extends State<_PermitVerificationDialog> {
                   fontSize: 13,
                   color: Colors.grey[600],
                 ),
-        ),
-        const SizedBox(height: 16),
+              ),
+              const SizedBox(height: 16),
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
@@ -4312,7 +4624,11 @@ class _PermitVerificationDialogState extends State<_PermitVerificationDialog> {
                 ),
                 child: Row(
                   children: [
-                    Icon(Icons.info_outline, color: Colors.orange[600], size: 20),
+                    Icon(
+                      Icons.info_outline,
+                      color: Colors.orange[600],
+                      size: 20,
+                    ),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
@@ -4337,25 +4653,27 @@ class _PermitVerificationDialogState extends State<_PermitVerificationDialog> {
               ),
               const SizedBox(height: 16),
               _buildOptionWithDescription(
-          'Yes, I can proceed without it',
+                'Yes, I can proceed without it',
                 'I will continue with the CP verification',
-          'yes',
-          _canWorkWithoutStatePermit,
-          (value) => setState(() => _canWorkWithoutStatePermit = value),
-        ),
+                'yes',
+                _canWorkWithoutStatePermit,
+                (value) => setState(() => _canWorkWithoutStatePermit = value),
+              ),
               _buildOptionWithDescription(
-          'No, I cannot proceed without it',
+                'No, I cannot proceed without it',
                 'Send the MMP back to FOM for action',
-          'no',
-          _canWorkWithoutStatePermit,
-          (value) => setState(() => _canWorkWithoutStatePermit = value),
+                'no',
+                _canWorkWithoutStatePermit,
+                (value) => setState(() => _canWorkWithoutStatePermit = value),
               ),
               const SizedBox(height: 24),
               Row(
                 children: [
                   Expanded(
                     child: OutlinedButton.icon(
-                      onPressed: () => setState(() => _currentStep = _PermitStep.stateQuestion),
+                      onPressed: () => setState(
+                        () => _currentStep = _PermitStep.stateQuestion,
+                      ),
                       icon: const Icon(Icons.arrow_back, size: 18),
                       label: Text('Back', style: GoogleFonts.poppins()),
                       style: OutlinedButton.styleFrom(
@@ -4404,14 +4722,14 @@ class _PermitVerificationDialogState extends State<_PermitVerificationDialog> {
     if (_canWorkWithoutStatePermit == null) return;
 
     if (_canWorkWithoutStatePermit == 'yes') {
-      // Can work without state permit - complete with decision
-      _handleComplete();
+      // Can work without state permit - complete state and proceed to locality
+      _handleStateComplete();
     } else {
       // Cannot work without - send back to FOM
       final state = widget.site['state']?.toString() ?? '';
       final reason =
           'State permit is required for $state but coordinator does not have it and cannot proceed without it.';
-      
+
       if (widget.onSendBackToFOM != null) {
         widget.onSendBackToFOM!(reason);
       }
@@ -4424,7 +4742,8 @@ class _PermitVerificationDialogState extends State<_PermitVerificationDialog> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         OutlinedButton.icon(
-          onPressed: () => setState(() => _currentStep = _PermitStep.stateQuestion),
+          onPressed: () =>
+              setState(() => _currentStep = _PermitStep.stateQuestion),
           icon: const Icon(Icons.arrow_back, size: 18),
           label: Text('Back to Questions', style: GoogleFonts.poppins()),
           style: OutlinedButton.styleFrom(
@@ -4559,12 +4878,572 @@ class _PermitVerificationDialogState extends State<_PermitVerificationDialog> {
                     ),
                   ],
                 ),
+                const SizedBox(height: 12),
+                // Optional issue / expiry dates for state permit
+                Row(
+                  children: [
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () async {
+                          final picked = await showDatePicker(
+                            context: context,
+                            initialDate:
+                                _statePermitIssueDate ?? DateTime.now(),
+                            firstDate: DateTime(2000),
+                            lastDate: DateTime(2100),
+                          );
+                          if (picked != null) {
+                            setState(() => _statePermitIssueDate = picked);
+                          }
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 12,
+                            horizontal: 12,
+                          ),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.grey[300]!),
+                          ),
+                          child: Text(
+                            _statePermitIssueDate != null
+                                ? 'Issue: ${_formatDate(_statePermitIssueDate!)}'
+                                : 'Select issue date',
+                            style: GoogleFonts.poppins(fontSize: 13),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () async {
+                          final picked = await showDatePicker(
+                            context: context,
+                            initialDate:
+                                _statePermitExpiryDate ?? DateTime.now(),
+                            firstDate: DateTime(2000),
+                            lastDate: DateTime(2100),
+                          );
+                          if (picked != null) {
+                            setState(() => _statePermitExpiryDate = picked);
+                          }
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 12,
+                            horizontal: 12,
+                          ),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.grey[300]!),
+                          ),
+                          child: Text(
+                            _statePermitExpiryDate != null
+                                ? 'Expiry: ${_formatDate(_statePermitExpiryDate!)}'
+                                : 'Select expiry date',
+                            style: GoogleFonts.poppins(fontSize: 13),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                if ((_statePermitIssueDate != null ||
+                        _statePermitExpiryDate != null) &&
+                    (_statePermitIssueDate == null ||
+                        _statePermitExpiryDate == null ||
+                        (_statePermitIssueDate != null &&
+                            _statePermitExpiryDate != null &&
+                            _statePermitExpiryDate!.isBefore(
+                              _statePermitIssueDate!,
+                            )))) ...[
+                  Text(
+                    'Please ensure both Issue and Expiry dates are set and Expiry is after Issue.',
+                    style: GoogleFonts.poppins(color: Colors.red, fontSize: 12),
+                  ),
+                  const SizedBox(height: 8),
+                ],
               ],
             ],
           ),
         ),
       ],
     );
+  }
+
+  Widget _buildLocalityPermitQuestion(String locality) {
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: Colors.green[200]!, width: 1),
+      ),
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Colors.green[50]!.withOpacity(0.5), Colors.white],
+          ),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.location_on, color: Colors.green[600], size: 24),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Locality Permit Verification',
+                    style: GoogleFonts.poppins(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.green[800],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Verify locality permit requirements for $locality',
+                style: GoogleFonts.poppins(
+                  fontSize: 13,
+                  color: Colors.grey[600],
+                ),
+              ),
+              const SizedBox(height: 24),
+              Text(
+                'Do you require a Locality permit in your locality?',
+                style: GoogleFonts.poppins(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.grey[800],
+                ),
+              ),
+              const SizedBox(height: 16),
+              _buildOptionWithDescription(
+                'Yes, it\'s required and I will upload it',
+                'I have the locality permit and will upload it now',
+                'required_have_it',
+                _localityPermitRequirement,
+                (value) => setState(() => _localityPermitRequirement = value),
+              ),
+              _buildOptionWithDescription(
+                'Yes, it\'s required but I don\'t have it',
+                'The locality permit is required but not available',
+                'required_dont_have_it',
+                _localityPermitRequirement,
+                (value) => setState(() => _localityPermitRequirement = value),
+              ),
+              _buildOptionWithDescription(
+                'No, it\'s not a requirement',
+                'Locality permit is not required in this locality',
+                'not_required',
+                _localityPermitRequirement,
+                (value) => setState(() => _localityPermitRequirement = value),
+              ),
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => setState(
+                        () => _currentStep = _PermitStep.stateQuestion,
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                      child: Text(
+                        'Back to State',
+                        style: GoogleFonts.poppins(),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    flex: 2,
+                    child: ElevatedButton(
+                      onPressed: _localityPermitRequirement != null
+                          ? _handleLocalityPermitNext
+                          : null,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primaryBlue,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            'Next',
+                            style: GoogleFonts.poppins(color: Colors.white),
+                          ),
+                          const SizedBox(width: 8),
+                          const Icon(
+                            Icons.arrow_forward,
+                            size: 18,
+                            color: Colors.white,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _handleLocalityPermitNext() {
+    if (_localityPermitRequirement == null) return;
+
+    if (_localityPermitRequirement == 'required_have_it') {
+      setState(() => _currentStep = _PermitStep.localityUpload);
+    } else if (_localityPermitRequirement == 'required_dont_have_it') {
+      setState(() => _currentStep = _PermitStep.localityFollowUp);
+    } else {
+      // Not required - complete
+      _handleComplete();
+    }
+  }
+
+  Widget _buildLocalityPermitUpload() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        OutlinedButton.icon(
+          onPressed: () =>
+              setState(() => _currentStep = _PermitStep.localityQuestion),
+          icon: const Icon(Icons.arrow_back, size: 18),
+          label: Text('Back to Questions', style: GoogleFonts.poppins()),
+          style: OutlinedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+          ),
+        ),
+        const SizedBox(height: 16),
+        Text(
+          'Upload Locality Permit',
+          style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w500),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Take a photo or select from gallery',
+          style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey[600]),
+        ),
+        const SizedBox(height: 16),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            border: Border.all(
+              color: _localityPermitUploaded ? Colors.green : Colors.grey[300]!,
+              width: _localityPermitUploaded ? 2 : 1,
+            ),
+            borderRadius: BorderRadius.circular(12),
+            color: _localityPermitUploaded
+                ? Colors.green.withOpacity(0.1)
+                : null,
+          ),
+          child: Column(
+            children: [
+              if (_localityPermitImage != null) ...[
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: kIsWeb
+                      ? Image.network(
+                          _localityPermitImage!.path,
+                          height: 150,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return _buildImagePlaceholder();
+                          },
+                        )
+                      : Image.file(
+                          _localityPermitImage!,
+                          height: 150,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return _buildImagePlaceholder();
+                          },
+                        ),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(
+                      Icons.check_circle,
+                      color: Colors.green,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Permit Uploaded',
+                      style: GoogleFonts.poppins(
+                        color: Colors.green,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                TextButton.icon(
+                  onPressed: () => _pickPermitImage(isState: false),
+                  icon: const Icon(Icons.refresh, size: 18),
+                  label: const Text('Replace Image'),
+                ),
+              ] else ...[
+                Icon(Icons.add_a_photo, size: 48, color: Colors.grey[400]),
+                const SizedBox(height: 12),
+                Text(
+                  'Tap to upload permit photo',
+                  style: GoogleFonts.poppins(color: Colors.grey[600]),
+                ),
+                const SizedBox(height: 16),
+                Wrap(
+                  alignment: WrapAlignment.center,
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    ElevatedButton.icon(
+                      onPressed: () =>
+                          _pickPermitImage(isState: false, useCamera: true),
+                      icon: const Icon(Icons.camera_alt, size: 16),
+                      label: const Text(
+                        'Camera',
+                        style: TextStyle(fontSize: 12),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primaryBlue,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: () =>
+                          _pickPermitImage(isState: false, useCamera: false),
+                      icon: const Icon(Icons.photo_library, size: 16),
+                      label: const Text(
+                        'Gallery',
+                        style: TextStyle(fontSize: 12),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.primaryBlue,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        side: BorderSide(color: AppColors.primaryBlue),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCanWorkWithoutLocalityQuestion(String locality) {
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: Colors.orange[200]!, width: 1),
+      ),
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Colors.orange[50]!.withOpacity(0.5), Colors.white],
+          ),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    Icons.warning_amber,
+                    color: Colors.orange[600],
+                    size: 24,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Locality Permit Not Available',
+                    style: GoogleFonts.poppins(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.orange[800],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'You indicated the locality permit for $locality is required but not available',
+                style: GoogleFonts.poppins(
+                  fontSize: 13,
+                  color: Colors.grey[600],
+                ),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.orange[50],
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.orange[200]!),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.info_outline,
+                      color: Colors.orange[600],
+                      size: 20,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'The locality permit is required but you don\'t have it. Can you proceed with the verification without it?',
+                        style: GoogleFonts.poppins(
+                          fontSize: 13,
+                          color: Colors.orange[800],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+              Text(
+                'Are you able to work without the locality permit?',
+                style: GoogleFonts.poppins(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.grey[800],
+                ),
+              ),
+              const SizedBox(height: 16),
+              _buildOptionWithDescription(
+                'Yes, I can proceed without it',
+                'I will continue with the CP verification',
+                'yes',
+                _canWorkWithoutLocalityPermit,
+                (value) =>
+                    setState(() => _canWorkWithoutLocalityPermit = value),
+              ),
+              _buildOptionWithDescription(
+                'No, I cannot proceed without it',
+                'Send the MMP back to FOM for action',
+                'no',
+                _canWorkWithoutLocalityPermit,
+                (value) =>
+                    setState(() => _canWorkWithoutLocalityPermit = value),
+              ),
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () => setState(
+                        () => _currentStep = _PermitStep.localityQuestion,
+                      ),
+                      icon: const Icon(Icons.arrow_back, size: 18),
+                      label: Text('Back', style: GoogleFonts.poppins()),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    flex: 2,
+                    child: ElevatedButton.icon(
+                      onPressed: _canWorkWithoutLocalityPermit != null
+                          ? _handleLocalityFollowUpNext
+                          : null,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _canWorkWithoutLocalityPermit == 'no'
+                            ? Colors.red
+                            : AppColors.primaryBlue,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                      icon: Icon(
+                        _canWorkWithoutLocalityPermit == 'no'
+                            ? Icons.send
+                            : Icons.arrow_forward,
+                        size: 18,
+                        color: Colors.white,
+                      ),
+                      label: Text(
+                        _canWorkWithoutLocalityPermit == 'no'
+                            ? 'Send Back to FOM'
+                            : 'Continue',
+                        style: GoogleFonts.poppins(color: Colors.white),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _handleLocalityFollowUpNext() {
+    if (_canWorkWithoutLocalityPermit == null) return;
+
+    if (_canWorkWithoutLocalityPermit == 'yes') {
+      // Can work without locality permit - complete
+      _handleComplete();
+    } else {
+      // Cannot work without - send back to FOM
+      final locality = widget.site['locality']?.toString() ?? '';
+      final reason =
+          'Locality permit is required for $locality but coordinator does not have it and cannot proceed without it.';
+
+      if (widget.onSendBackToFOM != null) {
+        widget.onSendBackToFOM!(reason);
+      }
+      Navigator.pop(context);
+    }
+  }
+
+  void _handleLocalityPermitUploaded() {
+    // Ensure localityPermitRequirement is set (should be 'required_have_it' at this point)
+    if (_localityPermitRequirement != 'required_have_it') {
+      debugPrint(
+        'Locality permit uploaded but requirement is not set correctly: $_localityPermitRequirement',
+      );
+    }
+    _handleComplete(uploadedOverride: true);
   }
 
   Future<void> _pickPermitImage({
@@ -4580,26 +5459,381 @@ class _PermitVerificationDialogState extends State<_PermitVerificationDialog> {
 
       if (image != null) {
         setState(() {
+          if (isState) {
             _statePermitImage = File(image.path);
             _statePermitUploaded = true;
+          } else {
+            _localityPermitImage = File(image.path);
+            _localityPermitUploaded = true;
+          }
         });
-        // Auto-complete after upload
-        _handleStatePermitUploaded();
+        // Prompt for dates when uploading
+        if (isState) {
+          await _promptForStatePermitDates();
+          _handleStatePermitUploaded();
+        } else {
+          await _promptForLocalityPermitDates();
+          _handleLocalityPermitUploaded();
+        }
       }
     } catch (e) {
       debugPrint('Error picking image: $e');
     }
   }
 
+  /// Prompt the coordinator to optionally enter Issue and Expiry dates for state permit
+  Future<void> _promptForStatePermitDates() async {
+    DateTime? tempIssue = _statePermitIssueDate;
+    DateTime? tempExpiry = _statePermitExpiryDate;
+
+    final result = await showDialog<String?>(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            return AlertDialog(
+              title: const Text('Enter State Permit Dates'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  GestureDetector(
+                    onTap: () async {
+                      final picked = await showDatePicker(
+                        context: context,
+                        initialDate: tempIssue ?? DateTime.now(),
+                        firstDate: DateTime(2000),
+                        lastDate: DateTime(2100),
+                      );
+                      if (picked != null) {
+                        setStateDialog(() => tempIssue = picked);
+                      }
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 12,
+                        horizontal: 12,
+                      ),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.grey[300]!),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.calendar_today,
+                            size: 18,
+                            color: Colors.grey[700],
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              tempIssue != null
+                                  ? 'Issue: ${_formatDate(tempIssue!)}'
+                                  : 'Select issue date',
+                              style: GoogleFonts.poppins(fontSize: 13),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  GestureDetector(
+                    onTap: () async {
+                      final picked = await showDatePicker(
+                        context: context,
+                        initialDate: tempExpiry ?? DateTime.now(),
+                        firstDate: DateTime(2000),
+                        lastDate: DateTime(2100),
+                      );
+                      if (picked != null) {
+                        setStateDialog(() => tempExpiry = picked);
+                      }
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 12,
+                        horizontal: 12,
+                      ),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.grey[300]!),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.calendar_today_outlined,
+                            size: 18,
+                            color: Colors.grey[700],
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              tempExpiry != null
+                                  ? 'Expiry: ${_formatDate(tempExpiry!)}'
+                                  : 'Select expiry date',
+                              style: GoogleFonts.poppins(fontSize: 13),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  if ((tempIssue != null || tempExpiry != null) &&
+                      (tempIssue == null ||
+                          tempExpiry == null ||
+                          (tempIssue != null &&
+                              tempExpiry != null &&
+                              tempExpiry!.isBefore(tempIssue!))))
+                    Text(
+                      'Please provide both dates and ensure Expiry is after Issue.',
+                      style: GoogleFonts.poppins(
+                        color: Colors.red,
+                        fontSize: 12,
+                      ),
+                    ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, null),
+                  child: const Text('Cancel'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(context, 'skip'),
+                  child: const Text('Skip'),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    // Validate before closing
+                    if ((tempIssue != null || tempExpiry != null) &&
+                        (tempIssue == null || tempExpiry == null)) {
+                      // keep dialog open
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Please set both dates or Skip.'),
+                        ),
+                      );
+                      return;
+                    }
+                    if (tempIssue != null &&
+                        tempExpiry != null &&
+                        tempExpiry!.isBefore(tempIssue!)) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Expiry must be after Issue.'),
+                        ),
+                      );
+                      return;
+                    }
+
+                    // Save to state
+                    setState(() {
+                      _statePermitIssueDate = tempIssue;
+                      _statePermitExpiryDate = tempExpiry;
+                    });
+
+                    Navigator.pop(context, 'saved');
+                  },
+                  child: const Text('Save'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (result == 'saved') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('State permit dates recorded')),
+      );
+    }
+  }
+
+  /// Prompt the coordinator to optionally enter Issue and Expiry dates for locality permit
+  Future<bool> _promptForLocalityPermitDates() async {
+    DateTime? tempIssue = _localityPermitIssueDate;
+    DateTime? tempExpiry = _localityPermitExpiryDate;
+
+    final result = await showDialog<bool?>(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            return AlertDialog(
+              title: const Text('Enter Permit Dates'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  GestureDetector(
+                    onTap: () async {
+                      final picked = await showDatePicker(
+                        context: context,
+                        initialDate: tempIssue ?? DateTime.now(),
+                        firstDate: DateTime(2000),
+                        lastDate: DateTime(2100),
+                      );
+                      if (picked != null) {
+                        setStateDialog(() => tempIssue = picked);
+                      }
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 12,
+                        horizontal: 12,
+                      ),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.grey[300]!),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.calendar_today,
+                            size: 18,
+                            color: Colors.grey[700],
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              tempIssue != null
+                                  ? 'Issue: ${_formatDate(tempIssue!)}'
+                                  : 'Select issue date',
+                              style: GoogleFonts.poppins(fontSize: 13),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  GestureDetector(
+                    onTap: () async {
+                      final picked = await showDatePicker(
+                        context: context,
+                        initialDate: tempExpiry ?? DateTime.now(),
+                        firstDate: DateTime(2000),
+                        lastDate: DateTime(2100),
+                      );
+                      if (picked != null) {
+                        setStateDialog(() => tempExpiry = picked);
+                      }
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 12,
+                        horizontal: 12,
+                      ),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.grey[300]!),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.calendar_today_outlined,
+                            size: 18,
+                            color: Colors.grey[700],
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              tempExpiry != null
+                                  ? 'Expiry: ${_formatDate(tempExpiry!)}'
+                                  : 'Select expiry date',
+                              style: GoogleFonts.poppins(fontSize: 13),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  if ((tempIssue != null || tempExpiry != null) &&
+                      (tempIssue == null ||
+                          tempExpiry == null ||
+                          (tempIssue != null &&
+                              tempExpiry != null &&
+                              tempExpiry!.isBefore(tempIssue!))))
+                    Text(
+                      'Please provide both dates and ensure Expiry is after Issue.',
+                      style: GoogleFonts.poppins(
+                        color: Colors.red,
+                        fontSize: 12,
+                      ),
+                    ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    // Validate before closing
+                    if (tempIssue == null || tempExpiry == null) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'Please set both Issue and Expiry dates.',
+                          ),
+                        ),
+                      );
+                      return;
+                    }
+                    if (tempExpiry!.isBefore(tempIssue!)) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Expiry must be after Issue.'),
+                        ),
+                      );
+                      return;
+                    }
+
+                    // Save to state
+                    setState(() {
+                      _localityPermitIssueDate = tempIssue;
+                      _localityPermitExpiryDate = tempExpiry;
+                    });
+
+                    Navigator.pop(context, true);
+                  },
+                  child: const Text('Save'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (result == true) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Permit dates recorded')));
+      return true;
+    }
+    return false;
+  }
+
   void _handleStatePermitUploaded() {
     // Ensure statePermitRequirement is set (should be 'required_have_it' at this point)
     if (_statePermitRequirement != 'required_have_it') {
-      debugPrint('State permit uploaded but requirement is not set correctly: $_statePermitRequirement');
+      debugPrint(
+        'State permit uploaded but requirement is not set correctly: $_statePermitRequirement',
+      );
     }
-    _handleComplete(uploadedOverride: true);
+    // After uploading state permit, do NOT automatically move to locality — complete state-only flow
+    _handleStateComplete(uploadedOverride: true, proceedToLocality: false);
   }
 
-  void _handleComplete({bool? uploadedOverride}) {
+  void _handleStateComplete({
+    bool? uploadedOverride,
+    bool proceedToLocality = true,
+  }) {
     // Validate that we have the required information
     if (_statePermitRequirement == null) {
       debugPrint('Cannot complete: statePermitRequirement is not set');
@@ -4615,38 +5849,53 @@ class _PermitVerificationDialogState extends State<_PermitVerificationDialog> {
     }
 
     // Additional validation: if requirement is 'required_dont_have_it', canWorkWithout must be set
-    if (_statePermitRequirement == 'required_dont_have_it' && _canWorkWithoutStatePermit == null) {
-      debugPrint('Cannot complete: state permit is required but canWorkWithout is not set');
+    if (_statePermitRequirement == 'required_dont_have_it' &&
+        _canWorkWithoutStatePermit == null) {
+      debugPrint(
+        'Cannot complete: state permit is required but canWorkWithout is not set',
+      );
       return;
     }
 
-    final state = widget.site['state']?.toString() ?? '';
+    if (proceedToLocality) {
+      // Proceed to locality questions as before
+      setState(() => _currentStep = _PermitStep.localityQuestion);
+      return;
+    }
 
+    // Finish state-only: create a PermitDecision with only state info and persist
     final decision = PermitDecision(
       statePermit: PermitStatus(
         requirement: _statePermitRequirement,
         canWorkWithout: _canWorkWithoutStatePermit,
         uploaded: effectiveUploaded,
+        issueDate: _statePermitIssueDate != null
+            ? _formatDate(_statePermitIssueDate!)
+            : null,
+        expiryDate: _statePermitExpiryDate != null
+            ? _formatDate(_statePermitExpiryDate!)
+            : null,
       ),
-      localityPermit: PermitStatus(uploaded: false), // Not handled in this dialog
+      localityPermit: PermitStatus(),
     );
 
-    // Generate summary message based on decision (matching web code)
+    // Prepare a confirmation message for state-only completion
+    final state = widget.site['state']?.toString() ?? '';
     String message = '';
-    if (_statePermitRequirement == 'not_required') {
+    if (_statePermitRequirement == 'required_have_it' && effectiveUploaded) {
       message =
-          'No state permit is required for $state. The verification process for the state permit is complete. You will now proceed to verify the permits for the localities.';
-    } else if (_statePermitRequirement == 'required_have_it' && effectiveUploaded) {
-      message =
-          'The state permit for $state has been uploaded successfully. The verification process for the state permit is complete. You will now proceed to verify the permits for the localities.';
+          'State permit uploaded successfully for $state. You can upload the locality permit separately.';
     } else if (_statePermitRequirement == 'required_dont_have_it' &&
         _canWorkWithoutStatePermit == 'yes') {
       message =
-          'A state permit is required for $state, but you can proceed without it. The verification process for the state permit is complete. You will now proceed to verify the permits for the localities.';
+          'Proceeding without the state permit for $state. You can upload the locality permit separately.';
     } else if (_statePermitRequirement == 'required_dont_have_it' &&
         _canWorkWithoutStatePermit == 'no') {
       message =
-          'The MMP has been sent back to FOM because a state permit is required for $state and you cannot proceed without it. No further action is needed here.';
+          'The MMP has been sent back to FOM because a state permit is required for $state and you cannot proceed without it.';
+    } else if (_statePermitRequirement == 'not_required') {
+      message =
+          'State permit not required for $state. You can upload the locality permit separately if needed.';
     }
 
     setState(() {
@@ -4654,17 +5903,6 @@ class _PermitVerificationDialogState extends State<_PermitVerificationDialog> {
       _pendingDecision = decision;
       _confirmationDialogOpen = true;
     });
-  }
-
-  void _handleConfirmationOkay() {
-    if (_pendingDecision != null) {
-      widget.onComplete(_pendingDecision!);
-    }
-    setState(() {
-      _confirmationDialogOpen = false;
-      _pendingDecision = null;
-    });
-    Navigator.pop(context);
   }
 
   Widget _buildOptionWithDescription(
@@ -4731,7 +5969,9 @@ class _PermitVerificationDialogState extends State<_PermitVerificationDialog> {
                     label,
                     style: GoogleFonts.poppins(
                       fontSize: 14,
-                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                      fontWeight: isSelected
+                          ? FontWeight.w600
+                          : FontWeight.normal,
                       color: isSelected
                           ? AppColors.primaryBlue
                           : const Color(0xFF374151),
@@ -4754,6 +5994,141 @@ class _PermitVerificationDialogState extends State<_PermitVerificationDialog> {
     );
   }
 
+  void _handleComplete({bool? uploadedOverride}) {
+    // Validate that we have the required information
+    if (_statePermitRequirement == null || _localityPermitRequirement == null) {
+      debugPrint('Cannot complete: permit requirements not set');
+      return;
+    }
+
+    // Determine the effective uploaded flags
+    final effectiveStateUploaded = _statePermitUploaded;
+    final effectiveLocalityUploaded =
+        uploadedOverride ?? _localityPermitUploaded;
+
+    // Additional validation: if requirement is 'required_have_it', uploaded must be true
+    if (_statePermitRequirement == 'required_have_it' &&
+        !effectiveStateUploaded) {
+      debugPrint('Cannot complete: state permit is required but not uploaded');
+    }
+    if (_localityPermitRequirement == 'required_have_it' &&
+        !effectiveLocalityUploaded) {
+      debugPrint(
+        'Cannot complete: locality permit is required but not uploaded',
+      );
+    }
+
+    // Additional validation: if requirement is 'required_dont_have_it', canWorkWithout must be set
+    if (_statePermitRequirement == 'required_dont_have_it' &&
+        _canWorkWithoutStatePermit == null) {
+      debugPrint(
+        'Cannot complete: state permit is required but canWorkWithout is not set',
+      );
+      return;
+    }
+    if (_localityPermitRequirement == 'required_dont_have_it' &&
+        _canWorkWithoutLocalityPermit == null) {
+      debugPrint(
+        'Cannot complete: locality permit is required but canWorkWithout is not set',
+      );
+      return;
+    }
+
+    final state = widget.site['state']?.toString() ?? '';
+    final locality = widget.site['locality']?.toString() ?? '';
+
+    final decision = PermitDecision(
+      statePermit: PermitStatus(
+        requirement: _statePermitRequirement,
+        canWorkWithout: _canWorkWithoutStatePermit,
+        uploaded: effectiveStateUploaded,
+        issueDate: _statePermitIssueDate != null
+            ? _formatDate(_statePermitIssueDate!)
+            : null,
+        expiryDate: _statePermitExpiryDate != null
+            ? _formatDate(_statePermitExpiryDate!)
+            : null,
+      ),
+      localityPermit: PermitStatus(
+        requirement: _localityPermitRequirement,
+        canWorkWithout: _canWorkWithoutLocalityPermit,
+        uploaded: effectiveLocalityUploaded,
+        issueDate: _localityPermitIssueDate != null
+            ? _formatDate(_localityPermitIssueDate!)
+            : null,
+        expiryDate: _localityPermitExpiryDate != null
+            ? _formatDate(_localityPermitExpiryDate!)
+            : null,
+      ),
+    );
+
+    // Generate summary message based on decision
+    String message = '';
+    final stateReq = _statePermitRequirement;
+    final localityReq = _localityPermitRequirement;
+
+    if (stateReq == 'not_required' && localityReq == 'not_required') {
+      message =
+          'No permits are required for $state/$locality. The verification process is complete.';
+    } else if (stateReq == 'required_have_it' &&
+        effectiveStateUploaded &&
+        localityReq == 'not_required') {
+      message =
+          'State permit uploaded successfully. No locality permit required. The verification process is complete.';
+    } else if (stateReq == 'not_required' &&
+        localityReq == 'required_have_it' &&
+        effectiveLocalityUploaded) {
+      message =
+          'Locality permit uploaded successfully. No state permit required. The verification process is complete.';
+    } else if (stateReq == 'required_have_it' &&
+        effectiveStateUploaded &&
+        localityReq == 'required_have_it' &&
+        effectiveLocalityUploaded) {
+      message =
+          'Both state and locality permits uploaded successfully. The verification process is complete.';
+    } else if (stateReq == 'required_dont_have_it' &&
+        _canWorkWithoutStatePermit == 'yes' &&
+        localityReq == 'not_required') {
+      message =
+          'State permit required but proceeding without it. No locality permit required. The verification process is complete.';
+    } else if (stateReq == 'not_required' &&
+        localityReq == 'required_dont_have_it' &&
+        _canWorkWithoutLocalityPermit == 'yes') {
+      message =
+          'Locality permit required but proceeding without it. No state permit required. The verification process is complete.';
+    } else if (stateReq == 'required_dont_have_it' &&
+        _canWorkWithoutStatePermit == 'yes' &&
+        localityReq == 'required_dont_have_it' &&
+        _canWorkWithoutLocalityPermit == 'yes') {
+      message =
+          'Both permits required but proceeding without them. The verification process is complete.';
+    } else if (stateReq == 'required_dont_have_it' &&
+        _canWorkWithoutStatePermit == 'no') {
+      message =
+          'The MMP has been sent back to FOM because a state permit is required for $state and you cannot proceed without it. No further action is needed here.';
+    } else if (localityReq == 'required_dont_have_it' &&
+        _canWorkWithoutLocalityPermit == 'no') {
+      message =
+          'The MMP has been sent back to FOM because a locality permit is required for $locality and you cannot proceed without it. No further action is needed here.';
+    }
+
+    setState(() {
+      _confirmationMessage = message;
+      _pendingDecision = decision;
+      _confirmationDialogOpen = true;
+    });
+  }
+
+  void _handleConfirmationOkay() {
+    if (_pendingDecision != null) {
+      widget.onComplete(_pendingDecision!);
+    }
+    setState(() {
+      _confirmationDialogOpen = false;
+      _pendingDecision = null;
+    });
+    Navigator.pop(context);
+  }
 }
 
 /// Locality Permit Dialog for sites in Locality Permit tab
@@ -5315,8 +6690,27 @@ class _LocalityPermitDialogState extends State<_LocalityPermitDialog> {
           _currentStep = 1;
         });
 
-        // Prompt immediately for dates after upload
-        await _promptForLocalityPermitDates();
+        // Prompt immediately for dates after upload; dates are required for locality permit
+        final saved = await _promptForLocalityPermitDates();
+        if (saved != true) {
+          // User cancelled or did not save dates — revert upload
+          setState(() {
+            _localityPermitImage = null;
+            _localityPermitUploaded = false;
+            _currentStep = 0;
+            _localityPermitIssueDate = null;
+            _localityPermitExpiryDate = null;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Locality permit upload cancelled: dates are required',
+              ),
+              backgroundColor: Colors.orange,
+            ),
+          );
+          return;
+        }
 
         // Ensure UI updates and canProceed recalculates
         setState(() {});
@@ -5327,7 +6721,7 @@ class _LocalityPermitDialogState extends State<_LocalityPermitDialog> {
   }
 
   /// Prompt the coordinator to optionally enter Issue and Expiry dates
-  Future<void> _promptForLocalityPermitDates() async {
+  Future<bool> _promptForLocalityPermitDates() async {
     DateTime? tempIssue = _localityPermitIssueDate;
     DateTime? tempExpiry = _localityPermitExpiryDate;
 
@@ -5494,7 +6888,10 @@ class _LocalityPermitDialogState extends State<_LocalityPermitDialog> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Permit dates recorded')));
+      return true;
     }
+
+    return false;
   }
 
   Widget _buildNavigationButtons() {
@@ -5656,37 +7053,13 @@ class _LocalityPermitDialogState extends State<_LocalityPermitDialog> {
       }
     }
 
-    // If both dates are not provided, prompt user to enter them or skip
+    // If both dates are not provided, require user to enter them
     if (_localityPermitIssueDate == null && _localityPermitExpiryDate == null) {
-      final choice = await showDialog<String?>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Add permit dates?'),
-          content: const Text(
-            'You have not entered Issue or Expiry dates for this locality permit. Would you like to add them now?',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, 'enter'),
-              child: const Text('Enter dates'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(context, 'skip'),
-              child: const Text('Skip'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(context, null),
-              child: const Text('Cancel'),
-            ),
-          ],
-        ),
-      );
-
-      if (choice == 'enter' || choice == null) {
-        // Let the user add dates (or cancelled)
+      final saved = await _promptForLocalityPermitDates();
+      if (!saved) {
+        // user cancelled or did not save required dates
         return;
       }
-      // if 'skip', proceed without dates
     }
 
     // If only one date is set, block
@@ -6181,8 +7554,10 @@ class _VerificationDialogState extends State<_VerificationDialog> {
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
                 ),
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
               ),
             ),
           ],
