@@ -35,7 +35,7 @@ class _ImprovedRegisterScreenState extends State<ImprovedRegisterScreen>
 
   // State
   String? _selectedRole;
-  String? _selectedHub;
+  String? _selectedHub; // Store hub ID (string like 'dongola-hub', matching web)
   String? _selectedState;
   String? _selectedLocality;
   bool _isPasswordVisible = false;
@@ -45,7 +45,7 @@ class _ImprovedRegisterScreenState extends State<ImprovedRegisterScreen>
   String? _profilePhotoUrl;
   final ImagePicker _imagePicker = ImagePicker();
 
-  // Dropdown options matching web implementation
+  // Dropdown options matching web implementation (display names)
   final List<String> _roles = [
     'Data Collector',
     'Coordinator',
@@ -54,6 +54,39 @@ class _ImprovedRegisterScreenState extends State<ImprovedRegisterScreen>
     'ICT',
     'FOM',
   ];
+
+  /// Convert display role name to database role value (matching web implementation)
+  /// Web sends: 'Coordinator', 'DataCollector', etc.
+  /// Database expects: 'coordinator', 'dataCollector', etc.
+  String _normalizeRoleForDatabase(String? displayRole) {
+    if (displayRole == null) return 'dataCollector';
+    
+    // Map display names to database values (lowercase/camelCase)
+    switch (displayRole.toLowerCase().trim()) {
+      case 'coordinator':
+        return 'coordinator';
+      case 'data collector':
+      case 'datacollector':
+        return 'dataCollector';
+      case 'supervisor':
+        return 'supervisor';
+      case 'admin':
+        return 'admin';
+      case 'ict':
+        return 'ict';
+      case 'fom':
+      case 'field operation manager (fom)':
+        return 'fom';
+      case 'financialadmin':
+        return 'financialAdmin';
+      default:
+        // If it's already in the correct format, return as-is
+        // Otherwise default to dataCollector
+        return displayRole.toLowerCase() == displayRole 
+            ? displayRole 
+            : 'dataCollector';
+    }
+  }
 
   // Services
   final _authService = AuthService();
@@ -437,6 +470,9 @@ class _ImprovedRegisterScreenState extends State<ImprovedRegisterScreen>
 
       // Step 2: Register user with all metadata
       // Database triggers will automatically create profile and wallet
+      // Normalize role from display name to database value
+      final normalizedRole = _normalizeRoleForDatabase(_selectedRole);
+      
       final response = await _authService.signUp(
         email: _emailController.text.trim(),
         password: _passwordController.text,
@@ -445,7 +481,7 @@ class _ImprovedRegisterScreenState extends State<ImprovedRegisterScreen>
         employeeId: _employeeIdController.text.trim().isNotEmpty
             ? _employeeIdController.text.trim()
             : null,
-        role: _selectedRole ?? 'dataCollector',
+        role: normalizedRole,
         hubId: _selectedHub,
         stateId: _selectedState,
         localityId: _selectedLocality,
@@ -613,7 +649,7 @@ class _ImprovedRegisterScreenState extends State<ImprovedRegisterScreen>
 
                       const SizedBox(height: 16),
 
-                      // 4. Hub Dropdown
+                      // 4. Hub Dropdown (using hardcoded hubs matching web)
                       _buildDropdownField(
                         label: 'Select Hub',
                         hint: 'Select your hub',

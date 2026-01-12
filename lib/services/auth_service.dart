@@ -137,27 +137,45 @@ class AuthService {
     String? avatarUrl,
   }) async {
     try {
+      // CRITICAL: Always include role in metadata (defaults to 'dataCollector' if not provided)
+      // This ensures the handle_new_user trigger can properly set the profile role
+      // The database trigger reads from raw_user_meta_data->>'role'
+      final normalizedRole = role?.trim().toLowerCase() ?? 'dataCollector';
+      
+      debugPrint('[AuthService] SignUp with metadata: role=$normalizedRole, hubId=$hubId, stateId=$stateId, localityId=$localityId');
+      
       final response = await supabase.auth.signUp(
         email: email,
         password: password,
         data: {
-          if (name != null) 'name': name,
-          if (phone != null) 'phone': phone,
-          if (employeeId != null) 'employeeId': employeeId,
-          if (role != null) 'role': role,
-          if (hubId != null) 'hubId': hubId,
-          if (stateId != null) 'stateId': stateId,
-          if (localityId != null) 'localityId': localityId,
-          if (avatarUrl != null) 'avatar': avatarUrl,
+          // Always include name (use email prefix if not provided)
+          'name': name?.trim() ?? email.split('@')[0],
+          // Include phone if provided
+          if (phone != null && phone.trim().isNotEmpty) 'phone': phone.trim(),
+          // Include employeeId if provided
+          if (employeeId != null && employeeId.trim().isNotEmpty) 'employeeId': employeeId.trim(),
+          // CRITICAL: Always include role (never null)
+          'role': normalizedRole,
+          // Include location data if provided (required for coordinators/data collectors)
+          if (hubId != null && hubId.trim().isNotEmpty) 'hubId': hubId.trim(),
+          if (stateId != null && stateId.trim().isNotEmpty) 'stateId': stateId.trim(),
+          if (localityId != null && localityId.trim().isNotEmpty) 'localityId': localityId.trim(),
+          // Include avatar if provided
+          if (avatarUrl != null && avatarUrl.trim().isNotEmpty) 'avatar': avatarUrl.trim(),
         },
       );
+      
+      debugPrint('[AuthService] SignUp successful. User ID: ${response.user?.id}');
+      debugPrint('[AuthService] User metadata: ${response.user?.userMetadata}');
+      
       return response;
     } on AuthException catch (e) {
       if (kDebugMode) {
-        print('Auth error: ${e.message}');
+        debugPrint('[AuthService] SignUp error: ${e.message}');
       }
       throw AuthException(e.message);
     } catch (e) {
+      debugPrint('[AuthService] Unexpected signup error: $e');
       throw AuthException('An unexpected error occurred');
     }
   }
