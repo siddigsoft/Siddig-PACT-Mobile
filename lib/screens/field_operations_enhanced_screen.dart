@@ -38,6 +38,9 @@ class _MMPScreenState extends State<MMPScreen> {
   String? _userLocalityId;
   String? _userStateName;
   String? _userLocalityName;
+  String? _userRole;
+  List<String> _userProjectIds = [];
+  bool _isAdminOrSuperUser = false;
 
   // Tab states
   final String _activeTab = 'my-assignments';
@@ -96,18 +99,29 @@ class _MMPScreenState extends State<MMPScreen> {
           .maybeSingle();
 
       if (profileResponse != null) {
-        final role = (profileResponse['role'] as String?)?.toLowerCase() ?? '';
+        _userRole = (profileResponse['role'] as String?)?.toLowerCase() ?? '';
         _isCoordinator =
-            role == 'coordinator' ||
-            role == 'field_coordinator' ||
-            role == 'state_coordinator';
+            _userRole == 'coordinator' ||
+            _userRole == 'field_coordinator' ||
+            _userRole == 'state_coordinator';
         _isDataCollector =
-            role == 'datacollector' ||
-            role == 'enumerator' ||
-            role == 'data_collector';
+            _userRole == 'datacollector' ||
+            _userRole == 'enumerator' ||
+            _userRole == 'data_collector';
 
         _userStateId = profileResponse['state_id'] as String?;
         _userLocalityId = profileResponse['locality_id'] as String?;
+
+        // Check if user is admin or supervisor (can see all projects)
+        _isAdminOrSuperUser = _userRole == 'admin' || 
+                             _userRole == 'super_admin' || 
+                             _userRole == 'supervisor' ||
+                             _userRole == 'fom';
+
+        // Fetch user's project memberships (for non-admin users)
+        if (!_isAdminOrSuperUser) {
+          await _fetchUserProjectMemberships();
+        }
 
         // Query actual state and locality names from database
         await _loadLocationNames();
@@ -292,6 +306,109 @@ class _MMPScreenState extends State<MMPScreen> {
     }
   }
 
+  /// Fetch user's project memberships from team_members table and projects table
+  Future<void> _fetchUserProjectMemberships() async {
+    try {
+      _userProjectIds = [];
+      
+      debugPrint('[_fetchUserProjectMemberships] Fetching projects for user: $_userId');
+      
+      // Try to fetch from team_members table first (if it exists)
+      try {
+        final response = await Supabase.instance.client
+            .from('team_members')
+            .select('project_id')
+            .eq('user_id', _userId!);
+        
+        if (response != null && (response as List).isNotEmpty) {
+          _userProjectIds = (response as List)
+              .map((m) => m['project_id']?.toString())
+              .where((id) => id != null && id.isNotEmpty)
+              .cast<String>()
+              .toList();
+          debugPrint('User project IDs from team_members: ${_userProjectIds.length}');
+        } else {
+          debugPrint('team_members table returned empty or doesn\'t exist, checking projects table');
+        }
+      } catch (e) {
+        debugPrint('Error fetching from team_members table (may not exist): $e');
+      }
+      
+      // ALWAYS check projects table for team composition (primary source)
+      // This matches the web app's useUserProjects hook
+      try {
+        final projectsResponse = await Supabase.instance.client
+            .from('projects')
+            .select('id, team');
+        
+        if (projectsResponse != null) {
+          debugPrint('Checking ${(projectsResponse as List).length} projects for user membership');
+          int foundCount = 0;
+          
+          for (final project in projectsResponse as List) {
+            final projectId = project['id']?.toString();
+            if (projectId == null) continue;
+            
+            final team = project['team'] as Map<String, dynamic>?;
+            if (team == null) continue;
+            
+            bool isMember = false;
+            
+            // Check if user is project manager (can be UUID or name)
+            final projectManager = team['projectManager'];
+            if (projectManager != null) {
+              // Check both UUID and name (in case it's stored as name)
+              if (projectManager == _userId || 
+                  (projectManager is String && projectManager.contains(_userId!))) {
+                isMember = true;
+                debugPrint('Found user as project manager in project: $projectId');
+              }
+            }
+            
+            // Check if user is in members array
+            if (!isMember) {
+              final members = team['members'] as List?;
+              if (members != null && members.contains(_userId)) {
+                isMember = true;
+                debugPrint('Found user in members array for project: $projectId');
+              }
+            }
+            
+            // Check if user is in teamComposition (primary method)
+            if (!isMember) {
+              final teamComposition = team['teamComposition'] as List?;
+              if (teamComposition != null) {
+                for (final member in teamComposition) {
+                  if (member is Map) {
+                    final memberUserId = member['userId']?.toString();
+                    if (memberUserId == _userId) {
+                      isMember = true;
+                      debugPrint('Found user in teamComposition for project: $projectId (role: ${member['role']})');
+                      break;
+                    }
+                  }
+                }
+              }
+            }
+            
+            if (isMember && !_userProjectIds.contains(projectId)) {
+              _userProjectIds.add(projectId);
+              foundCount++;
+            }
+          }
+          
+          debugPrint('User project IDs from projects table: $foundCount (total: ${_userProjectIds.length})');
+        }
+      } catch (e2) {
+        debugPrint('Error fetching from projects table: $e2');
+      }
+      
+      debugPrint('User is member of ${_userProjectIds.length} projects: $_userProjectIds');
+    } catch (e) {
+      debugPrint('Error fetching user project memberships: $e');
+    }
+  }
+
   Future<void> _loadLocationNames() async {
     try {
       // Load state name from hub_states table
@@ -362,7 +479,7 @@ class _MMPScreenState extends State<MMPScreen> {
       // Build query step by step
       var query = supabase
           .from('mmp_site_entries')
-          .select('*')
+          .select('*, mmp_files(project_id)')
           .ilike('status', 'Dispatched');
 
       // Filter by location if names are available
@@ -383,10 +500,31 @@ class _MMPScreenState extends State<MMPScreen> {
           .limit(1000);
 
       // Filter out sites that have been accepted (accepted_by is not null)
-      _availableSites = (response as List)
+      List<Map<String, dynamic>> filteredSites = (response as List)
           .map((e) => e as Map<String, dynamic>)
           .where((site) => site['accepted_by'] == null)
           .toList();
+
+      // Filter by project membership (for non-admin users)
+      if (!_isAdminOrSuperUser) {
+        final beforeCount = filteredSites.length;
+        filteredSites = filteredSites.where((site) {
+          final mmpFile = site['mmp_files'] as Map<String, dynamic>? ?? {};
+          final projectId = mmpFile['project_id']?.toString();
+          
+          // If site has no project ID, exclude it
+          if (projectId == null || projectId.isEmpty) {
+            return false;
+          }
+          
+          // Site must be in one of user's projects
+          return _userProjectIds.contains(projectId);
+        }).toList();
+        
+        debugPrint('Filtered available sites by project: ${filteredSites.length} of $beforeCount');
+      }
+
+      _availableSites = filteredSites;
 
       debugPrint('Loaded ${_availableSites.length} available sites');
 
@@ -439,7 +577,7 @@ class _MMPScreenState extends State<MMPScreen> {
 
       final response = await supabase
           .from('mmp_site_entries')
-          .select('*')
+          .select('*, mmp_files(project_id)')
           .ilike('status', 'Assigned')
           .eq('accepted_by', _userId!)
           .order('created_at', ascending: false)
@@ -450,7 +588,7 @@ class _MMPScreenState extends State<MMPScreen> {
           .toList();
 
       // Filter out cost-acknowledged sites
-      _smartAssignedSites = allSites.where((site) {
+      List<Map<String, dynamic>> costFilteredSites = allSites.where((site) {
         final additionalData = site['additional_data'] as Map<String, dynamic>?;
         final costAcknowledged =
             site['cost_acknowledged'] ??
@@ -458,6 +596,27 @@ class _MMPScreenState extends State<MMPScreen> {
             false;
         return !costAcknowledged;
       }).toList();
+
+      // Filter by project membership (for non-admin users)
+      if (!_isAdminOrSuperUser) {
+        final beforeCount = costFilteredSites.length;
+        costFilteredSites = costFilteredSites.where((site) {
+          final mmpFile = site['mmp_files'] as Map<String, dynamic>? ?? {};
+          final projectId = mmpFile['project_id']?.toString();
+          
+          // If site has no project ID, exclude it
+          if (projectId == null || projectId.isEmpty) {
+            return false;
+          }
+          
+          // Site must be in one of user's projects
+          return _userProjectIds.contains(projectId);
+        }).toList();
+        
+        debugPrint('Filtered smart assigned sites by project: ${costFilteredSites.length} of $beforeCount');
+      }
+
+      _smartAssignedSites = costFilteredSites;
     } catch (e) {
       debugPrint(
         '[_loadSmartAssignedSites] Error loading smart assigned sites: $e',
@@ -498,14 +657,35 @@ class _MMPScreenState extends State<MMPScreen> {
 
       final response = await supabase
           .from('mmp_site_entries')
-          .select('*')
+          .select('*, mmp_files(project_id)')
           .eq('accepted_by', _userId!)
           .order('created_at', ascending: false)
           .limit(1000);
 
-      _mySites = (response as List)
+      List<Map<String, dynamic>> allSites = (response as List)
           .map((e) => e as Map<String, dynamic>)
           .toList();
+
+      // Filter by project membership (for non-admin users)
+      if (!_isAdminOrSuperUser) {
+        final beforeCount = allSites.length;
+        allSites = allSites.where((site) {
+          final mmpFile = site['mmp_files'] as Map<String, dynamic>? ?? {};
+          final projectId = mmpFile['project_id']?.toString();
+          
+          // If site has no project ID, exclude it
+          if (projectId == null || projectId.isEmpty) {
+            return false;
+          }
+          
+          // Site must be in one of user's projects
+          return _userProjectIds.contains(projectId);
+        }).toList();
+        
+        debugPrint('Filtered my sites by project: ${allSites.length} of $beforeCount');
+      }
+
+      _mySites = allSites;
     } catch (e) {
       debugPrint('[_loadMySites] Error loading my sites: $e');
 
@@ -533,20 +713,41 @@ class _MMPScreenState extends State<MMPScreen> {
 
       final response = await Supabase.instance.client
           .from('mmp_site_entries')
-          .select('*')
+          .select('*, mmp_files(project_id)')
           .eq('accepted_by', _userId!)
           .ilike('status', 'Completed')
           .order('created_at', ascending: false)
           .limit(100);
 
       // Filter for potentially unsynced visits (you may need additional logic)
-      _unsyncedCompletedVisits = (response as List)
+      List<Map<String, dynamic>> unsyncedSites = (response as List)
           .map((e) => e as Map<String, dynamic>)
           .where((site) {
             // Add logic to determine if unsynced
             return true; // Placeholder
           })
           .toList();
+
+      // Filter by project membership (for non-admin users)
+      if (!_isAdminOrSuperUser) {
+        final beforeCount = unsyncedSites.length;
+        unsyncedSites = unsyncedSites.where((site) {
+          final mmpFile = site['mmp_files'] as Map<String, dynamic>? ?? {};
+          final projectId = mmpFile['project_id']?.toString();
+          
+          // If site has no project ID, exclude it
+          if (projectId == null || projectId.isEmpty) {
+            return false;
+          }
+          
+          // Site must be in one of user's projects
+          return _userProjectIds.contains(projectId);
+        }).toList();
+        
+        debugPrint('Filtered unsynced completed visits by project: ${unsyncedSites.length} of $beforeCount');
+      }
+
+      _unsyncedCompletedVisits = unsyncedSites;
     } catch (e) {
       debugPrint('Error loading unsynced completed visits: $e');
     }
@@ -609,14 +810,35 @@ class _MMPScreenState extends State<MMPScreen> {
       // Load sites forwarded to this coordinator
       final response = await Supabase.instance.client
           .from('mmp_site_entries')
-          .select('*')
+          .select('*, mmp_files(project_id)')
           .eq('forwarded_to_user_id', _userId!)
           .order('created_at', ascending: false)
           .limit(1000);
 
-      _coordinatorSites = (response as List)
+      List<Map<String, dynamic>> allCoordinatorSites = (response as List)
           .map((e) => e as Map<String, dynamic>)
           .toList();
+
+      // Filter by project membership (for non-admin users)
+      if (!_isAdminOrSuperUser) {
+        final beforeCount = allCoordinatorSites.length;
+        allCoordinatorSites = allCoordinatorSites.where((site) {
+          final mmpFile = site['mmp_files'] as Map<String, dynamic>? ?? {};
+          final projectId = mmpFile['project_id']?.toString();
+          
+          // If site has no project ID, exclude it
+          if (projectId == null || projectId.isEmpty) {
+            return false;
+          }
+          
+          // Site must be in one of user's projects
+          return _userProjectIds.contains(projectId);
+        }).toList();
+        
+        debugPrint('Filtered coordinator sites by project: ${allCoordinatorSites.length} of $beforeCount');
+      }
+
+      _coordinatorSites = allCoordinatorSites;
     } catch (e) {
       debugPrint('Error loading coordinator data: $e');
     }

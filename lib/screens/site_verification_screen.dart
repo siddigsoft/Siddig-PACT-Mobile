@@ -90,6 +90,9 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
   String? _userState;
   String? _userHub;
   String? _userLocality; // For locality-specific coordinators
+  String? _userRole; // User's role (admin, coordinator, dataCollector, etc.)
+  List<String> _userProjectIds = []; // Projects the user is a member of
+  bool _isAdminOrSuperUser = false; // Whether user is admin/supervisor (can see all projects)
 
   // DM Activities that require date range (distribution start, end, expected visit)
   // Based on CoordinatorSites.tsx - only GFA, CBT, EBSFP
@@ -158,7 +161,7 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
       // Get coordinator's regional assignment (CONSTRAINT 1: Regional)
       final profile = await _supabase
           .from('profiles')
-          .select('state_id, hub_id, locality_id')
+          .select('state_id, hub_id, locality_id, role')
           .eq('id', user.id)
           .maybeSingle();
 
@@ -166,6 +169,18 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
       _userHub = profile?['hub_id'];
       _userLocality =
           profile?['locality_id']; // Can be null for state-wide access
+      _userRole = profile?['role']?.toString().toLowerCase();
+
+      // Check if user is admin or supervisor (can see all projects)
+      _isAdminOrSuperUser = _userRole == 'admin' || 
+                           _userRole == 'super_admin' || 
+                           _userRole == 'supervisor' ||
+                           _userRole == 'fom';
+
+      // Fetch user's project memberships (for non-admin users)
+      if (!_isAdminOrSuperUser) {
+        await _fetchUserProjectMemberships();
+      }
 
       // Fetch sites forwarded to this coordinator for verification
       await _fetchSitesForVerification();
@@ -186,6 +201,109 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
     }
   }
 
+  /// Fetch user's project memberships from team_members table and projects table
+  Future<void> _fetchUserProjectMemberships() async {
+    try {
+      _userProjectIds = [];
+      
+      debugPrint('[_fetchUserProjectMemberships] Fetching projects for user: $_userId');
+      
+      // Try to fetch from team_members table first (if it exists)
+      try {
+        final response = await _supabase
+            .from('team_members')
+            .select('project_id')
+            .eq('user_id', _userId!);
+        
+        if (response != null && (response as List).isNotEmpty) {
+          _userProjectIds = (response as List)
+              .map((m) => m['project_id']?.toString())
+              .where((id) => id != null && id.isNotEmpty)
+              .cast<String>()
+              .toList();
+          debugPrint('User project IDs from team_members: ${_userProjectIds.length}');
+        } else {
+          debugPrint('team_members table returned empty or doesn\'t exist, checking projects table');
+        }
+      } catch (e) {
+        debugPrint('Error fetching from team_members table (may not exist): $e');
+      }
+      
+      // ALWAYS check projects table for team composition (primary source)
+      // This matches the web app's useUserProjects hook
+      try {
+        final projectsResponse = await _supabase
+            .from('projects')
+            .select('id, team');
+        
+        if (projectsResponse != null) {
+          debugPrint('Checking ${(projectsResponse as List).length} projects for user membership');
+          int foundCount = 0;
+          
+          for (final project in projectsResponse as List) {
+            final projectId = project['id']?.toString();
+            if (projectId == null) continue;
+            
+            final team = project['team'] as Map<String, dynamic>?;
+            if (team == null) continue;
+            
+            bool isMember = false;
+            
+            // Check if user is project manager (can be UUID or name)
+            final projectManager = team['projectManager'];
+            if (projectManager != null) {
+              // Check both UUID and name (in case it's stored as name)
+              if (projectManager == _userId || 
+                  (projectManager is String && projectManager.contains(_userId!))) {
+                isMember = true;
+                debugPrint('Found user as project manager in project: $projectId');
+              }
+            }
+            
+            // Check if user is in members array
+            if (!isMember) {
+              final members = team['members'] as List?;
+              if (members != null && members.contains(_userId)) {
+                isMember = true;
+                debugPrint('Found user in members array for project: $projectId');
+              }
+            }
+            
+            // Check if user is in teamComposition (primary method)
+            if (!isMember) {
+              final teamComposition = team['teamComposition'] as List?;
+              if (teamComposition != null) {
+                for (final member in teamComposition) {
+                  if (member is Map) {
+                    final memberUserId = member['userId']?.toString();
+                    if (memberUserId == _userId) {
+                      isMember = true;
+                      debugPrint('Found user in teamComposition for project: $projectId (role: ${member['role']})');
+                      break;
+                    }
+                  }
+                }
+              }
+            }
+            
+            if (isMember && !_userProjectIds.contains(projectId)) {
+              _userProjectIds.add(projectId);
+              foundCount++;
+            }
+          }
+          
+          debugPrint('User project IDs from projects table: $foundCount (total: ${_userProjectIds.length})');
+        }
+      } catch (e2) {
+        debugPrint('Error fetching from projects table: $e2');
+      }
+      
+      debugPrint('User is member of ${_userProjectIds.length} projects: $_userProjectIds');
+    } catch (e) {
+      debugPrint('Error fetching user project memberships: $e');
+    }
+  }
+
   Future<void> _fetchSitesForVerification() async {
     try {
       // Fetch sites assigned to this coordinator
@@ -203,7 +321,7 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
       try {
         final response = await _supabase
             .from('mmp_site_entries')
-            .select('*, mmp_files(name, workflow)')
+            .select('*, mmp_files(name, workflow, project_id)')
             .eq('forwarded_to_user_id', _userId!)
             .order('created_at', ascending: false)
             .limit(1000);
@@ -216,6 +334,25 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
         debugPrint('Error fetching by forwarded_to_user_id: $e');
       }
 
+      // Filter by project membership (for non-admin users)
+      if (!_isAdminOrSuperUser) {
+        final beforeCount = sites.length;
+        sites = sites.where((site) {
+          final mmpFile = site['mmp_files'] as Map<String, dynamic>? ?? {};
+          final projectId = mmpFile['project_id']?.toString();
+          
+          // If site has no project ID, exclude it (user must be in project to see sites)
+          if (projectId == null || projectId.isEmpty) {
+            return false;
+          }
+          
+          // Site must be in one of user's projects
+          return _userProjectIds.contains(projectId);
+        }).toList();
+        
+        debugPrint('Filtered sites by project membership: ${sites.length} of $beforeCount');
+      }
+
       // SECONDARY APPROACH: Also check additional_data for assigned_to
       // Fetch all sites and filter in memory (more reliable than JSONB query)
       if (sites.length < 50) {
@@ -223,7 +360,7 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
         try {
           final response2 = await _supabase
               .from('mmp_site_entries')
-              .select('*, mmp_files(name, workflow)')
+              .select('*, mmp_files(name, workflow, project_id)')
               .order('created_at', ascending: false)
               .limit(500);
 
@@ -234,7 +371,17 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
                   site['additional_data'] as Map<String, dynamic>?;
               if (additionalData == null) return false;
               final assignedTo = additionalData['assigned_to']?.toString();
-              return assignedTo == _userId;
+              if (assignedTo != _userId) return false;
+              
+              // Also filter by project membership (for non-admin users)
+              if (!_isAdminOrSuperUser) {
+                final mmpFile = site['mmp_files'] as Map<String, dynamic>? ?? {};
+                final projectId = mmpFile['project_id']?.toString();
+                if (projectId == null || projectId.isEmpty) return false;
+                if (!_userProjectIds.contains(projectId)) return false;
+              }
+              
+              return true;
             }).toList();
 
             // Add sites not already in list (avoid duplicates)
