@@ -4204,7 +4204,6 @@ class _PermitVerificationDialogState extends State<_PermitVerificationDialog> {
               ),
             ),
           ),
-        ),
       ],
     );
   }
