@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import '../theme/app_colors.dart';
 import '../widgets/reusable_app_bar.dart';
 import '../widgets/custom_drawer_menu.dart';
@@ -35,12 +36,50 @@ class _SupportScreenState extends State<SupportScreen> {
       return;
     }
 
+    // Get app info for the email
+    PackageInfo packageInfo = await PackageInfo.fromPlatform();
+
+    final String formattedBody =
+        '''
+PACT Mobile Support Request
+===========================
+
+Hello Francis,
+
+A user has submitted a support request through the PACT Mobile app.
+
+SUBJECT: ${_subjectController.text}
+
+MESSAGE:
+${_messageController.text}
+
+---
+APP INFORMATION:
+• App Version: ${packageInfo.version} (${packageInfo.buildNumber})
+• Package Name: ${packageInfo.packageName}
+• App Name: ${packageInfo.appName}
+• Platform: ${Theme.of(context).platform == TargetPlatform.android
+            ? 'Android'
+            : Theme.of(context).platform == TargetPlatform.iOS
+            ? 'iOS'
+            : 'Unknown'}
+
+TIMESTAMP: ${DateTime.now().toString()}
+
+---
+This email was generated automatically from the PACT Mobile app.
+Please respond to the user directly if needed.
+
+Best regards,
+PACT Mobile Support System
+''';
+
     final Uri emailLaunchUri = Uri(
       scheme: 'mailto',
-      path: 'support@pactorg.org',
+      path: 'francis.b.kaz@gmail.com',
       queryParameters: {
-        'subject': '[PACT Mobile] ${_subjectController.text}',
-        'body': _messageController.text,
+        'subject': '[PACT Mobile Support] ${_subjectController.text}',
+        'body': formattedBody,
       },
     );
 
@@ -56,7 +95,7 @@ class _SupportScreenState extends State<SupportScreen> {
         AppSnackBar.show(
           context,
           message:
-              'No email app found. Please send email to support@pactorg.org',
+              'No email app found. Please send email to francis.b.kaz@gmail.com',
           type: SnackBarType.error,
         );
       }
@@ -64,7 +103,7 @@ class _SupportScreenState extends State<SupportScreen> {
       AppSnackBar.show(
         context,
         message:
-            'Unable to open email app. Please send email to support@pactorg.org',
+            'Unable to open email app. Please send email to francis.b.kaz@gmail.com',
         type: SnackBarType.error,
       );
     }
@@ -152,7 +191,7 @@ class _SupportScreenState extends State<SupportScreen> {
                       _buildContactCard(
                         icon: Icons.email_rounded,
                         title: 'Email Support',
-                        subtitle: 'support@pactorg.org',
+                        subtitle: 'francis.b.kaz@gmail.com',
                         description:
                             'Send us a detailed message about your issue',
                         buttonText: 'Send Email',
