@@ -100,7 +100,7 @@ class _ImprovedRegisterScreenState extends State<ImprovedRegisterScreen>
     try {
       // Generate unique filename
       final timestamp = DateTime.now().millisecondsSinceEpoch;
-      final fileName = 'avatar-${timestamp}.jpg';
+      final fileName = 'avatar-$timestamp.jpg';
 
       // Read image bytes
       Uint8List imageBytes;
@@ -345,6 +345,66 @@ class _ImprovedRegisterScreenState extends State<ImprovedRegisterScreen>
     return null;
   }
 
+  /// Get user-friendly error message based on signup error
+  String _getSignupErrorMessage(String error) {
+    final errorLower = error.toLowerCase();
+
+    if (errorLower.contains('user already registered') ||
+        errorLower.contains('already_registered')) {
+      return 'An account with this email already exists. Please try logging in instead.';
+    }
+
+    if (errorLower.contains('password should be at least') ||
+        errorLower.contains('password_too_short')) {
+      return 'Password must be at least 6 characters long.';
+    }
+
+    if (errorLower.contains('invalid email') ||
+        errorLower.contains('invalid_email')) {
+      return 'Please enter a valid email address.';
+    }
+
+    if (errorLower.contains('weak password') ||
+        errorLower.contains('password_too_weak')) {
+      return 'Password is too weak. Please use a stronger password with letters, numbers, and symbols.';
+    }
+
+    if (errorLower.contains('network') || errorLower.contains('connection')) {
+      return 'Network connection error. Please check your internet connection and try again.';
+    }
+
+    if (errorLower.contains('rate limit') ||
+        errorLower.contains('too many requests')) {
+      return 'Too many signup attempts. Please wait a few minutes before trying again.';
+    }
+
+    // Default fallback for any other errors
+    return 'Registration failed. Please try again or contact support if the problem persists.';
+  }
+
+  /// Clear all form data after successful registration
+  void _clearFormData() {
+    _emailController.clear();
+    _passwordController.clear();
+    _nameController.clear();
+    _phoneController.clear();
+    _employeeIdController.clear();
+
+    // Clear selected values
+    setState(() {
+      _selectedHub = null;
+      _selectedState = null;
+      _selectedLocality = null;
+      _selectedRole = null;
+      _profilePhoto = null;
+      _profilePhotoUrl = null;
+      _acceptTerms = false;
+    });
+
+    // Reset form validation
+    _formKey.currentState?.reset();
+  }
+
   Future<void> _handleRegister() async {
     if (!_formKey.currentState!.validate()) {
       return;
@@ -393,26 +453,34 @@ class _ImprovedRegisterScreenState extends State<ImprovedRegisterScreen>
       );
 
       if (response.user != null) {
+        // Clear all form data after successful registration
+        _clearFormData();
+
         // Success! Triggers have created profile and wallet automatically
         AppSnackBar.show(
           context,
           message:
-              'Account created successfully! Please check your email for verification.',
+              '🎉 Account created successfully! Welcome to PACT. Please check your email for verification instructions.',
           type: SnackBarType.success,
         );
 
-        // Navigate to login or success screen
+        // Navigate to login or success screen after a brief delay to show the message
         if (mounted) {
-          Navigator.of(context).pushReplacementNamed('/login');
+          Future.delayed(const Duration(seconds: 2), () {
+            if (mounted) {
+              Navigator.of(context).pushReplacementNamed('/login');
+            }
+          });
         }
       } else {
         throw Exception('Registration failed - no user returned');
       }
     } catch (e) {
       debugPrint('Registration error: $e');
+      String errorMessage = _getSignupErrorMessage(e.toString());
       AppSnackBar.show(
         context,
-        message: 'Registration failed: ${e.toString()}',
+        message: errorMessage,
         type: SnackBarType.error,
       );
     } finally {
@@ -556,8 +624,10 @@ class _ImprovedRegisterScreenState extends State<ImprovedRegisterScreen>
                         onChanged: (value) {
                           setState(() {
                             _selectedHub = value;
-                            _selectedState = null; // Reset state when hub changes
-                            _selectedLocality = null; // Reset locality when hub changes
+                            _selectedState =
+                                null; // Reset state when hub changes
+                            _selectedLocality =
+                                null; // Reset locality when hub changes
                           });
                         },
                         validator: _validateHub,
@@ -575,13 +645,16 @@ class _ImprovedRegisterScreenState extends State<ImprovedRegisterScreen>
                         icon: Icons.map_outlined,
                         value: _selectedState,
                         items: _availableStates.map((s) => s.id).toList(),
-                        displayItems: _availableStates.map((s) => s.name).toList(),
+                        displayItems: _availableStates
+                            .map((s) => s.name)
+                            .toList(),
                         onChanged: _selectedHub == null
                             ? null
                             : (value) {
                                 setState(() {
                                   _selectedState = value;
-                                  _selectedLocality = null; // Reset locality when state changes
+                                  _selectedLocality =
+                                      null; // Reset locality when state changes
                                 });
                               },
                         validator: _validateState,
@@ -599,7 +672,9 @@ class _ImprovedRegisterScreenState extends State<ImprovedRegisterScreen>
                         icon: Icons.location_on_outlined,
                         value: _selectedLocality,
                         items: _availableLocalities.map((l) => l.id).toList(),
-                        displayItems: _availableLocalities.map((l) => l.name).toList(),
+                        displayItems: _availableLocalities
+                            .map((l) => l.name)
+                            .toList(),
                         onChanged: _selectedState == null
                             ? null
                             : (value) {
@@ -789,7 +864,7 @@ class _ImprovedRegisterScreenState extends State<ImprovedRegisterScreen>
             ],
           ),
           child: DropdownButtonFormField<String>(
-            value: value,
+            initialValue: value,
             onChanged: onChanged,
             validator: validator,
             decoration: InputDecoration(

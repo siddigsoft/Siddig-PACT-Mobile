@@ -1,5 +1,4 @@
 import 'dart:typed_data';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
@@ -16,13 +15,13 @@ class ProfileScreen extends ConsumerStatefulWidget {
 class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   final _formKey = GlobalKey<FormState>();
   final _imagePicker = ImagePicker();
-  
+
   // Form controllers
   late TextEditingController _fullNameController;
   late TextEditingController _usernameController;
   late TextEditingController _phoneController;
   late TextEditingController _emailController;
-  
+
   bool _isEditMode = false;
   XFile? _selectedImage;
   Uint8List? _selectedImageBytes;
@@ -34,7 +33,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     _usernameController = TextEditingController();
     _phoneController = TextEditingController();
     _emailController = TextEditingController();
-    
+
     // Load profile on init
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(profileProvider.notifier).loadProfile();
@@ -78,9 +77,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to pick image: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to pick image: $e')));
       }
     }
   }
@@ -90,7 +89,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
     try {
       await ref.read(profileProvider.notifier).uploadAvatar(_selectedImage!);
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Avatar updated successfully')),
@@ -102,9 +101,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to upload avatar: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to upload avatar: $e')));
       }
     }
   }
@@ -142,11 +141,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     if (!_formKey.currentState!.validate()) return;
 
     try {
-      await ref.read(profileProvider.notifier).updateProfile(
-        fullName: _fullNameController.text.trim(),
-        username: _usernameController.text.trim(),
-        phone: _phoneController.text.trim(),
-      );
+      await ref
+          .read(profileProvider.notifier)
+          .updateProfile(
+            fullName: _fullNameController.text.trim(),
+            username: _usernameController.text.trim(),
+            phone: _phoneController.text.trim(),
+          );
 
       if (mounted) {
         setState(() {
@@ -158,9 +159,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to update profile: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to update profile: $e')));
       }
     }
   }
@@ -212,190 +213,216 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       body: profileState.isLoading && profile == null
           ? const Center(child: CircularProgressIndicator())
           : profileState.error != null && profile == null
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.error_outline, size: 64, color: Colors.red),
-                      const SizedBox(height: 16),
-                      Text(
-                        'Error: ${profileState.error}',
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 16),
-                      ElevatedButton(
-                        onPressed: () => ref.read(profileProvider.notifier).loadProfile(),
-                        child: const Text('Retry'),
-                      ),
-                    ],
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.error_outline, size: 64, color: Colors.red),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Error: ${profileState.error}',
+                    textAlign: TextAlign.center,
                   ),
-                )
-              : profile == null
-                  ? const Center(child: Text('No profile data'))
-                  : SingleChildScrollView(
-                      padding: const EdgeInsets.all(16),
-                      child: Form(
-                        key: _formKey,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            // Avatar Section
-                            Center(
-                              child: Stack(
-                                children: [
-                                  CircleAvatar(
-                                    radius: 60,
-                                    backgroundColor: Colors.grey[300],
-                                    backgroundImage: _selectedImageBytes != null
-                                        ? MemoryImage(_selectedImageBytes!)
-                                        : profile.hasAvatar
-                                            ? NetworkImage(profile.avatarUrl!)
-                                            : null,
-                                    child: !profile.hasAvatar && _selectedImageBytes == null
-                                        ? Text(
-                                            profile.initials,
-                                            style: const TextStyle(
-                                              fontSize: 32,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          )
-                                        : null,
-                                  ),
-                                  Positioned(
-                                    bottom: 0,
-                                    right: 0,
-                                    child: CircleAvatar(
-                                      backgroundColor: Theme.of(context).primaryColor,
-                                      child: IconButton(
-                                        icon: const Icon(Icons.camera_alt, color: Colors.white),
-                                        onPressed: _showImageSourceDialog,
-                                      ),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: () =>
+                        ref.read(profileProvider.notifier).loadProfile(),
+                    child: const Text('Retry'),
+                  ),
+                ],
+              ),
+            )
+          : profile == null
+          ? const Center(child: Text('No profile data'))
+          : SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    // Avatar Section
+                    Center(
+                      child: Stack(
+                        children: [
+                          CircleAvatar(
+                            radius: 60,
+                            backgroundColor: Colors.grey[300],
+                            backgroundImage: _selectedImageBytes != null
+                                ? MemoryImage(_selectedImageBytes!)
+                                : profile.hasAvatar
+                                ? NetworkImage(profile.avatarUrl!)
+                                : null,
+                            child:
+                                !profile.hasAvatar &&
+                                    _selectedImageBytes == null
+                                ? Text(
+                                    profile.initials,
+                                    style: const TextStyle(
+                                      fontSize: 32,
+                                      fontWeight: FontWeight.bold,
                                     ),
-                                  ),
-                                ],
+                                  )
+                                : null,
+                          ),
+                          Positioned(
+                            bottom: 0,
+                            right: 0,
+                            child: CircleAvatar(
+                              backgroundColor: Theme.of(context).primaryColor,
+                              child: IconButton(
+                                icon: const Icon(
+                                  Icons.camera_alt,
+                                  color: Colors.white,
+                                ),
+                                onPressed: _showImageSourceDialog,
                               ),
                             ),
-                            const SizedBox(height: 24),
-
-                            // Status Badges
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              alignment: WrapAlignment.center,
-                              children: [
-                                _buildBadge(
-                                  label: profile.roleDisplayName,
-                                  color: Colors.blue,
-                                  icon: Icons.badge,
-                                ),
-                                _buildBadge(
-                                  label: profile.status.toUpperCase(),
-                                  color: profile.isApproved ? Colors.green : Colors.orange,
-                                  icon: profile.isApproved ? Icons.check_circle : Icons.pending,
-                                ),
-                                _buildBadge(
-                                  label: profile.availability.displayName,
-                                  color: Color(int.parse(profile.availability.colorHex.substring(1), radix: 16) + 0xFF000000),
-                                  icon: Icons.circle,
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 32),
-
-                            // Form Fields
-                            _buildTextField(
-                              controller: _fullNameController,
-                              label: 'Full Name',
-                              icon: Icons.person,
-                              enabled: _isEditMode,
-                              validator: (value) {
-                                if (value == null || value.trim().isEmpty) {
-                                  return 'Full name is required';
-                                }
-                                return null;
-                              },
-                            ),
-                            const SizedBox(height: 16),
-                            
-                            _buildTextField(
-                              controller: _usernameController,
-                              label: 'Username',
-                              icon: Icons.alternate_email,
-                              enabled: _isEditMode,
-                            ),
-                            const SizedBox(height: 16),
-                            
-                            _buildTextField(
-                              controller: _emailController,
-                              label: 'Email',
-                              icon: Icons.email,
-                              enabled: false, // Email is read-only
-                            ),
-                            const SizedBox(height: 16),
-                            
-                            _buildTextField(
-                              controller: _phoneController,
-                              label: 'Phone',
-                              icon: Icons.phone,
-                              enabled: _isEditMode,
-                              keyboardType: TextInputType.phone,
-                            ),
-                            const SizedBox(height: 24),
-
-                            // Additional Info (Read-only)
-                            if (profile.employeeId != null) ...[
-                              _buildInfoRow('Employee ID', profile.employeeId!),
-                              const SizedBox(height: 12),
-                            ],
-
-                            if (profile.hubId != null) ...[
-                              _buildInfoRow('Hub ID', profile.hubId!),
-                              const SizedBox(height: 12),
-                            ],
-
-                            if (profile.stateId != null) ...[
-                              _buildInfoRow('State ID', profile.stateId!),
-                              const SizedBox(height: 12),
-                            ],
-
-                            if (profile.localityId != null) ...[
-                              _buildInfoRow('Locality ID', profile.localityId!),
-                              const SizedBox(height: 12),
-                            ],
-
-                            _buildInfoRow('Member Since', _formatDate(profile.createdAt)),
-                            
-                            if (profile.lastActive != null) ...[
-                              const SizedBox(height: 12),
-                              _buildInfoRow('Last Active', _formatDate(profile.lastActive!)),
-                            ],
-
-                            // Save Button
-                            if (_isEditMode) ...[
-                              const SizedBox(height: 32),
-                              SizedBox(
-                                width: double.infinity,
-                                child: ElevatedButton(
-                                  onPressed: profileState.isLoading ? null : _saveProfile,
-                                  style: ElevatedButton.styleFrom(
-                                    padding: const EdgeInsets.symmetric(vertical: 16),
-                                  ),
-                                  child: profileState.isLoading
-                                      ? const SizedBox(
-                                          height: 20,
-                                          width: 20,
-                                          child: CircularProgressIndicator(strokeWidth: 2),
-                                        )
-                                      : const Text('Save Changes'),
-                                ),
-                              ),
-                            ],
-
-                            const SizedBox(height: 16),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
                     ),
+                    const SizedBox(height: 24),
+
+                    // Status Badges
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      alignment: WrapAlignment.center,
+                      children: [
+                        _buildBadge(
+                          label: profile.roleDisplayName,
+                          color: Colors.blue,
+                          icon: Icons.badge,
+                        ),
+                        _buildBadge(
+                          label: profile.status.toUpperCase(),
+                          color: profile.isApproved
+                              ? Colors.green
+                              : Colors.orange,
+                          icon: profile.isApproved
+                              ? Icons.check_circle
+                              : Icons.pending,
+                        ),
+                        _buildBadge(
+                          label: profile.availability.displayName,
+                          color: Color(
+                            int.parse(
+                                  profile.availability.colorHex.substring(1),
+                                  radix: 16,
+                                ) +
+                                0xFF000000,
+                          ),
+                          icon: Icons.circle,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 32),
+
+                    // Form Fields
+                    _buildTextField(
+                      controller: _fullNameController,
+                      label: 'Full Name',
+                      icon: Icons.person,
+                      enabled: _isEditMode,
+                      validator: (value) {
+                        if (value == null || value.trim().isEmpty) {
+                          return 'Full name is required';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 16),
+
+                    _buildTextField(
+                      controller: _usernameController,
+                      label: 'Username',
+                      icon: Icons.alternate_email,
+                      enabled: _isEditMode,
+                    ),
+                    const SizedBox(height: 16),
+
+                    _buildTextField(
+                      controller: _emailController,
+                      label: 'Email',
+                      icon: Icons.email,
+                      enabled: false, // Email is read-only
+                    ),
+                    const SizedBox(height: 16),
+
+                    _buildTextField(
+                      controller: _phoneController,
+                      label: 'Phone',
+                      icon: Icons.phone,
+                      enabled: _isEditMode,
+                      keyboardType: TextInputType.phone,
+                    ),
+                    const SizedBox(height: 24),
+
+                    // Additional Info (Read-only)
+                    if (profile.employeeId != null) ...[
+                      _buildInfoRow('Employee ID', profile.employeeId!),
+                      const SizedBox(height: 12),
+                    ],
+
+                    if (profile.hubId != null) ...[
+                      _buildInfoRow('Hub ID', profile.hubId!),
+                      const SizedBox(height: 12),
+                    ],
+
+                    if (profile.stateId != null) ...[
+                      _buildInfoRow('State ID', profile.stateId!),
+                      const SizedBox(height: 12),
+                    ],
+
+                    if (profile.localityId != null) ...[
+                      _buildInfoRow('Locality ID', profile.localityId!),
+                      const SizedBox(height: 12),
+                    ],
+
+                    _buildInfoRow(
+                      'Member Since',
+                      _formatDate(profile.createdAt),
+                    ),
+
+                    if (profile.lastActive != null) ...[
+                      const SizedBox(height: 12),
+                      _buildInfoRow(
+                        'Last Active',
+                        _formatDate(profile.lastActive!),
+                      ),
+                    ],
+
+                    // Save Button
+                    if (_isEditMode) ...[
+                      const SizedBox(height: 32),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: profileState.isLoading
+                              ? null
+                              : _saveProfile,
+                          style: ElevatedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                          ),
+                          child: profileState.isLoading
+                              ? const SizedBox(
+                                  height: 20,
+                                  width: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Text('Save Changes'),
+                        ),
+                      ),
+                    ],
+
+                    const SizedBox(height: 16),
+                  ],
+                ),
+              ),
+            ),
     );
   }
 
@@ -430,9 +457,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       decoration: InputDecoration(
         labelText: label,
         prefixIcon: Icon(icon),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
         filled: !enabled,
         fillColor: enabled ? null : Colors.grey[100],
       ),
@@ -443,19 +468,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(
-          label,
-          style: TextStyle(
-            color: Colors.grey[600],
-            fontSize: 14,
-          ),
-        ),
+        Text(label, style: TextStyle(color: Colors.grey[600], fontSize: 14)),
         Text(
           value,
-          style: const TextStyle(
-            fontWeight: FontWeight.w500,
-            fontSize: 14,
-          ),
+          style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
         ),
       ],
     );

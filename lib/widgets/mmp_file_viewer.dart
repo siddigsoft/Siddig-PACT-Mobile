@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:open_file/open_file.dart';
 import '../models/mmp_file.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'dart:io';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -10,10 +9,7 @@ import 'package:permission_handler/permission_handler.dart';
 class MMPFileViewer extends StatelessWidget {
   final MMPFile mmpFile;
 
-  const MMPFileViewer({
-    super.key,
-    required this.mmpFile,
-  });
+  const MMPFileViewer({super.key, required this.mmpFile});
 
   Future<void> _openFile() async {
     try {
@@ -32,8 +28,9 @@ class MMPFileViewer extends StatelessWidget {
       if (!await file.exists()) {
         // Download file from Supabase storage
         final supabase = Supabase.instance.client;
-        final bytes =
-            await supabase.storage.from('mmps').download(mmpFile.filePath);
+        final bytes = await supabase.storage
+            .from('mmps')
+            .download(mmpFile.filePath);
         await file.writeAsBytes(bytes);
       }
 
@@ -93,9 +90,7 @@ class MMPFileViewer extends StatelessWidget {
               const SizedBox(height: 8),
               Text(
                 'Status: ${mmpFile.status}',
-                style: TextStyle(
-                  color: _getStatusColor(mmpFile.status),
-                ),
+                style: TextStyle(color: _getStatusColor(mmpFile.status)),
               ),
             ],
           ),

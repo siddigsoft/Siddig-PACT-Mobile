@@ -70,22 +70,21 @@ class _IncidentReportScreenState extends State<IncidentReportScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               DropdownButtonFormField<String>(
-                value: selectedType,
-                items: [
-                  'harassment',
-                  'theft',
-                  'accident',
-                  'medicalEmergency',
-                  'naturalDisaster',
-                  'other'
-                ]
-                    .map(
-                      (type) => DropdownMenuItem(
-                        value: type,
-                        child: Text(type),
-                      ),
-                    )
-                    .toList(),
+                initialValue: selectedType,
+                items:
+                    [
+                          'harassment',
+                          'theft',
+                          'accident',
+                          'medicalEmergency',
+                          'naturalDisaster',
+                          'other',
+                        ]
+                        .map(
+                          (type) =>
+                              DropdownMenuItem(value: type, child: Text(type)),
+                        )
+                        .toList(),
                 onChanged: (value) {
                   if (value != null) selectedType = value;
                 },
@@ -256,9 +255,9 @@ class _IncidentReportScreenState extends State<IncidentReportScreen> {
                                 _buildDetailItem('Location', report.location),
                                 _buildDetailItem(
                                   'Date',
-                                  report.incidentDate
-                                          .toString()
-                                          .split('.')[0] ??
+                                  report.incidentDate.toString().split(
+                                        '.',
+                                      )[0] ??
                                       report.createdAt.toString().split('.')[0],
                                 ),
                                 _buildDetailItem(
@@ -276,10 +275,7 @@ class _IncidentReportScreenState extends State<IncidentReportScreen> {
                                     'Immediate Action Taken',
                                     report.immediateActionTaken!,
                                   ),
-                                _buildDetailItem(
-                                  'Severity',
-                                  report.severity,
-                                ),
+                                _buildDetailItem('Severity', report.severity),
                                 _buildDetailItem(
                                   'Requires Follow-up',
                                   report.requiresFollowUp ? 'Yes' : 'No',

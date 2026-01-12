@@ -23,13 +23,10 @@ class ChatService {
   Future<void> _cacheChats(List<Chat> chats) async {
     try {
       final box = await _openChatCacheBox();
-      await box.put(
-        _chatCacheKey,
-        {
-          'updated_at': DateTime.now().toIso8601String(),
-          'chats': chats.map((chat) => chat.toCacheJson()).toList(),
-        },
-      );
+      await box.put(_chatCacheKey, {
+        'updated_at': DateTime.now().toIso8601String(),
+        'chats': chats.map((chat) => chat.toCacheJson()).toList(),
+      });
     } catch (e) {
       // ignore: avoid_print
       print('Error caching chats: $e');
@@ -48,19 +45,16 @@ class ChatService {
       final updated = <Map<String, dynamic>>[];
       for (final item in rawChats) {
         if (item is! Map) continue;
-        final map = Map<String, dynamic>.from(item as Map);
+        final map = Map<String, dynamic>.from(item);
         if (map['id'] != chatId) {
           updated.add(map);
         }
       }
 
-      await box.put(
-        _chatCacheKey,
-        {
-          'updated_at': DateTime.now().toIso8601String(),
-          'chats': updated,
-        },
-      );
+      await box.put(_chatCacheKey, {
+        'updated_at': DateTime.now().toIso8601String(),
+        'chats': updated,
+      });
     } catch (e) {
       // ignore: avoid_print
       print('Error removing chat from cache: $e');
@@ -79,7 +73,7 @@ class ChatService {
       final chats = <Chat>[];
       for (final item in rawChats) {
         if (item is! Map) continue;
-        chats.add(Chat.fromJson(Map<String, dynamic>.from(item as Map)));
+        chats.add(Chat.fromJson(Map<String, dynamic>.from(item)));
       }
 
       for (final chat in chats) {
@@ -138,18 +132,13 @@ class ChatService {
     }
 
     try {
-    final response = await _supabase
-      .from('profiles')
-      .select('id, username, full_name, email')
-          .filter(
-            'id',
-            'in',
-            _buildInFilterPayload(validIds),
-          );
+      final response = await _supabase
+          .from('profiles')
+          .select('id, username, full_name, email')
+          .filter('id', 'in', _buildInFilterPayload(validIds));
 
       final names = <String, String>{};
       for (final item in response) {
-        if (item is! Map) continue;
         final map = Map<String, dynamic>.from(item as Map);
         final id = map['id'] as String?;
         if (id == null) continue;
@@ -221,7 +210,6 @@ class ChatService {
           .limit(25);
 
       for (final item in response) {
-        if (item is! Map) continue;
         final map = Map<String, dynamic>.from(item as Map);
         final senderId = map['sender_id'] as String?;
         if (senderId != null && senderId != currentUserId) {
@@ -245,23 +233,26 @@ class ChatService {
         final messages = await _supabase
             .from('chat_messages')
             .select(
-                'sender_id, profiles!chat_messages_sender_id_fkey(full_name, email, username)')
+              'sender_id, profiles!chat_messages_sender_id_fkey(full_name, email, username)',
+            )
             .eq('chat_id', chatId)
             .order('created_at', ascending: false)
             .limit(10);
 
         for (final message in messages) {
-          if (message is! Map) continue;
           final map = Map<String, dynamic>.from(message as Map);
           final senderId = map['sender_id'] as String?;
           if (senderId == null ||
-              participants.any((participant) => participant.userId == senderId)) {
+              participants.any(
+                (participant) => participant.userId == senderId,
+              )) {
             continue;
           }
 
           final profile = map['profiles'];
-          final profileMap =
-              profile is Map ? Map<String, dynamic>.from(profile) : null;
+          final profileMap = profile is Map
+              ? Map<String, dynamic>.from(profile)
+              : null;
           final username = (profileMap?['username'] as String?)?.trim();
           final fullName = (profileMap?['full_name'] as String?)?.trim();
           final email = (profileMap?['email'] as String?)?.trim();
@@ -273,8 +264,8 @@ class ChatService {
               userName: username?.isNotEmpty == true
                   ? username
                   : (fullName?.isNotEmpty == true
-                      ? fullName
-                      : (email?.isNotEmpty == true ? email : null)),
+                        ? fullName
+                        : (email?.isNotEmpty == true ? email : null)),
               joinedAt: DateTime.now(),
             ),
           );
@@ -286,14 +277,16 @@ class ChatService {
     }
 
     final missingNameIds = participants
-        .where((participant) =>
-            participant.userName == null ||
-            participant.userName!.trim().isEmpty)
+        .where(
+          (participant) =>
+              participant.userName == null ||
+              participant.userName!.trim().isEmpty,
+        )
         .map((participant) => participant.userId)
         .toSet();
 
     if (missingNameIds.isNotEmpty) {
-          final fallbackNames = await _fetchProfileNames(missingNameIds);
+      final fallbackNames = await _fetchProfileNames(missingNameIds);
       for (final participant in participants) {
         final name = fallbackNames[participant.userId];
         if (name != null && name.isNotEmpty) {
@@ -338,8 +331,8 @@ class ChatService {
           .select('chat_id, chats(*)')
           .eq('user_id', currentUser.id);
 
-  final chats = <Chat>[];
-  final profileIds = <String>{};
+      final chats = <Chat>[];
+      final profileIds = <String>{};
       for (final row in response) {
         final chatData = row['chats'];
         if (chatData != null) {
@@ -354,8 +347,7 @@ class ChatService {
           chat.participants = List<ChatParticipant>.from(participants);
 
           for (final participant in chat.participants) {
-            if (participant.userName == null ||
-                participant.userName!.isEmpty) {
+            if (participant.userName == null || participant.userName!.isEmpty) {
               profileIds.add(participant.userId);
             }
           }
@@ -377,21 +369,27 @@ class ChatService {
               counterpartId = counterpartFromParticipants.userId;
               chat.otherParticipantName =
                   counterpartFromParticipants.userName ??
-                      chat.otherParticipantName;
+                  chat.otherParticipantName;
             }
 
-            counterpartId ??=
-                _parseOtherParticipantFromPairKey(chat.pairKey, currentUser.id);
+            counterpartId ??= _parseOtherParticipantFromPairKey(
+              chat.pairKey,
+              currentUser.id,
+            );
 
-            counterpartId ??=
-                await _findOtherParticipantFromMessages(chat.id, currentUser.id);
+            counterpartId ??= await _findOtherParticipantFromMessages(
+              chat.id,
+              currentUser.id,
+            );
 
             if (counterpartId != null) {
               chat.otherParticipantId = counterpartId;
               profileIds.add(counterpartId);
 
-              var participant =
-                  _findParticipantById(chat.participants, counterpartId);
+              var participant = _findParticipantById(
+                chat.participants,
+                counterpartId,
+              );
               if (participant == null) {
                 participant = ChatParticipant(
                   chatId: chat.id,
@@ -405,9 +403,10 @@ class ChatService {
                 chat.otherParticipantName ??= participant.userName;
               }
 
-              chat.otherParticipantName ??=
-                  _findParticipantById(chat.participants, counterpartId)
-                      ?.userName;
+              chat.otherParticipantName ??= _findParticipantById(
+                chat.participants,
+                counterpartId,
+              )?.userName;
             }
           }
 
@@ -441,8 +440,10 @@ class ChatService {
             final resolvedName = resolvedNames[counterpartId];
             if (resolvedName != null && resolvedName.isNotEmpty) {
               chat.otherParticipantName = resolvedName;
-              final participant =
-                  _findParticipantById(chat.participants, counterpartId);
+              final participant = _findParticipantById(
+                chat.participants,
+                counterpartId,
+              );
               if (participant != null) {
                 participant.userName = resolvedName;
               }
@@ -472,8 +473,10 @@ class ChatService {
   }
 
   // Create a new private chat between two users
-  Future<Chat?> createPrivateChat(String otherUserId,
-      {String? chatName}) async {
+  Future<Chat?> createPrivateChat(
+    String otherUserId, {
+    String? chatName,
+  }) async {
     final currentUser = _supabase.auth.currentUser;
     if (currentUser == null) return null;
 
@@ -508,7 +511,10 @@ class ChatService {
       ]);
 
       // Load participants with user names
-      final participants = await getChatParticipants(chat.id, forceRefresh: true);
+      final participants = await getChatParticipants(
+        chat.id,
+        forceRefresh: true,
+      );
       chat.participants = List<ChatParticipant>.from(participants);
 
       chat.otherParticipantId = otherUserId;
@@ -533,8 +539,7 @@ class ChatService {
         chat.createdByName = names[chat.createdBy!];
       }
 
-      final counterpart =
-          _findParticipantById(chat.participants, otherUserId);
+      final counterpart = _findParticipantById(chat.participants, otherUserId);
       final resolvedOtherName = names[otherUserId];
       if (counterpart != null) {
         counterpart.userName = resolvedOtherName ?? counterpart.userName;
@@ -579,8 +584,10 @@ class ChatService {
   }
 
   // Get messages for a chat
-  Future<List<ChatMessage>> getChatMessages(String chatId,
-      {int limit = 50}) async {
+  Future<List<ChatMessage>> getChatMessages(
+    String chatId, {
+    int limit = 50,
+  }) async {
     try {
       final response = await _supabase
           .from('chat_messages')
@@ -597,8 +604,11 @@ class ChatService {
   }
 
   // Send a message
-  Future<ChatMessage?> sendMessage(String chatId, String content,
-      {String contentType = 'text'}) async {
+  Future<ChatMessage?> sendMessage(
+    String chatId,
+    String content, {
+    String contentType = 'text',
+  }) async {
     final currentUser = _supabase.auth.currentUser;
     if (currentUser == null) return null;
 
@@ -702,16 +712,17 @@ class ChatService {
     }
 
     try {
-    final response = await _supabase
-        .from('chat_participants')
-        .select('*, profiles(username, full_name, email)')
-        .eq('chat_id', chatId);
+      final response = await _supabase
+          .from('chat_participants')
+          .select('*, profiles(username, full_name, email)')
+          .eq('chat_id', chatId);
 
       final participants = response.map((json) {
         final map = Map<String, dynamic>.from(json);
         final profile = map['profiles'];
-        final profileMap =
-            profile is Map ? Map<String, dynamic>.from(profile) : null;
+        final profileMap = profile is Map
+            ? Map<String, dynamic>.from(profile)
+            : null;
         final username = (profileMap?['username'] as String?)?.trim();
         final fullName = (profileMap?['full_name'] as String?)?.trim();
         final email = (profileMap?['email'] as String?)?.trim();
@@ -795,13 +806,17 @@ class ChatService {
         final messageIds = unreadMessages.map((msg) => msg['id']).toList();
 
         // Mark as read (upsert to avoid duplicates)
-        await _supabase.from('chat_message_reads').upsert(
+        await _supabase
+            .from('chat_message_reads')
+            .upsert(
               messageIds
-                  .map((messageId) => {
-                        'message_id': messageId,
-                        'user_id': currentUser.id,
-                        'read_at': DateTime.now().toIso8601String(),
-                      })
+                  .map(
+                    (messageId) => {
+                      'message_id': messageId,
+                      'user_id': currentUser.id,
+                      'read_at': DateTime.now().toIso8601String(),
+                    },
+                  )
                   .toList(),
               onConflict: 'message_id,user_id',
             );
@@ -820,8 +835,9 @@ class ChatService {
           .select('id')
           .eq('chat_id', chatId);
 
-      final messageIds =
-          (messages as List).map((msg) => msg['id'] as String).toList();
+      final messageIds = (messages as List)
+          .map((msg) => msg['id'] as String)
+          .toList();
 
       // Delete message reads if there are any messages
       if (messageIds.isNotEmpty) {

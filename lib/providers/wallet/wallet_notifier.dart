@@ -1,4 +1,6 @@
 /// Enhanced wallet provider with memoized filtering and all TSX functionality
+library;
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../models/wallet_models.dart';
@@ -84,10 +86,7 @@ class WalletNotifier extends AsyncNotifier<WalletState> {
   /// Get balance for specific currency
   double getBalance(String currency) {
     if (state.asData?.value.wallet == null) return 0.0;
-    return _service.getBalance(
-      state.asData!.value.wallet!,
-      currency: currency,
-    );
+    return _service.getBalance(state.asData!.value.wallet!, currency: currency);
   }
 
   /// Create withdrawal request
@@ -190,126 +189,145 @@ class WalletState {
 // Providers
 final walletServiceProvider = Provider((ref) => WalletService());
 
-final walletNotifierProvider = AsyncNotifierProvider<WalletNotifier, WalletState>(
-  () => WalletNotifier(),
-);
+final walletNotifierProvider =
+    AsyncNotifierProvider<WalletNotifier, WalletState>(() => WalletNotifier());
 
 /// Filter state for transaction search
 final transactionSearchFiltersProvider =
-    StateProvider<TransactionSearchFilters>((ref) => TransactionSearchFilters());
+    StateProvider<TransactionSearchFilters>(
+      (ref) => TransactionSearchFilters(),
+    );
 
 /// Quick filter states
 final transactionTypeFilterProvider = StateProvider<String>((ref) => 'all');
 final dateRangeFilterProvider = StateProvider<String>((ref) => 'all');
-final withdrawalStatusFilterProvider =
-    StateProvider<String>((ref) => WITHDRAWAL_STATUS_PENDING);
+final withdrawalStatusFilterProvider = StateProvider<String>(
+  (ref) => WITHDRAWAL_STATUS_PENDING,
+);
 
 /// Filtered transactions with memoization matching TSX logic
-final filteredTransactionsProvider =
-    Provider<List<WalletTransaction>>((ref) {
+final filteredTransactionsProvider = Provider<List<WalletTransaction>>((ref) {
   final state = ref.watch(walletNotifierProvider);
   final searchFilters = ref.watch(transactionSearchFiltersProvider);
   final transactionTypeFilter = ref.watch(transactionTypeFilterProvider);
   final dateRangeFilter = ref.watch(dateRangeFilterProvider);
 
   return state.whenData((walletState) {
-    var filtered = List<WalletTransaction>.from(walletState.transactions);
+        var filtered = List<WalletTransaction>.from(walletState.transactions);
 
-    // Apply advanced search filters
-    if (searchFilters.searchTerm != null && searchFilters.searchTerm!.isNotEmpty) {
-      final term = searchFilters.searchTerm!.toLowerCase();
-      filtered = filtered.where((t) {
-        return (t.description?.toLowerCase().contains(term) ?? false) ||
-            t.id.toLowerCase().contains(term) ||
-            (t.siteVisitId?.toLowerCase().contains(term) ?? false);
-      }).toList();
-    }
+        // Apply advanced search filters
+        if (searchFilters.searchTerm != null &&
+            searchFilters.searchTerm!.isNotEmpty) {
+          final term = searchFilters.searchTerm!.toLowerCase();
+          filtered = filtered.where((t) {
+            return (t.description?.toLowerCase().contains(term) ?? false) ||
+                t.id.toLowerCase().contains(term) ||
+                (t.siteVisitId?.toLowerCase().contains(term) ?? false);
+          }).toList();
+        }
 
-    if (searchFilters.type != null) {
-      filtered = filtered.where((t) => t.type == searchFilters.type).toList();
-    }
+        if (searchFilters.type != null) {
+          filtered = filtered
+              .where((t) => t.type == searchFilters.type)
+              .toList();
+        }
 
-    if (searchFilters.minAmount != null) {
-      filtered = filtered
-          .where((t) => t.amount.abs() >= searchFilters.minAmount!)
-          .toList();
-    }
+        if (searchFilters.minAmount != null) {
+          filtered = filtered
+              .where((t) => t.amount.abs() >= searchFilters.minAmount!)
+              .toList();
+        }
 
-    if (searchFilters.maxAmount != null) {
-      filtered = filtered
-          .where((t) => t.amount.abs() <= searchFilters.maxAmount!)
-          .toList();
-    }
+        if (searchFilters.maxAmount != null) {
+          filtered = filtered
+              .where((t) => t.amount.abs() <= searchFilters.maxAmount!)
+              .toList();
+        }
 
-    if (searchFilters.startDate != null) {
-      final startDate = searchFilters.startDate!;
-      filtered =
-          filtered.where((t) => t.createdAt.isAfter(startDate)).toList();
-    }
+        if (searchFilters.startDate != null) {
+          final startDate = searchFilters.startDate!;
+          filtered = filtered
+              .where((t) => t.createdAt.isAfter(startDate))
+              .toList();
+        }
 
-    if (searchFilters.endDate != null) {
-      final endDate = searchFilters.endDate!;
-      final endDateTime = DateTime(
-        endDate.year,
-        endDate.month,
-        endDate.day,
-        23,
-        59,
-        59,
-        999,
-      );
-      filtered =
-          filtered.where((t) => t.createdAt.isBefore(endDateTime)).toList();
-    }
+        if (searchFilters.endDate != null) {
+          final endDate = searchFilters.endDate!;
+          final endDateTime = DateTime(
+            endDate.year,
+            endDate.month,
+            endDate.day,
+            23,
+            59,
+            59,
+            999,
+          );
+          filtered = filtered
+              .where((t) => t.createdAt.isBefore(endDateTime))
+              .toList();
+        }
 
-    // Legacy quick filters
-    if (transactionTypeFilter != 'all' && searchFilters.type == null) {
-      if (transactionTypeFilter == TRANSACTION_TYPE_EARNING) {
-        filtered = filtered
-            .where((t) =>
-                t.type == TRANSACTION_TYPE_EARNING ||
-                t.type == TRANSACTION_TYPE_SITE_VISIT_FEE)
-            .toList();
-      } else {
-        filtered =
-            filtered.where((t) => t.type == transactionTypeFilter).toList();
-      }
-    }
+        // Legacy quick filters
+        if (transactionTypeFilter != 'all' && searchFilters.type == null) {
+          if (transactionTypeFilter == TRANSACTION_TYPE_EARNING) {
+            filtered = filtered
+                .where(
+                  (t) =>
+                      t.type == TRANSACTION_TYPE_EARNING ||
+                      t.type == TRANSACTION_TYPE_SITE_VISIT_FEE,
+                )
+                .toList();
+          } else {
+            filtered = filtered
+                .where((t) => t.type == transactionTypeFilter)
+                .toList();
+          }
+        }
 
-    if (dateRangeFilter != 'all' &&
-        searchFilters.startDate == null &&
-        searchFilters.endDate == null) {
-      final now = DateTime.now();
-      late DateTime startDate;
-      late DateTime endDate;
+        if (dateRangeFilter != 'all' &&
+            searchFilters.startDate == null &&
+            searchFilters.endDate == null) {
+          final now = DateTime.now();
+          late DateTime startDate;
+          late DateTime endDate;
 
-      switch (dateRangeFilter) {
-        case DATE_FILTER_THIS_MONTH:
-          startDate = DateTime(now.year, now.month, 1);
-          endDate = DateTime(now.year, now.month + 1, 0, 23, 59, 59, 999);
-          break;
-        case DATE_FILTER_LAST_MONTH:
-          final lastMonth = DateTime(now.year, now.month - 1);
-          startDate = DateTime(lastMonth.year, lastMonth.month, 1);
-          endDate =
-              DateTime(lastMonth.year, lastMonth.month + 1, 0, 23, 59, 59, 999);
-          break;
-        case DATE_FILTER_LAST_3_MONTHS:
-          startDate = now.subtract(const Duration(days: 90));
-          endDate = now;
-          break;
-        default:
-          return filtered;
-      }
+          switch (dateRangeFilter) {
+            case DATE_FILTER_THIS_MONTH:
+              startDate = DateTime(now.year, now.month, 1);
+              endDate = DateTime(now.year, now.month + 1, 0, 23, 59, 59, 999);
+              break;
+            case DATE_FILTER_LAST_MONTH:
+              final lastMonth = DateTime(now.year, now.month - 1);
+              startDate = DateTime(lastMonth.year, lastMonth.month, 1);
+              endDate = DateTime(
+                lastMonth.year,
+                lastMonth.month + 1,
+                0,
+                23,
+                59,
+                59,
+                999,
+              );
+              break;
+            case DATE_FILTER_LAST_3_MONTHS:
+              startDate = now.subtract(const Duration(days: 90));
+              endDate = now;
+              break;
+            default:
+              return filtered;
+          }
 
-      filtered = filtered
-          .where((t) =>
-              t.createdAt.isAfter(startDate) && t.createdAt.isBefore(endDate))
-          .toList();
-    }
+          filtered = filtered
+              .where(
+                (t) =>
+                    t.createdAt.isAfter(startDate) &&
+                    t.createdAt.isBefore(endDate),
+              )
+              .toList();
+        }
 
-    return filtered;
-  }).value ??
+        return filtered;
+      }).value ??
       [];
 });
 
@@ -318,25 +336,29 @@ final earningsByMonthProvider = Provider<List<MapEntry<String, double>>>((ref) {
   final state = ref.watch(walletNotifierProvider);
 
   return state.whenData((walletState) {
-    final monthlyData = <String, double>{};
+        final monthlyData = <String, double>{};
 
-    walletState.transactions
-        .where((t) =>
-            t.type == TRANSACTION_TYPE_EARNING ||
-            t.type == TRANSACTION_TYPE_SITE_VISIT_FEE)
-        .forEach((t) {
-      final month = DateFormat('MMM yyyy').format(t.createdAt);
-      monthlyData[month] = (monthlyData[month] ?? 0) + t.amount;
-    });
+        walletState.transactions
+            .where(
+              (t) =>
+                  t.type == TRANSACTION_TYPE_EARNING ||
+                  t.type == TRANSACTION_TYPE_SITE_VISIT_FEE,
+            )
+            .forEach((t) {
+              final month = DateFormat('MMM yyyy').format(t.createdAt);
+              monthlyData[month] = (monthlyData[month] ?? 0) + t.amount;
+            });
 
-    final sorted = monthlyData.entries.toList()
-      ..sort((a, b) => _parseMonthYear(a.key).compareTo(_parseMonthYear(b.key)));
+        final sorted = monthlyData.entries.toList()
+          ..sort(
+            (a, b) => _parseMonthYear(a.key).compareTo(_parseMonthYear(b.key)),
+          );
 
-    // Return last 6 months
-    return sorted.length > EARNINGS_MONTHS_LIMIT
-        ? sorted.sublist(sorted.length - EARNINGS_MONTHS_LIMIT)
-        : sorted;
-  }).value ??
+        // Return last 6 months
+        return sorted.length > EARNINGS_MONTHS_LIMIT
+            ? sorted.sublist(sorted.length - EARNINGS_MONTHS_LIMIT)
+            : sorted;
+      }).value ??
       [];
 });
 
@@ -345,14 +367,16 @@ final siteVisitEarningsProvider = Provider<List<WalletTransaction>>((ref) {
   final state = ref.watch(walletNotifierProvider);
 
   return state.whenData((walletState) {
-    return walletState.transactions
-        .where((t) =>
-            (t.type == TRANSACTION_TYPE_EARNING ||
-                t.type == TRANSACTION_TYPE_SITE_VISIT_FEE) &&
-            t.siteVisitId != null)
-        .take(SITE_VISIT_EARNINGS_LIMIT)
-        .toList();
-  }).value ??
+        return walletState.transactions
+            .where(
+              (t) =>
+                  (t.type == TRANSACTION_TYPE_EARNING ||
+                      t.type == TRANSACTION_TYPE_SITE_VISIT_FEE) &&
+                  t.siteVisitId != null,
+            )
+            .take(SITE_VISIT_EARNINGS_LIMIT)
+            .toList();
+      }).value ??
       [];
 });
 
@@ -361,10 +385,10 @@ final pendingWithdrawalsProvider = Provider<List<WithdrawalRequest>>((ref) {
   final state = ref.watch(walletNotifierProvider);
 
   return state.whenData((walletState) {
-    return walletState.withdrawalRequests
-        .where((r) => r.status == WITHDRAWAL_STATUS_PENDING)
-        .toList();
-  }).value ??
+        return walletState.withdrawalRequests
+            .where((r) => r.status == WITHDRAWAL_STATUS_PENDING)
+            .toList();
+      }).value ??
       [];
 });
 
@@ -373,10 +397,10 @@ final completedWithdrawalsProvider = Provider<List<WithdrawalRequest>>((ref) {
   final state = ref.watch(walletNotifierProvider);
 
   return state.whenData((walletState) {
-    return walletState.withdrawalRequests
-        .where((r) => r.status == WITHDRAWAL_STATUS_APPROVED)
-        .toList();
-  }).value ??
+        return walletState.withdrawalRequests
+            .where((r) => r.status == WITHDRAWAL_STATUS_APPROVED)
+            .toList();
+      }).value ??
       [];
 });
 
@@ -385,10 +409,10 @@ final rejectedWithdrawalsProvider = Provider<List<WithdrawalRequest>>((ref) {
   final state = ref.watch(walletNotifierProvider);
 
   return state.whenData((walletState) {
-    return walletState.withdrawalRequests
-        .where((r) => r.status == WITHDRAWAL_STATUS_REJECTED)
-        .toList();
-  }).value ??
+        return walletState.withdrawalRequests
+            .where((r) => r.status == WITHDRAWAL_STATUS_REJECTED)
+            .toList();
+      }).value ??
       [];
 });
 
@@ -408,7 +432,9 @@ final displayWithdrawalsProvider = Provider<List<WithdrawalRequest>>((ref) {
     case WITHDRAWAL_STATUS_REJECTED:
       return rejected;
     default:
-      return allWithdrawals.whenData((state) => state.withdrawalRequests).value ??
+      return allWithdrawals
+              .whenData((state) => state.withdrawalRequests)
+              .value ??
           [];
   }
 });
@@ -418,12 +444,12 @@ final withdrawalSuccessRateProvider = Provider<double>((ref) {
   final state = ref.watch(walletNotifierProvider);
 
   return state.whenData((walletState) {
-    if (walletState.withdrawalRequests.isEmpty) return 0.0;
-    final completed = walletState.withdrawalRequests
-        .where((r) => r.status == WITHDRAWAL_STATUS_APPROVED)
-        .length;
-    return (completed / walletState.withdrawalRequests.length) * 100;
-  }).value ??
+        if (walletState.withdrawalRequests.isEmpty) return 0.0;
+        final completed = walletState.withdrawalRequests
+            .where((r) => r.status == WITHDRAWAL_STATUS_APPROVED)
+            .length;
+        return (completed / walletState.withdrawalRequests.length) * 100;
+      }).value ??
       0.0;
 });
 

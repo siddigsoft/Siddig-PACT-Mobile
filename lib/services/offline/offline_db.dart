@@ -1,5 +1,4 @@
 import 'package:hive/hive.dart';
-import 'package:uuid/uuid.dart';
 import 'models.dart';
 
 /// Offline database service using Hive for local storage.
@@ -93,7 +92,10 @@ class OfflineDb {
     await _pendingSync.put(action.id, action);
   }
 
-  List<PendingSyncAction> getPendingSyncActions({String? type, String? status}) {
+  List<PendingSyncAction> getPendingSyncActions({
+    String? type,
+    String? status,
+  }) {
     var actions = _pendingSync.values.toList();
     if (type != null) {
       actions = actions.where((a) => a.type == type).toList();
@@ -159,9 +161,9 @@ class OfflineDb {
 
   /// Get unsynced site visits that are ready to sync (excludes drafts)
   List<OfflineSiteVisit> getUnsyncedSiteVisits() {
-    return _siteVisits.values.where(
-      (v) => !v.synced && v.status != 'draft'
-    ).toList();
+    return _siteVisits.values
+        .where((v) => !v.synced && v.status != 'draft')
+        .toList();
   }
 
   List<OfflineSiteVisit> getAllSiteVisits() {
@@ -186,12 +188,13 @@ class OfflineDb {
 
   /// Get completed but unsynced visits (ready to sync when online)
   List<OfflineSiteVisit> getCompletedUnsyncedVisits() {
-    return _siteVisits.values.where(
-      (v) => v.status == 'completed' && !v.synced
-    ).toList();
+    return _siteVisits.values
+        .where((v) => v.status == 'completed' && !v.synced)
+        .toList();
   }
 
-  Future<void> updateSiteVisitOffline(String id, {
+  Future<void> updateSiteVisitOffline(
+    String id, {
     required String status,
     DateTime? completedAt,
     Map<String, dynamic>? endLocation,
@@ -253,7 +256,10 @@ class OfflineDb {
     return locations.isNotEmpty ? locations.first : null;
   }
 
-  Future<void> markLocationsSynced(List<String> ids, {DateTime? syncedAt}) async {
+  Future<void> markLocationsSynced(
+    List<String> ids, {
+    DateTime? syncedAt,
+  }) async {
     for (final id in ids) {
       final location = _locations.get(id);
       if (location != null) {
@@ -268,8 +274,12 @@ class OfflineDb {
   }
 
   Future<void> clearOldLocations({int daysOld = 30}) async {
-    final cutoffTime = DateTime.now().subtract(Duration(days: daysOld)).millisecondsSinceEpoch;
-    final oldLocations = _locations.values.where((l) => l.timestamp < cutoffTime).toList();
+    final cutoffTime = DateTime.now()
+        .subtract(Duration(days: daysOld))
+        .millisecondsSinceEpoch;
+    final oldLocations = _locations.values
+        .where((l) => l.timestamp < cutoffTime)
+        .toList();
     for (final loc in oldLocations) {
       await loc.delete();
     }
@@ -330,7 +340,9 @@ class OfflineDb {
     String? version,
   }) async {
     final box = _getCache(boxName);
-    final expiresAt = ttl != null ? DateTime.now().add(ttl).millisecondsSinceEpoch : null;
+    final expiresAt = ttl != null
+        ? DateTime.now().add(ttl).millisecondsSinceEpoch
+        : null;
     final item = CachedItem(
       key: key,
       data: data,

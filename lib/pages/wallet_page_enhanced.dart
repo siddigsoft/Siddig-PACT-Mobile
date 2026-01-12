@@ -1,4 +1,6 @@
 /// Enhanced Wallet Page matching the React TSX implementation
+library;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -15,7 +17,7 @@ import '../models/down_payment_request.dart';
 import '../widgets/down_payment_request_dialog.dart';
 
 class WalletPageEnhanced extends ConsumerStatefulWidget {
-  const WalletPageEnhanced({Key? key}) : super(key: key);
+  const WalletPageEnhanced({super.key});
 
   @override
   ConsumerState<WalletPageEnhanced> createState() => _WalletPageEnhancedState();
@@ -61,7 +63,7 @@ class _WalletPageEnhancedState extends ConsumerState<WalletPageEnhanced>
                   controller: _withdrawalAmountController,
                   keyboardType: TextInputType.number,
                   decoration: InputDecoration(
-                    labelText: 'Amount (${DEFAULT_CURRENCY})',
+                    labelText: 'Amount ($DEFAULT_CURRENCY)',
                     hintText: 'Enter amount',
                     border: const OutlineInputBorder(),
                     helperText:
@@ -78,8 +80,7 @@ class _WalletPageEnhancedState extends ConsumerState<WalletPageEnhanced>
                   maxLines: 3,
                   decoration: InputDecoration(
                     labelText: 'Reason',
-                    hintText:
-                        'Transportation costs, accommodation, etc.',
+                    hintText: 'Transportation costs, accommodation, etc.',
                     border: const OutlineInputBorder(),
                   ),
                 ),
@@ -87,7 +88,8 @@ class _WalletPageEnhancedState extends ConsumerState<WalletPageEnhanced>
 
                 // Payment method field
                 TextField(
-                  onChanged: (value) => setState(() => _selectedPaymentMethod = value),
+                  onChanged: (value) =>
+                      setState(() => _selectedPaymentMethod = value),
                   decoration: InputDecoration(
                     labelText: 'Payment Method (Optional)',
                     hintText: 'Bank transfer, Mobile money, etc.',
@@ -150,7 +152,9 @@ class _WalletPageEnhancedState extends ConsumerState<WalletPageEnhanced>
 
     final amount = double.parse(_withdrawalAmountController.text);
     try {
-      await ref.read(walletNotifierProvider.notifier).createWithdrawalRequest(
+      await ref
+          .read(walletNotifierProvider.notifier)
+          .createWithdrawalRequest(
             amount,
             _withdrawalReasonController.text,
             _selectedPaymentMethod ?? '',
@@ -163,9 +167,9 @@ class _WalletPageEnhancedState extends ConsumerState<WalletPageEnhanced>
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     }
   }
@@ -185,23 +189,17 @@ class _WalletPageEnhancedState extends ConsumerState<WalletPageEnhanced>
     return walletState.when(
       loading: () => Scaffold(
         appBar: AppBar(title: const Text('Wallet')),
-        body: const Center(
-          child: CircularProgressIndicator(),
-        ),
+        body: const Center(child: CircularProgressIndicator()),
       ),
       error: (error, stack) => Scaffold(
         appBar: AppBar(title: const Text('Wallet')),
-        body: Center(
-          child: Text('Error: $error'),
-        ),
+        body: Center(child: Text('Error: $error')),
       ),
       data: (state) {
         if (state.wallet == null) {
           return Scaffold(
             appBar: AppBar(title: const Text('Wallet')),
-            body: const Center(
-              child: Text('Wallet not found'),
-            ),
+            body: const Center(child: Text('Wallet not found')),
           );
         }
 
@@ -255,9 +253,8 @@ class _WalletPageEnhancedState extends ConsumerState<WalletPageEnhanced>
                 // Transaction Search
                 TransactionSearchWidget(
                   onSearch: (filters) {
-                    ref
-                        .read(transactionSearchFiltersProvider.notifier)
-                        .state = filters;
+                    ref.read(transactionSearchFiltersProvider.notifier).state =
+                        filters;
                   },
                   onClear: () {
                     ref.read(transactionSearchFiltersProvider.notifier).state =
@@ -288,8 +285,11 @@ class _WalletPageEnhancedState extends ConsumerState<WalletPageEnhanced>
     );
   }
 
-  Widget _buildHeroCard(Wallet wallet, double currentBalance,
-      List<WalletTransaction> filteredTransactions) {
+  Widget _buildHeroCard(
+    Wallet wallet,
+    double currentBalance,
+    List<WalletTransaction> filteredTransactions,
+  ) {
     return Container(
       margin: const EdgeInsets.all(16),
       padding: const EdgeInsets.all(24),
@@ -319,10 +319,7 @@ class _WalletPageEnhancedState extends ConsumerState<WalletPageEnhanced>
                 children: [
                   const Text(
                     'My Wallet',
-                    style: TextStyle(
-                      color: Colors.white70,
-                      fontSize: 16,
-                    ),
+                    style: TextStyle(color: Colors.white70, fontSize: 16),
                   ),
                   const SizedBox(height: 8),
                   Text(
@@ -336,10 +333,7 @@ class _WalletPageEnhancedState extends ConsumerState<WalletPageEnhanced>
                   const SizedBox(height: 4),
                   const Text(
                     'Available for withdrawal',
-                    style: TextStyle(
-                      color: Colors.white60,
-                      fontSize: 12,
-                    ),
+                    style: TextStyle(color: Colors.white60, fontSize: 12),
                   ),
                 ],
               ),
@@ -349,11 +343,7 @@ class _WalletPageEnhancedState extends ConsumerState<WalletPageEnhanced>
                   color: Colors.white.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Icon(
-                  Icons.wallet,
-                  color: Colors.white,
-                  size: 32,
-                ),
+                child: const Icon(Icons.wallet, color: Colors.white, size: 32),
               ),
             ],
           ),
@@ -377,8 +367,7 @@ class _WalletPageEnhancedState extends ConsumerState<WalletPageEnhanced>
   }
 
   Widget _buildPendingWithdrawalsAlert(List<WithdrawalRequest> pending) {
-    final totalPending =
-        pending.fold<double>(0, (sum, r) => sum + r.amount);
+    final totalPending = pending.fold<double>(0, (sum, r) => sum + r.amount);
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
       padding: const EdgeInsets.all(16),
@@ -445,10 +434,7 @@ class _WalletPageEnhancedState extends ConsumerState<WalletPageEnhanced>
           ),
           _buildStatCard(
             'Total Withdrawn',
-            formatCurrency(
-              state.stats?.totalWithdrawn ?? 0,
-              DEFAULT_CURRENCY,
-            ),
+            formatCurrency(state.stats?.totalWithdrawn ?? 0, DEFAULT_CURRENCY),
             Icons.trending_down,
             Colors.purple,
           ),
@@ -486,10 +472,7 @@ class _WalletPageEnhancedState extends ConsumerState<WalletPageEnhanced>
             const Spacer(),
             Text(
               value,
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
           ],
         ),
@@ -531,7 +514,10 @@ class _WalletPageEnhancedState extends ConsumerState<WalletPageEnhanced>
                       ),
                       Text(
                         '${completedWithdrawals.length} approved, ${rejectedWithdrawals.length} rejected',
-                        style: const TextStyle(fontSize: 12, color: Colors.grey),
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey,
+                        ),
                       ),
                     ],
                   ),
@@ -553,11 +539,7 @@ class _WalletPageEnhancedState extends ConsumerState<WalletPageEnhanced>
               padding: const EdgeInsets.all(16),
               child: Row(
                 children: [
-                  Icon(
-                    Icons.check_circle,
-                    color: Colors.green,
-                    size: 32,
-                  ),
+                  Icon(Icons.check_circle, color: Colors.green, size: 32),
                   const SizedBox(width: 16),
                   Expanded(
                     child: Column(
@@ -623,11 +605,7 @@ class _WalletPageEnhancedState extends ConsumerState<WalletPageEnhanced>
             child: TabBarView(
               controller: _tabController,
               children: [
-                _buildOverviewTab(
-                  state,
-                  earningsByMonth,
-                  siteVisitEarnings,
-                ),
+                _buildOverviewTab(state, earningsByMonth, siteVisitEarnings),
                 _buildTransactionsTab(filteredTransactions),
                 _buildWithdrawalsTab(
                   displayWithdrawals,
@@ -682,44 +660,45 @@ class _WalletPageEnhancedState extends ConsumerState<WalletPageEnhanced>
                 child: Text('No transactions yet'),
               )
             else
-              ...transactions
-                  .map((t) => Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                t.typeLabel,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                ),
+              ...transactions.map(
+                (t) => Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              t.typeLabel,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
                               ),
-                              Text(
-                                DateFormat('MMM dd, yyyy HH:mm')
-                                    .format(t.createdAt),
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey,
-                                ),
+                            ),
+                            Text(
+                              DateFormat(
+                                'MMM dd, yyyy HH:mm',
+                              ).format(t.createdAt),
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey,
                               ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
-                        Text(
-                          '${t.amount >= 0 ? '+' : ''}${formatCurrency(t.amount, t.currency)}',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: t.amount >= 0 ? Colors.green : Colors.red,
-                          ),
+                      ),
+                      Text(
+                        '${t.amount >= 0 ? '+' : ''}${formatCurrency(t.amount, t.currency)}',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: t.amount >= 0 ? Colors.green : Colors.red,
                         ),
-                      ],
-                    ),
-                  ))
-                  .toList(),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
           ],
         ),
       ),
@@ -727,7 +706,8 @@ class _WalletPageEnhancedState extends ConsumerState<WalletPageEnhanced>
   }
 
   Widget _buildMonthlyEarningsCard(
-      List<MapEntry<String, double>> earningsByMonth) {
+    List<MapEntry<String, double>> earningsByMonth,
+  ) {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -745,40 +725,38 @@ class _WalletPageEnhancedState extends ConsumerState<WalletPageEnhanced>
                 child: Text('No earnings data yet'),
               )
             else
-              ...earningsByMonth
-                  .map((entry) {
-                    final maxAmount = earningsByMonth
-                        .map((e) => e.value)
-                        .reduce((a, b) => a > b ? a : b);
-                    final percentage = (entry.value / maxAmount) * 100;
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+              ...earningsByMonth.map((entry) {
+                final maxAmount = earningsByMonth
+                    .map((e) => e.value)
+                    .reduce((a, b) => a > b ? a : b);
+                final percentage = (entry.value / maxAmount) * 100;
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(entry.key),
-                              Text(
-                                formatCurrency(entry.value, DEFAULT_CURRENCY),
-                                style: const TextStyle(fontWeight: FontWeight.bold),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 4),
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(4),
-                            child: LinearProgressIndicator(
-                              value: percentage / 100,
-                              minHeight: 6,
-                            ),
+                          Text(entry.key),
+                          Text(
+                            formatCurrency(entry.value, DEFAULT_CURRENCY),
+                            style: const TextStyle(fontWeight: FontWeight.bold),
                           ),
                         ],
                       ),
-                    );
-                  })
-                  .toList(),
+                      const SizedBox(height: 4),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(4),
+                        child: LinearProgressIndicator(
+                          value: percentage / 100,
+                          minHeight: 6,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }),
           ],
         ),
       ),
@@ -804,9 +782,7 @@ class _WalletPageEnhancedState extends ConsumerState<WalletPageEnhanced>
                   child: Center(child: Text('No transactions found')),
                 )
               else
-                ...filteredTransactions
-                    .map((t) => _buildTransactionRow(t))
-                    .toList(),
+                ...filteredTransactions.map((t) => _buildTransactionRow(t)),
             ],
           ),
         ),
@@ -825,10 +801,7 @@ class _WalletPageEnhancedState extends ConsumerState<WalletPageEnhanced>
               color: Colors.grey[200],
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Icon(
-              _getTransactionIcon(t.type),
-              size: 16,
-            ),
+            child: Icon(_getTransactionIcon(t.type), size: 16),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -933,9 +906,7 @@ class _WalletPageEnhancedState extends ConsumerState<WalletPageEnhanced>
                   child: Center(child: Text('No withdrawal requests found')),
                 )
               else
-                ...displayWithdrawals
-                    .map((r) => _buildWithdrawalRow(r))
-                    .toList(),
+                ...displayWithdrawals.map((r) => _buildWithdrawalRow(r)),
             ],
           ),
         ),
@@ -950,10 +921,7 @@ class _WalletPageEnhancedState extends ConsumerState<WalletPageEnhanced>
         const SizedBox(height: 4),
         Text(
           count.toString(),
-          style: const TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 18,
-          ),
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
         ),
       ],
     );
@@ -996,7 +964,10 @@ class _WalletPageEnhancedState extends ConsumerState<WalletPageEnhanced>
                       padding: const EdgeInsets.only(top: 4),
                       child: Text(
                         r.requestReason!,
-                        style: const TextStyle(fontSize: 11, color: Colors.grey),
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: Colors.grey,
+                        ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -1041,9 +1012,9 @@ class _WalletPageEnhancedState extends ConsumerState<WalletPageEnhanced>
                       }
                     } catch (e) {
                       if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Error: $e')),
-                        );
+                        ScaffoldMessenger.of(
+                          context,
+                        ).showSnackBar(SnackBar(content: Text('Error: $e')));
                       }
                     }
                   }
@@ -1087,9 +1058,7 @@ class _WalletPageEnhancedState extends ConsumerState<WalletPageEnhanced>
                   child: Center(child: Text('No site visit earnings yet')),
                 )
               else
-                ...siteVisitEarnings
-                    .map((t) => _buildTransactionRow(t))
-                    .toList(),
+                ...siteVisitEarnings.map((t) => _buildTransactionRow(t)),
             ],
           ),
         ),
@@ -1162,7 +1131,9 @@ class _WalletPageEnhancedState extends ConsumerState<WalletPageEnhanced>
         }
 
         final downPaymentState = ref.watch(downPaymentProvider(userId));
-        final downPaymentStream = ref.watch(userDownPaymentStreamProvider(userId));
+        final downPaymentStream = ref.watch(
+          userDownPaymentStreamProvider(userId),
+        );
 
         return SingleChildScrollView(
           padding: const EdgeInsets.all(16),
@@ -1177,7 +1148,8 @@ class _WalletPageEnhancedState extends ConsumerState<WalletPageEnhanced>
                     style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                   ),
                   ElevatedButton.icon(
-                    onPressed: () => _showCreateDownPaymentDialog(context, ref, userId),
+                    onPressed: () =>
+                        _showCreateDownPaymentDialog(context, ref, userId),
                     icon: const Icon(Icons.add),
                     label: const Text('Request Advance'),
                   ),
@@ -1196,9 +1168,15 @@ class _WalletPageEnhancedState extends ConsumerState<WalletPageEnhanced>
 
               // Requests list
               downPaymentStream.when(
-                data: (requests) => _buildDownPaymentRequestsList(requests, context, ref, userId),
+                data: (requests) => _buildDownPaymentRequestsList(
+                  requests,
+                  context,
+                  ref,
+                  userId,
+                ),
                 loading: () => const Center(child: CircularProgressIndicator()),
-                error: (error, stack) => Center(child: Text('Error loading requests: $error')),
+                error: (error, stack) =>
+                    Center(child: Text('Error loading requests: $error')),
               ),
             ],
           ),
@@ -1208,7 +1186,12 @@ class _WalletPageEnhancedState extends ConsumerState<WalletPageEnhanced>
   }
 
   Widget _buildDownPaymentSummary(List<DownPaymentRequest> requests) {
-    final pending = requests.where((r) => r.status == 'pending_supervisor' || r.status == 'pending_admin').length;
+    final pending = requests
+        .where(
+          (r) =>
+              r.status == 'pending_supervisor' || r.status == 'pending_admin',
+        )
+        .length;
     final approved = requests.where((r) => r.status == 'approved').length;
     final rejected = requests.where((r) => r.status == 'rejected').length;
     final paid = requests.where((r) => r.status == 'fully_paid').length;
@@ -1227,7 +1210,11 @@ class _WalletPageEnhancedState extends ConsumerState<WalletPageEnhanced>
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
                 _buildSummaryItem('Pending', pending.toString(), Colors.orange),
-                _buildSummaryItem('Approved', approved.toString(), Colors.green),
+                _buildSummaryItem(
+                  'Approved',
+                  approved.toString(),
+                  Colors.green,
+                ),
                 _buildSummaryItem('Rejected', rejected.toString(), Colors.red),
                 _buildSummaryItem('Paid', paid.toString(), Colors.blue),
               ],
@@ -1249,10 +1236,7 @@ class _WalletPageEnhancedState extends ConsumerState<WalletPageEnhanced>
             color: color,
           ),
         ),
-        Text(
-          label,
-          style: TextStyle(fontSize: 12, color: color),
-        ),
+        Text(label, style: TextStyle(fontSize: 12, color: color)),
       ],
     );
   }
@@ -1328,10 +1312,17 @@ class _WalletPageEnhancedState extends ConsumerState<WalletPageEnhanced>
                           request.status == 'pending_admin' ||
                           request.status == 'approved')
                         TextButton.icon(
-                          onPressed: () => _cancelDownPaymentRequest(context, ref, request.id, userId),
+                          onPressed: () => _cancelDownPaymentRequest(
+                            context,
+                            ref,
+                            request.id,
+                            userId,
+                          ),
                           icon: const Icon(Icons.cancel, size: 16),
                           label: const Text('Cancel'),
-                          style: TextButton.styleFrom(foregroundColor: Colors.red),
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.red,
+                          ),
                         ),
                     ],
                   ),
@@ -1413,7 +1404,9 @@ class _WalletPageEnhancedState extends ConsumerState<WalletPageEnhanced>
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Cancel Request'),
-        content: const Text('Are you sure you want to cancel this down payment request?'),
+        content: const Text(
+          'Are you sure you want to cancel this down payment request?',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -1429,7 +1422,9 @@ class _WalletPageEnhancedState extends ConsumerState<WalletPageEnhanced>
 
     if (confirmed == true) {
       try {
-        await ref.read(downPaymentProvider(userId).notifier).cancelRequest(requestId);
+        await ref
+            .read(downPaymentProvider(userId).notifier)
+            .cancelRequest(requestId);
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Request cancelled successfully')),

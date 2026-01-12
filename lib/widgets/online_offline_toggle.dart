@@ -17,7 +17,8 @@ class OnlineOfflineToggle extends ConsumerStatefulWidget {
   });
 
   @override
-  ConsumerState<OnlineOfflineToggle> createState() => _OnlineOfflineToggleState();
+  ConsumerState<OnlineOfflineToggle> createState() =>
+      _OnlineOfflineToggleState();
 }
 
 class _OnlineOfflineToggleState extends ConsumerState<OnlineOfflineToggle> {
@@ -34,7 +35,9 @@ class _OnlineOfflineToggleState extends ConsumerState<OnlineOfflineToggle> {
         throw Exception('User profile not found');
       }
 
-      final currentAvailability = UserAvailability.fromString(profile.availability?.name);
+      final currentAvailability = UserAvailability.fromString(
+        profile.availability.name,
+      );
       final newAvailability = currentAvailability == UserAvailability.online
           ? UserAvailability.offline
           : UserAvailability.online;
@@ -93,24 +96,24 @@ class _OnlineOfflineToggleState extends ConsumerState<OnlineOfflineToggle> {
   Widget build(BuildContext context) {
     final profile = ref.watch(currentUserProfileProvider);
 
-    // Show loading indicator while profile loads instead of hiding
-    if (profile == null) {
-      return _buildLoadingPlaceholder();
-    }
-
-    // Only show for data collectors and coordinators
-    final role = (profile.role ?? '').toLowerCase();
-    final isDataCollectorOrCoordinator = [
-      'datacollector',
-      'data collector',
-      'coordinator',
-      'enumerator'
-    ].contains(role);
-
-    if (!isDataCollectorOrCoordinator) return const SizedBox.shrink();
-
-    final availability = UserAvailability.fromString(profile.availability?.name);
+    // If profile is null, show the toggle in offline state (assume offline)
+    final availability = profile != null
+        ? UserAvailability.fromString(profile.availability.name)
+        : UserAvailability.offline;
     final isOnline = availability == UserAvailability.online;
+
+    // Only show for data collectors and coordinators if profile is loaded
+    if (profile != null) {
+      final role = (profile.role ?? '').toLowerCase();
+      final isDataCollectorOrCoordinator = [
+        'datacollector',
+        'data collector',
+        'coordinator',
+        'enumerator',
+      ].contains(role);
+
+      if (!isDataCollectorOrCoordinator) return const SizedBox.shrink();
+    }
 
     switch (widget.variant) {
       case ToggleVariant.uber:
@@ -120,47 +123,6 @@ class _OnlineOfflineToggleState extends ConsumerState<OnlineOfflineToggle> {
       case ToggleVariant.minimal:
         return _buildMinimalVariant(isOnline);
     }
-  }
-
-  /// Build a loading placeholder that matches the toggle size
-  Widget _buildLoadingPlaceholder() {
-    return Container(
-      margin: widget.mobileBottomOffset
-          ? const EdgeInsets.only(bottom: 16)
-          : EdgeInsets.zero,
-      child: Material(
-        elevation: 8,
-        borderRadius: BorderRadius.circular(28),
-        child: Container(
-          height: 56,
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(28),
-            border: Border.all(color: Colors.grey[300]!, width: 2),
-            color: Colors.grey[100],
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-              const SizedBox(width: 12),
-              Text(
-                'Loading...',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.grey[600],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
   }
 
   Widget _buildUberVariant(bool isOnline) {
@@ -233,10 +195,7 @@ class _OnlineOfflineToggleState extends ConsumerState<OnlineOfflineToggle> {
                       isOnline
                           ? 'Available for assignments'
                           : 'Not receiving assignments',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: Colors.grey[600],
-                      ),
+                      style: TextStyle(fontSize: 11, color: Colors.grey[600]),
                     ),
                   ],
                 ),
@@ -351,8 +310,4 @@ class _OnlineOfflineToggleState extends ConsumerState<OnlineOfflineToggle> {
   }
 }
 
-enum ToggleVariant {
-  uber,
-  pill,
-  minimal,
-}
+enum ToggleVariant { uber, pill, minimal }

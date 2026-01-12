@@ -58,12 +58,15 @@ class WebRTCService {
     'iceServers': [
       {'urls': 'stun:stun.l.google.com:19302'},
       {'urls': 'stun:stun1.l.google.com:19302'},
-    ]
+    ],
   };
 
   /// Initialize the service with user information
-  Future<void> initialize(String userId, String userName,
-      {String? userAvatar}) async {
+  Future<void> initialize(
+    String userId,
+    String userName, {
+    String? userAvatar,
+  }) async {
     _userId = userId;
     _userName = userName;
     _userAvatar = userAvatar;
@@ -80,9 +83,13 @@ class WebRTCService {
     _signalingChannel = _supabase.channel('calls:user:$_userId');
 
     _signalingChannel!
-        .onBroadcast(event: 'call-signal', callback: (payload) {
-      _handleSignal(CallSignal.fromJson(payload));
-    }).subscribe();
+        .onBroadcast(
+          event: 'call-signal',
+          callback: (payload) {
+            _handleSignal(CallSignal.fromJson(payload));
+          },
+        )
+        .subscribe();
   }
 
   /// Setup presence channel for call status tracking
@@ -98,8 +105,11 @@ class WebRTCService {
   }
 
   /// Update user presence
-  Future<void> _updatePresence(
-      {required bool inCall, String? callId, String? callToken}) async {
+  Future<void> _updatePresence({
+    required bool inCall,
+    String? callId,
+    String? callToken,
+  }) async {
     if (_userId == null || _presenceChannel == null) return;
 
     await _presenceChannel!.track({
@@ -114,7 +124,7 @@ class WebRTCService {
   /// Check if user is busy (in another call)
   Future<bool> _checkUserBusy(String userId) async {
     try {
-      final presence = await _presenceChannel?.presenceState();
+      final presence = _presenceChannel?.presenceState();
       if (presence == null || presence.isEmpty) return false;
 
       // presenceState returns List<SinglePresenceState>
@@ -133,8 +143,12 @@ class WebRTCService {
   }
 
   /// Initiate a call to a target user
-  Future<bool> initiateCall(String targetUserId, String targetUserName,
-      {String? targetUserAvatar, bool isAudioOnly = false}) async {
+  Future<bool> initiateCall(
+    String targetUserId,
+    String targetUserName, {
+    String? targetUserAvatar,
+    bool isAudioOnly = false,
+  }) async {
     if (_userId == null || _callState.isInCall) return false;
 
     // Check if target user is busy
@@ -162,23 +176,24 @@ class WebRTCService {
       _callStateController.add(_callState);
 
       // Update presence
-      await _updatePresence(
-          inCall: true, callId: callId, callToken: callToken);
+      await _updatePresence(inCall: true, callId: callId, callToken: callToken);
 
       // Setup local media
       await _setupLocalMedia(isAudioOnly: isAudioOnly);
 
       // Send call request signal
-      await _sendSignal(CallSignal(
-        type: CallSignalType.callRequest,
-        from: _userId!,
-        to: targetUserId,
-        fromName: _userName!,
-        fromAvatar: _userAvatar,
-        callId: callId,
-        callToken: callToken,
-        isAudioOnly: isAudioOnly,
-      ));
+      await _sendSignal(
+        CallSignal(
+          type: CallSignalType.callRequest,
+          from: _userId!,
+          to: targetUserId,
+          fromName: _userName!,
+          fromAvatar: _userAvatar,
+          callId: callId,
+          callToken: callToken,
+          isAudioOnly: isAudioOnly,
+        ),
+      );
 
       // Start call timeout timer - end call if not answered within timeout
       _startCallTimeoutTimer();
@@ -191,8 +206,11 @@ class WebRTCService {
   }
 
   /// Accept an incoming call
-  Future<void> acceptCall(String callerId, String callId,
-      String callToken) async {
+  Future<void> acceptCall(
+    String callerId,
+    String callId,
+    String callToken,
+  ) async {
     if (_userId == null) return;
 
     try {
@@ -205,22 +223,23 @@ class WebRTCService {
       _callStateController.add(_callState);
 
       // Update presence
-      await _updatePresence(
-          inCall: true, callId: callId, callToken: callToken);
+      await _updatePresence(inCall: true, callId: callId, callToken: callToken);
 
       // Setup local media
       await _setupLocalMedia(isAudioOnly: _callState.isAudioOnly);
 
       // Send accept signal
-      await _sendSignal(CallSignal(
-        type: CallSignalType.callAccept,
-        from: _userId!,
-        to: callerId,
-        fromName: _userName!,
-        fromAvatar: _userAvatar,
-        callId: callId,
-        callToken: callToken,
-      ));
+      await _sendSignal(
+        CallSignal(
+          type: CallSignalType.callAccept,
+          from: _userId!,
+          to: callerId,
+          fromName: _userName!,
+          fromAvatar: _userAvatar,
+          callId: callId,
+          callToken: callToken,
+        ),
+      );
 
       // Create peer connection and send offer
       await _createPeerConnection();
@@ -234,14 +253,16 @@ class WebRTCService {
   Future<void> rejectCall(String callerId, String callId) async {
     if (_userId == null) return;
 
-    await _sendSignal(CallSignal(
-      type: CallSignalType.callReject,
-      from: _userId!,
-      to: callerId,
-      fromName: _userName!,
-      fromAvatar: _userAvatar,
-      callId: callId,
-    ));
+    await _sendSignal(
+      CallSignal(
+        type: CallSignalType.callReject,
+        from: _userId!,
+        to: callerId,
+        fromName: _userName!,
+        fromAvatar: _userAvatar,
+        callId: callId,
+      ),
+    );
 
     _updateCallState(CallStatus.rejected);
   }
@@ -254,14 +275,16 @@ class WebRTCService {
     final callId = _callState.callId;
 
     if (remoteUserId != null) {
-      await _sendSignal(CallSignal(
-        type: CallSignalType.callEnd,
-        from: _userId!,
-        to: remoteUserId,
-        fromName: _userName!,
-        fromAvatar: _userAvatar,
-        callId: callId,
-      ));
+      await _sendSignal(
+        CallSignal(
+          type: CallSignalType.callEnd,
+          from: _userId!,
+          to: remoteUserId,
+          fromName: _userName!,
+          fromAvatar: _userAvatar,
+          callId: callId,
+        ),
+      );
     }
 
     await _cleanup();
@@ -291,7 +314,9 @@ class WebRTCService {
             : false,
       };
 
-      _localStream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
+      _localStream = await navigator.mediaDevices.getUserMedia(
+        mediaConstraints,
+      );
       _localStreamController.add(_localStream);
     } catch (e) {
       throw Exception('Failed to access camera/microphone: $e');
@@ -316,16 +341,18 @@ class WebRTCService {
 
     // Handle ICE candidates
     _peerConnection!.onIceCandidate = (RTCIceCandidate candidate) {
-      _sendSignal(CallSignal(
-        type: CallSignalType.iceCandidate,
-        from: _userId!,
-        to: _callState.remoteUserId!,
-        fromName: _userName!,
-        fromAvatar: _userAvatar,
-        callId: _callState.callId,
-        callToken: _callState.callToken,
-        payload: candidate.toMap(),
-      ));
+      _sendSignal(
+        CallSignal(
+          type: CallSignalType.iceCandidate,
+          from: _userId!,
+          to: _callState.remoteUserId!,
+          fromName: _userName!,
+          fromAvatar: _userAvatar,
+          callId: _callState.callId,
+          callToken: _callState.callToken,
+          payload: candidate.toMap(),
+        ),
+      );
     };
 
     // Handle remote stream
@@ -354,16 +381,18 @@ class WebRTCService {
     final offer = await _peerConnection!.createOffer();
     await _peerConnection!.setLocalDescription(offer);
 
-    await _sendSignal(CallSignal(
-      type: CallSignalType.offer,
-      from: _userId!,
-      to: _callState.remoteUserId!,
-      fromName: _userName!,
-      fromAvatar: _userAvatar,
-      callId: _callState.callId,
-      callToken: _callState.callToken,
-      payload: {'sdp': offer.sdp, 'type': offer.type},
-    ));
+    await _sendSignal(
+      CallSignal(
+        type: CallSignalType.offer,
+        from: _userId!,
+        to: _callState.remoteUserId!,
+        fromName: _userName!,
+        fromAvatar: _userAvatar,
+        callId: _callState.callId,
+        callToken: _callState.callToken,
+        payload: {'sdp': offer.sdp, 'type': offer.type},
+      ),
+    );
   }
 
   /// Handle incoming offer
@@ -377,16 +406,18 @@ class WebRTCService {
     final answer = await _peerConnection!.createAnswer();
     await _peerConnection!.setLocalDescription(answer);
 
-    await _sendSignal(CallSignal(
-      type: CallSignalType.answer,
-      from: _userId!,
-      to: _callState.remoteUserId!,
-      fromName: _userName!,
-      fromAvatar: _userAvatar,
-      callId: _callState.callId,
-      callToken: _callState.callToken,
-      payload: {'sdp': answer.sdp, 'type': answer.type},
-    ));
+    await _sendSignal(
+      CallSignal(
+        type: CallSignalType.answer,
+        from: _userId!,
+        to: _callState.remoteUserId!,
+        fromName: _userName!,
+        fromAvatar: _userAvatar,
+        callId: _callState.callId,
+        callToken: _callState.callToken,
+        payload: {'sdp': answer.sdp, 'type': answer.type},
+      ),
+    );
   }
 
   /// Handle incoming answer
@@ -473,7 +504,9 @@ class WebRTCService {
   Future<void> _playRingingSound() async {
     try {
       await _audioPlayer.setReleaseMode(ReleaseMode.loop);
-      await _audioPlayer.play(AssetSource('sounds/Phone Dial Tone - Sound Effect (HD).mp3'));
+      await _audioPlayer.play(
+        AssetSource('sounds/Phone Dial Tone - Sound Effect (HD).mp3'),
+      );
     } catch (e) {
       debugPrint('Error playing ringing sound: $e');
     }
@@ -492,10 +525,10 @@ class WebRTCService {
   Future<bool> toggleVideo() async {
     if (_localStream == null) return false;
 
-    final videoTrack = _localStream!
-        .getVideoTracks()
-        .firstWhere((track) => track.kind == 'video');
-    
+    final videoTrack = _localStream!.getVideoTracks().firstWhere(
+      (track) => track.kind == 'video',
+    );
+
     final enabled = !videoTrack.enabled;
     videoTrack.enabled = enabled;
 
@@ -508,7 +541,7 @@ class WebRTCService {
   /// Send signal to target user
   Future<void> _sendSignal(CallSignal signal) async {
     final targetChannel = _supabase.channel('calls:user:${signal.to}');
-    await targetChannel.subscribe();
+    targetChannel.subscribe();
     await targetChannel.sendBroadcastMessage(
       event: 'call-signal',
       payload: signal.toJson(),
@@ -520,10 +553,10 @@ class WebRTCService {
   bool toggleMute() {
     if (_localStream == null) return false;
 
-    final audioTrack = _localStream!
-        .getAudioTracks()
-        .firstWhere((track) => track.kind == 'audio');
-    
+    final audioTrack = _localStream!.getAudioTracks().firstWhere(
+      (track) => track.kind == 'audio',
+    );
+
     final muted = !audioTrack.enabled;
     audioTrack.enabled = !muted;
 
@@ -546,8 +579,10 @@ class WebRTCService {
     _callStateController.add(_callState);
 
     // Cancel call timeout timer when call is answered or ends
-    if (status == CallStatus.connected || status == CallStatus.idle || 
-        status == CallStatus.ended || status == CallStatus.rejected ||
+    if (status == CallStatus.connected ||
+        status == CallStatus.idle ||
+        status == CallStatus.ended ||
+        status == CallStatus.rejected ||
         status == CallStatus.busy) {
       _cancelCallTimeoutTimer();
     }
@@ -555,10 +590,15 @@ class WebRTCService {
     // Handle call sounds
     if (status == CallStatus.calling && previousStatus != CallStatus.calling) {
       _playRingingSound();
-    } else if (status == CallStatus.ringing && previousStatus != CallStatus.ringing) {
+    } else if (status == CallStatus.ringing &&
+        previousStatus != CallStatus.ringing) {
       _playRingingSound();
-    } else if ((status == CallStatus.connected || status == CallStatus.idle || status == CallStatus.ended || status == CallStatus.rejected) &&
-               (previousStatus == CallStatus.calling || previousStatus == CallStatus.ringing)) {
+    } else if ((status == CallStatus.connected ||
+            status == CallStatus.idle ||
+            status == CallStatus.ended ||
+            status == CallStatus.rejected) &&
+        (previousStatus == CallStatus.calling ||
+            previousStatus == CallStatus.ringing)) {
       _stopRingingSound();
     }
   }
@@ -568,7 +608,8 @@ class WebRTCService {
     _cancelCallTimeoutTimer();
     _callTimeoutTimer = Timer(_callTimeoutDuration, () {
       // If still calling/ringing after timeout, mark as unavailable and end call
-      if (_callState.status == CallStatus.calling || _callState.status == CallStatus.ringing) {
+      if (_callState.status == CallStatus.calling ||
+          _callState.status == CallStatus.ringing) {
         endCall();
       }
     });

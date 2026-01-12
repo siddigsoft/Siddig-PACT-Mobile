@@ -18,10 +18,13 @@ class UserManagementService {
   /// User can then login
   Future<bool> approveUser(String userId) async {
     try {
-      await supabase.from('profiles').update({
-        'status': 'approved',
-        'updated_at': DateTime.now().toIso8601String(),
-      }).eq('id', userId);
+      await supabase
+          .from('profiles')
+          .update({
+            'status': 'approved',
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('id', userId);
 
       debugPrint('User $userId approved');
       return true;
@@ -36,10 +39,13 @@ class UserManagementService {
   /// Account is permanently disabled
   Future<bool> rejectUser(String userId) async {
     try {
-      await supabase.from('profiles').update({
-        'status': 'rejected',
-        'updated_at': DateTime.now().toIso8601String(),
-      }).eq('id', userId);
+      await supabase
+          .from('profiles')
+          .update({
+            'status': 'rejected',
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('id', userId);
 
       debugPrint('User $userId rejected');
       return true;
@@ -100,11 +106,14 @@ class UserManagementService {
         lastUpdated: DateTime.now().toIso8601String(),
       );
 
-      await supabase.from('profiles').update({
-        'location': location.toJson(),
-        'location_sharing': isSharing,
-        'updated_at': DateTime.now().toIso8601String(),
-      }).eq('id', userId);
+      await supabase
+          .from('profiles')
+          .update({
+            'location': location.toJson(),
+            'location_sharing': isSharing,
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('id', userId);
 
       debugPrint('User $userId location updated');
       return true;
@@ -125,10 +134,13 @@ class UserManagementService {
         throw Exception('Invalid availability status: $status');
       }
 
-      await supabase.from('profiles').update({
-        'availability': status.toLowerCase(),
-        'updated_at': DateTime.now().toIso8601String(),
-      }).eq('id', userId);
+      await supabase
+          .from('profiles')
+          .update({
+            'availability': status.toLowerCase(),
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('id', userId);
 
       debugPrint('User $userId availability set to $status');
       return true;
@@ -142,10 +154,13 @@ class UserManagementService {
   /// User can enable/disable location sharing with team
   Future<bool> toggleLocationSharing(String userId, bool isSharing) async {
     try {
-      await supabase.from('profiles').update({
-        'location_sharing': isSharing,
-        'updated_at': DateTime.now().toIso8601String(),
-      }).eq('id', userId);
+      await supabase
+          .from('profiles')
+          .update({
+            'location_sharing': isSharing,
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('id', userId);
 
       final action = isSharing ? 'enabled' : 'disabled';
       debugPrint('User $userId location sharing $action');
@@ -228,7 +243,7 @@ class UserManagementService {
           .eq('user_id', userId);
 
       final userRoles = <AppRole>[];
-      if (rolesData != null && rolesData is List) {
+      if (rolesData is List) {
         for (final roleData in rolesData) {
           final roleStr = roleData['role'] as String?;
           if (roleStr != null) {
@@ -264,7 +279,7 @@ class UserManagementService {
         // Need to join with user_roles if filtering by role
         query = supabase.from('user_roles').select('user_id').eq('role', role);
         final roleUsers = await query;
-        if (roleUsers == null || (roleUsers is List && roleUsers.isEmpty)) {
+        if ((roleUsers.isEmpty)) {
           return [];
         }
 
@@ -289,7 +304,7 @@ class UserManagementService {
 
       final profilesData = await query;
 
-      if (profilesData == null || (profilesData is! List)) {
+      if ((profilesData is! List)) {
         return [];
       }
 
@@ -302,7 +317,7 @@ class UserManagementService {
             .eq('user_id', profileData['id'] as String);
 
         final userRoles = <AppRole>[];
-        if (rolesData != null && rolesData is List) {
+        if (rolesData is List) {
           for (final roleData in rolesData) {
             final roleStr = roleData['role'] as String?;
             if (roleStr != null) {
@@ -360,21 +375,15 @@ class UserManagementService {
           var filtered = profilesList;
 
           if (status != null) {
-            filtered = filtered
-                .where((p) => p['status'] == status)
-                .toList();
+            filtered = filtered.where((p) => p['status'] == status).toList();
           }
 
           if (stateId != null) {
-            filtered = filtered
-                .where((p) => p['state_id'] == stateId)
-                .toList();
+            filtered = filtered.where((p) => p['state_id'] == stateId).toList();
           }
 
           if (hubId != null) {
-            filtered = filtered
-                .where((p) => p['hub_id'] == hubId)
-                .toList();
+            filtered = filtered.where((p) => p['hub_id'] == hubId).toList();
           }
 
           final users = <User>[];
@@ -385,7 +394,7 @@ class UserManagementService {
                 .eq('user_id', profileData['id'] as String);
 
             final userRoles = <AppRole>[];
-            if (rolesData != null && rolesData is List) {
+            if (rolesData is List) {
               for (final roleData in rolesData) {
                 final roleStr = roleData['role'] as String?;
                 if (roleStr != null) {
@@ -419,17 +428,19 @@ class UserManagementService {
     String retainerCurrency = 'SDG',
   }) async {
     try {
-      await supabase.from('profiles').update({
-        'classification_level': level,
-        'role_scope': roleScope,
-        'has_retainer': hasRetainer,
-        'retainer_amount_cents': retainerAmountCents,
-        'retainer_currency': retainerCurrency,
-        'updated_at': DateTime.now().toIso8601String(),
-      }).eq('id', userId);
+      await supabase
+          .from('profiles')
+          .update({
+            'classification_level': level,
+            'role_scope': roleScope,
+            'has_retainer': hasRetainer,
+            'retainer_amount_cents': retainerAmountCents,
+            'retainer_currency': retainerCurrency,
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('id', userId);
 
-      debugPrint(
-          'User $userId classification set: $level / $roleScope');
+      debugPrint('User $userId classification set: $level / $roleScope');
       return true;
     } catch (e) {
       debugPrint('Error setting user classification: $e');
@@ -447,16 +458,13 @@ class UserManagementService {
   }) async {
     try {
       // Store bank account in a separate secure table (RLS protected)
-      await supabase.from('user_bank_accounts').upsert(
-        {
-          'user_id': userId,
-          'account_name': accountName,
-          'account_number': accountNumber,
-          'branch': branch,
-          'updated_at': DateTime.now().toIso8601String(),
-        },
-        onConflict: 'user_id',
-      );
+      await supabase.from('user_bank_accounts').upsert({
+        'user_id': userId,
+        'account_name': accountName,
+        'account_number': accountNumber,
+        'branch': branch,
+        'updated_at': DateTime.now().toIso8601String(),
+      }, onConflict: 'user_id');
 
       debugPrint('Bank account updated for user $userId');
       return true;
@@ -502,9 +510,10 @@ class UserManagementService {
 
       if (!currentTokens.contains(token)) {
         currentTokens.add(token);
-        await supabase.from('profiles').update({
-          'fcm_tokens': currentTokens,
-        }).eq('id', userId);
+        await supabase
+            .from('profiles')
+            .update({'fcm_tokens': currentTokens})
+            .eq('id', userId);
 
         debugPrint('FCM token added for user $userId');
       }
@@ -552,7 +561,8 @@ class UserManagementService {
           hasRetainer: profileData['has_retainer'] ?? false,
           retainerAmountCents: profileData['retainer_amount_cents'] ?? 0,
           retainerCurrency: profileData['retainer_currency'] ?? 'SDG',
-          effectiveFrom: profileData['effective_from'] ?? DateTime.now().toIso8601String(),
+          effectiveFrom:
+              profileData['effective_from'] ?? DateTime.now().toIso8601String(),
           effectiveUntil: profileData['effective_until'],
         );
       } catch (e) {
@@ -578,7 +588,9 @@ class UserManagementService {
       avatar: profileData['avatar_url'] as String?,
       username: profileData['username'] as String?,
       fullName: profileData['full_name'] as String?,
-      lastActive: profileData['last_active'] as String? ?? DateTime.now().toIso8601String(),
+      lastActive:
+          profileData['last_active'] as String? ??
+          DateTime.now().toIso8601String(),
       availability: profileData['availability'] as String? ?? 'offline',
       roles: userRoles.isNotEmpty ? userRoles : null,
       location: location,

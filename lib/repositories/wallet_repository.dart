@@ -9,7 +9,7 @@ import '../services/offline_data_service.dart';
 class WalletRepository {
   final SupabaseClient _supabase = Supabase.instance.client;
   final OfflineDataService _offlineDataService = OfflineDataService();
-  
+
   /// Check if device is online
   Future<bool> _isOnline() async {
     try {
@@ -27,7 +27,7 @@ class WalletRepository {
       if (!(await _isOnline())) {
         return _getWalletFromCache(userId);
       }
-      
+
       final response = await _supabase
           .from('wallets')
           .select()
@@ -40,10 +40,10 @@ class WalletRepository {
       }
 
       final wallet = Wallet.fromJson(response);
-      
+
       // Cache for offline use
       await _offlineDataService.cacheWalletData(userId, response);
-      
+
       return wallet;
     } catch (e) {
       // Try cache on error
@@ -53,7 +53,7 @@ class WalletRepository {
       throw WalletException('Failed to fetch wallet: $e');
     }
   }
-  
+
   Future<Wallet?> _getWalletFromCache(String userId) async {
     final cachedData = await _offlineDataService.getCachedWalletData(userId);
     if (cachedData != null) {
@@ -93,7 +93,7 @@ class WalletRepository {
   }) async {
     try {
       final List<dynamic> response;
-      
+
       if (referenceId != null && referenceId.isNotEmpty) {
         // Check both site_visit_id and reference_id
         response = await _supabase
@@ -109,7 +109,7 @@ class WalletRepository {
             .eq('site_visit_id', siteVisitId)
             .inFilter('type', ['earning', 'site_visit_fee']);
       }
-      
+
       return response.isNotEmpty;
     } catch (e) {
       // Fail-safe: if query fails, don't proceed with insertion
@@ -133,7 +133,7 @@ class WalletRepository {
         siteVisitId: siteVisitId,
         referenceId: referenceId,
       );
-      
+
       if (existingTransaction) {
         throw WalletException(
           'Site visit fee transaction already exists for visit $siteVisitId',
@@ -203,7 +203,8 @@ class WalletRepository {
         userId: userId,
         siteVisitId: siteVisitId,
         amount: totalFee,
-        description: 'Enumerator fee: $enumeratorFee, Transport fee: $transportFee',
+        description:
+            'Enumerator fee: $enumeratorFee, Transport fee: $transportFee',
         referenceId: referenceId,
       );
 
@@ -219,10 +220,6 @@ class WalletRepository {
           .eq('id', wallet.id)
           .select()
           .single();
-
-      if (updateResponse == null) {
-        throw WalletException('Failed to update wallet balance');
-      }
     } catch (e) {
       if (e is WalletException) rethrow;
       throw WalletException('Failed to process visit payment: $e');
@@ -291,7 +288,7 @@ class WalletRepository {
       final response = await query
           .order('created_at', ascending: false)
           .range(offset, offset + limit - 1);
-          
+
       return (response as List)
           .map((json) => WalletTransaction.fromJson(json))
           .toList();
@@ -334,7 +331,8 @@ class WalletRepository {
 
       if (wallet.currentBalance < amount) {
         throw InsufficientBalanceException(
-            'Insufficient balance. Available: ${wallet.currentBalance} $currency');
+          'Insufficient balance. Available: ${wallet.currentBalance} $currency',
+        );
       }
 
       final response = await _supabase
@@ -387,10 +385,8 @@ class WalletRepository {
     String? costNotes,
   }) async {
     try {
-      final totalCost = transportationCost +
-          accommodationCost +
-          mealAllowance +
-          otherCosts;
+      final totalCost =
+          transportationCost + accommodationCost + mealAllowance + otherCosts;
 
       final baseFeeCents = (totalCost * 100).round();
 
@@ -460,7 +456,7 @@ class WalletRepository {
         totalTransactions: transactions.length,
         completedSiteVisits: siteVisitTransactions,
       );
-      
+
       // Cache stats for offline use
       await _offlineDataService.cacheWalletStats(userId, {
         'totalEarned': stats.totalEarned,
@@ -470,7 +466,7 @@ class WalletRepository {
         'totalTransactions': stats.totalTransactions,
         'completedSiteVisits': stats.completedSiteVisits,
       });
-      
+
       return stats;
     } catch (e) {
       // Try cache on error
@@ -480,7 +476,7 @@ class WalletRepository {
       throw WalletException('Failed to calculate wallet stats: $e');
     }
   }
-  
+
   Future<WalletStats?> _getWalletStatsFromCache(String userId) async {
     final cachedData = await _offlineDataService.getCachedWalletStats(userId);
     if (cachedData != null) {
@@ -516,7 +512,10 @@ class WalletRepository {
         .stream(primaryKey: ['id'])
         .eq('user_id', userId)
         .order('created_at', ascending: false)
-        .map((data) => data.map((json) => WalletTransaction.fromJson(json)).toList());
+        .map(
+          (data) =>
+              data.map((json) => WalletTransaction.fromJson(json)).toList(),
+        );
   }
 
   // Real-time stream for withdrawal requests
@@ -526,7 +525,10 @@ class WalletRepository {
         .stream(primaryKey: ['id'])
         .eq('user_id', userId)
         .order('created_at', ascending: false)
-        .map((data) => data.map((json) => WithdrawalRequest.fromJson(json)).toList());
+        .map(
+          (data) =>
+              data.map((json) => WithdrawalRequest.fromJson(json)).toList(),
+        );
   }
 
   // Search transactions
@@ -563,7 +565,8 @@ class WalletRepository {
       // Filter by query if provided
       if (query != null && query.isNotEmpty) {
         transactions = transactions.where((t) {
-          return (t.description?.toLowerCase().contains(query.toLowerCase()) ?? false) ||
+          return (t.description?.toLowerCase().contains(query.toLowerCase()) ??
+                  false) ||
               t.type.toLowerCase().contains(query.toLowerCase());
         }).toList();
       }
@@ -604,8 +607,14 @@ class WalletRepository {
           .single();
 
       final userRole = userProfile['role'] as String;
-      if (!['dataCollector', 'datacollector', 'coordinator'].contains(userRole)) {
-        throw WalletException('Only data collectors and coordinators can request down payments');
+      if (![
+        'dataCollector',
+        'datacollector',
+        'coordinator',
+      ].contains(userRole)) {
+        throw WalletException(
+          'Only data collectors and coordinators can request down payments',
+        );
       }
 
       // Validate that the site visit exists and is accepted
@@ -618,11 +627,15 @@ class WalletRepository {
 
       final status = (siteVisit['status'] as String?)?.toLowerCase() ?? '';
       if (!status.startsWith('accept')) {
-        throw WalletException('Can only request down payment for accepted site visits');
+        throw WalletException(
+          'Can only request down payment for accepted site visits',
+        );
       }
 
       if (siteVisit['accepted_by'] != userId) {
-        throw WalletException('Can only request down payment for sites assigned to you');
+        throw WalletException(
+          'Can only request down payment for sites assigned to you',
+        );
       }
 
       // Check if a request already exists for this site visit
@@ -631,16 +644,25 @@ class WalletRepository {
           .select('id')
           .eq('site_visit_id', siteVisitId)
           .eq('requested_by', userId)
-          .inFilter('status', ['pending_supervisor', 'pending_admin', 'approved', 'partially_paid'])
+          .inFilter('status', [
+            'pending_supervisor',
+            'pending_admin',
+            'approved',
+            'partially_paid',
+          ])
           .maybeSingle();
 
       if (existingRequest != null) {
-        throw WalletException('A down payment request already exists for this site visit');
+        throw WalletException(
+          'A down payment request already exists for this site visit',
+        );
       }
 
       // Validate requested amount doesn't exceed transportation budget
       if (requestedAmount > totalTransportationBudget) {
-        throw WalletException('Requested amount cannot exceed transportation budget');
+        throw WalletException(
+          'Requested amount cannot exceed transportation budget',
+        );
       }
 
       final requestData = {
@@ -654,12 +676,18 @@ class WalletRepository {
         'total_transportation_budget': totalTransportationBudget,
         'requested_amount': requestedAmount,
         'payment_type': paymentType,
-        'installment_plan': installmentPlan?.map((plan) => {
-          'installment_number': plan.installmentNumber,
-          'amount': plan.amount,
-          'due_date': plan.dueDate.toIso8601String(),
-          'description': plan.description,
-        }).toList() ?? [],
+        'installment_plan':
+            installmentPlan
+                ?.map(
+                  (plan) => {
+                    'installment_number': plan.installmentNumber,
+                    'amount': plan.amount,
+                    'due_date': plan.dueDate.toIso8601String(),
+                    'description': plan.description,
+                  },
+                )
+                .toList() ??
+            [],
         'justification': justification,
         'supporting_documents': supportingDocuments ?? [],
         'status': 'pending_supervisor',
@@ -679,7 +707,9 @@ class WalletRepository {
   }
 
   /// Get down payment requests for current user
-  Future<List<DownPaymentRequest>> getUserDownPaymentRequests(String userId) async {
+  Future<List<DownPaymentRequest>> getUserDownPaymentRequests(
+    String userId,
+  ) async {
     try {
       final response = await _supabase
           .from('down_payment_requests')
@@ -696,7 +726,9 @@ class WalletRepository {
   }
 
   /// Get down payment requests for supervisor approval
-  Future<List<DownPaymentRequest>> getSupervisorDownPaymentRequests(String supervisorId) async {
+  Future<List<DownPaymentRequest>> getSupervisorDownPaymentRequests(
+    String supervisorId,
+  ) async {
     try {
       final response = await _supabase
           .from('down_payment_requests')
@@ -714,7 +746,9 @@ class WalletRepository {
   }
 
   /// Get down payment requests for admin approval
-  Future<List<DownPaymentRequest>> getAdminDownPaymentRequests(String adminId) async {
+  Future<List<DownPaymentRequest>> getAdminDownPaymentRequests(
+    String adminId,
+  ) async {
     try {
       final response = await _supabase
           .from('down_payment_requests')
@@ -872,7 +906,11 @@ class WalletRepository {
           .update(updateData)
           .eq('id', requestId)
           .eq('requested_by', userId)
-          .inFilter('status', ['pending_supervisor', 'pending_admin', 'approved'])
+          .inFilter('status', [
+            'pending_supervisor',
+            'pending_admin',
+            'approved',
+          ])
           .select()
           .single();
 
@@ -889,19 +927,30 @@ class WalletRepository {
         .stream(primaryKey: ['id'])
         .eq('requested_by', userId)
         .order('created_at', ascending: false)
-        .map((data) => data.map((json) => DownPaymentRequest.fromJson(json)).toList());
+        .map(
+          (data) =>
+              data.map((json) => DownPaymentRequest.fromJson(json)).toList(),
+        );
   }
 
   /// Real-time stream for supervisor's pending requests
-  Stream<List<DownPaymentRequest>> watchSupervisorDownPaymentRequests(String supervisorId) {
+  Stream<List<DownPaymentRequest>> watchSupervisorDownPaymentRequests(
+    String supervisorId,
+  ) {
     return _supabase
         .from('down_payment_requests')
         .stream(primaryKey: ['id'])
         .order('created_at', ascending: false)
-        .map((data) => data
-            .where((json) => json['supervisor_id'] == supervisorId && json['status'] == 'pending_supervisor')
-            .map((json) => DownPaymentRequest.fromJson(json))
-            .toList());
+        .map(
+          (data) => data
+              .where(
+                (json) =>
+                    json['supervisor_id'] == supervisorId &&
+                    json['status'] == 'pending_supervisor',
+              )
+              .map((json) => DownPaymentRequest.fromJson(json))
+              .toList(),
+        );
   }
 
   /// Real-time stream for admin's pending requests
@@ -911,7 +960,10 @@ class WalletRepository {
         .stream(primaryKey: ['id'])
         .eq('status', 'pending_admin')
         .order('created_at', ascending: false)
-        .map((data) => data.map((json) => DownPaymentRequest.fromJson(json)).toList());
+        .map(
+          (data) =>
+              data.map((json) => DownPaymentRequest.fromJson(json)).toList(),
+        );
   }
 
   // ============================================================================

@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
@@ -12,7 +11,7 @@ class ProfileRepository {
   final OfflineDataService _offlineDataService = OfflineDataService();
 
   ProfileRepository(this._supabase);
-  
+
   /// Check if device is online
   Future<bool> _isOnline() async {
     try {
@@ -42,7 +41,7 @@ class ProfileRepository {
         if (cachedProfile != null) return cachedProfile;
         throw Exception('No cached profile available offline');
       }
-      
+
       final response = await _supabase
           .from('profiles')
           .select()
@@ -50,10 +49,10 @@ class ProfileRepository {
           .single();
 
       final profile = PACTUserProfile.fromJson(response);
-      
+
       // Cache for offline use
       await _offlineDataService.cacheUserProfile(userId, response);
-      
+
       return profile;
     } on PostgrestException catch (e) {
       // Try cache on error
@@ -69,7 +68,7 @@ class ProfileRepository {
       throw Exception('Failed to load profile: $e');
     }
   }
-  
+
   Future<PACTUserProfile?> _getProfileFromCache(String userId) async {
     final cachedData = await _offlineDataService.getCachedUserProfile(userId);
     if (cachedData != null) {
@@ -102,7 +101,8 @@ class ProfileRepository {
       if (phone != null) updates['phone'] = phone;
       if (avatarUrl != null) updates['avatar_url'] = avatarUrl;
       if (availability != null) updates['availability'] = availability.name;
-      if (locationSharing != null) updates['location_sharing'] = locationSharing;
+      if (locationSharing != null)
+        updates['location_sharing'] = locationSharing;
       if (location != null) updates['location'] = location.toJson();
       if (bankAccount != null) updates['bank_account'] = bankAccount.toJson();
 
@@ -133,16 +133,14 @@ class ProfileRepository {
     try {
       // Read file bytes (works on web and mobile)
       final bytes = await imageFile.readAsBytes();
-      
+
       // Generate unique filename with timestamp
       final timestamp = DateTime.now().millisecondsSinceEpoch;
       final extension = imageFile.name.split('.').last;
       final filename = '$userId-$timestamp.$extension';
 
       // Upload to avatars bucket using bytes
-      await _supabase.storage
-          .from('avatars')
-          .uploadBinary(filename, bytes);
+      await _supabase.storage.from('avatars').uploadBinary(filename, bytes);
 
       // Get public URL
       final publicUrl = _supabase.storage
@@ -164,9 +162,7 @@ class ProfileRepository {
       final uri = Uri.parse(avatarUrl);
       final filename = uri.pathSegments.last;
 
-      await _supabase.storage
-          .from('avatars')
-          .remove([filename]);
+      await _supabase.storage.from('avatars').remove([filename]);
     } on StorageException catch (e) {
       throw Exception('Failed to delete avatar: ${e.message}');
     } catch (e) {
@@ -210,10 +206,7 @@ class ProfileRepository {
         updates['location_sharing'] = isSharing;
       }
 
-      await _supabase
-          .from('profiles')
-          .update(updates)
-          .eq('id', userId);
+      await _supabase.from('profiles').update(updates).eq('id', userId);
     } on PostgrestException catch (e) {
       throw Exception('Failed to update location: ${e.message}');
     } catch (e) {
@@ -227,7 +220,7 @@ class ProfileRepository {
     required void Function(PACTUserProfile profile) onUpdate,
   }) {
     final channel = _supabase.channel('profile-$userId');
-    
+
     channel
         .onPostgresChanges(
           event: PostgresChangeEvent.update,

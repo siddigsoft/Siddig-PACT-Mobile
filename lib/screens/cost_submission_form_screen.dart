@@ -13,16 +13,15 @@ import '../services/site_visit_service.dart';
 class CostSubmissionFormScreen extends ConsumerStatefulWidget {
   final String? editSubmissionId;
 
-  const CostSubmissionFormScreen({
-    super.key,
-    this.editSubmissionId,
-  });
+  const CostSubmissionFormScreen({super.key, this.editSubmissionId});
 
   @override
-  ConsumerState<CostSubmissionFormScreen> createState() => _CostSubmissionFormScreenState();
+  ConsumerState<CostSubmissionFormScreen> createState() =>
+      _CostSubmissionFormScreenState();
 }
 
-class _CostSubmissionFormScreenState extends ConsumerState<CostSubmissionFormScreen> {
+class _CostSubmissionFormScreenState
+    extends ConsumerState<CostSubmissionFormScreen> {
   final _formKey = GlobalKey<FormState>();
   final _transportCentsController = TextEditingController();
   final _transportDetailsController = TextEditingController();
@@ -40,7 +39,7 @@ class _CostSubmissionFormScreenState extends ConsumerState<CostSubmissionFormScr
   final List<SupportingDocument> _documents = [];
   bool _isSubmitting = false;
   int _totalCents = 0;
-  
+
   // Site visit data
   List<SiteVisit> _completedSiteVisits = [];
   bool _loadingSiteVisits = true;
@@ -54,34 +53,37 @@ class _CostSubmissionFormScreenState extends ConsumerState<CostSubmissionFormScr
     super.initState();
     _setupListeners();
     _loadCompletedSiteVisits();
-    
+
     if (widget.editSubmissionId != null) {
       _loadExistingSubmission();
     }
   }
-  
+
   Future<void> _loadCompletedSiteVisits() async {
     setState(() => _loadingSiteVisits = true);
-    
+
     try {
       final currentUser = Supabase.instance.client.auth.currentUser;
       if (currentUser == null) {
         throw Exception('User not authenticated');
       }
-      
+
       // Load all completed site visits for current user
-      final visits = await _siteVisitService.getCompletedSiteVisits(currentUser.id);
-      
+      final visits = await _siteVisitService.getCompletedSiteVisits(
+        currentUser.id,
+      );
+
       // Filter by assignment (unless user is admin/supervisor)
       final profile = ref.read(currentUserProfileProvider);
-      final isAdminOrSupervisor = profile?.role == 'admin' || 
-                                   profile?.role == 'supervisor' ||
-                                   profile?.role == 'financeAdmin';
-      
-      final filteredVisits = isAdminOrSupervisor 
-        ? visits 
-        : visits.where((v) => v.assignedTo == currentUser.id).toList();
-      
+      final isAdminOrSupervisor =
+          profile?.role == 'admin' ||
+          profile?.role == 'supervisor' ||
+          profile?.role == 'financeAdmin';
+
+      final filteredVisits = isAdminOrSupervisor
+          ? visits
+          : visits.where((v) => v.assignedTo == currentUser.id).toList();
+
       setState(() {
         _completedSiteVisits = filteredVisits;
         _loadingSiteVisits = false;
@@ -105,11 +107,11 @@ class _CostSubmissionFormScreenState extends ConsumerState<CostSubmissionFormScr
 
   void _calculateTotal() {
     setState(() {
-      _totalCents = 
-        (_parseCents(_transportCentsController.text) ?? 0) +
-        (_parseCents(_accommodationCentsController.text) ?? 0) +
-        (_parseCents(_mealCentsController.text) ?? 0) +
-        (_parseCents(_otherCentsController.text) ?? 0);
+      _totalCents =
+          (_parseCents(_transportCentsController.text) ?? 0) +
+          (_parseCents(_accommodationCentsController.text) ?? 0) +
+          (_parseCents(_mealCentsController.text) ?? 0) +
+          (_parseCents(_otherCentsController.text) ?? 0);
     });
   }
 
@@ -124,14 +126,20 @@ class _CostSubmissionFormScreenState extends ConsumerState<CostSubmissionFormScr
 
   Future<void> _loadExistingSubmission() async {
     // Load existing submission for editing
-    final submission = await ref.read(costSubmissionByIdProvider(widget.editSubmissionId!).future);
+    final submission = await ref.read(
+      costSubmissionByIdProvider(widget.editSubmissionId!).future,
+    );
     if (submission != null && mounted) {
       setState(() {
         _selectedSiteVisitId = submission.siteVisitId;
-        _transportCentsController.text = submission.transportationCostCents.toString();
-        _transportDetailsController.text = submission.transportationDetails ?? '';
-        _accommodationCentsController.text = submission.accommodationCostCents.toString();
-        _accommodationDetailsController.text = submission.accommodationDetails ?? '';
+        _transportCentsController.text = submission.transportationCostCents
+            .toString();
+        _transportDetailsController.text =
+            submission.transportationDetails ?? '';
+        _accommodationCentsController.text = submission.accommodationCostCents
+            .toString();
+        _accommodationDetailsController.text =
+            submission.accommodationDetails ?? '';
         _mealCentsController.text = submission.mealAllowanceCents.toString();
         _mealDetailsController.text = submission.mealDetails ?? '';
         _otherCentsController.text = submission.otherCostsCents.toString();
@@ -165,8 +173,13 @@ class _CostSubmissionFormScreenState extends ConsumerState<CostSubmissionFormScr
       backgroundColor: const Color(0xFFF8F9FA),
       appBar: AppBar(
         title: Text(
-          widget.editSubmissionId == null ? 'Submit Costs' : 'Edit Cost Submission',
-          style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+          widget.editSubmissionId == null
+              ? 'Submit Costs'
+              : 'Edit Cost Submission',
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
         ),
         backgroundColor: const Color(0xFF1976D2),
         foregroundColor: Colors.white,
@@ -276,7 +289,10 @@ class _CostSubmissionFormScreenState extends ConsumerState<CostSubmissionFormScr
             ),
             const SizedBox(height: 8),
             Text(
-              service.formatCurrencyWithSymbol(_totalCents, currency: _selectedCurrency),
+              service.formatCurrencyWithSymbol(
+                _totalCents,
+                currency: _selectedCurrency,
+              ),
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 36,
@@ -286,10 +302,7 @@ class _CostSubmissionFormScreenState extends ConsumerState<CostSubmissionFormScr
             const SizedBox(height: 4),
             Text(
               '$_totalCents cents',
-              style: const TextStyle(
-                color: Colors.white54,
-                fontSize: 14,
-              ),
+              style: const TextStyle(color: Colors.white54, fontSize: 14),
             ),
           ],
         ),
@@ -314,15 +327,15 @@ class _CostSubmissionFormScreenState extends ConsumerState<CostSubmissionFormScr
                     color: const Color(0xFF1976D2).withOpacity(0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: const Icon(Icons.location_on, color: Color(0xFF1976D2)),
+                  child: const Icon(
+                    Icons.location_on,
+                    color: Color(0xFF1976D2),
+                  ),
                 ),
                 const SizedBox(width: 12),
                 const Text(
                   'Site Visit',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
                 const Text(
                   ' *',
@@ -339,11 +352,11 @@ class _CostSubmissionFormScreenState extends ConsumerState<CostSubmissionFormScr
             ),
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
-              value: _selectedSiteVisitId,
+              initialValue: _selectedSiteVisitId,
               decoration: InputDecoration(
-                hintText: _loadingSiteVisits 
-                  ? 'Loading site visits...' 
-                  : 'Select completed site visit',
+                hintText: _loadingSiteVisits
+                    ? 'Loading site visits...'
+                    : 'Select completed site visit',
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
                 ),
@@ -365,25 +378,24 @@ class _CostSubmissionFormScreenState extends ConsumerState<CostSubmissionFormScr
                   ),
                 );
               }).toList(),
-              onChanged: _loadingSiteVisits ? null : (value) {
-                setState(() {
-                  _selectedSiteVisitId = value;
-                  _selectedSiteVisit = _completedSiteVisits.firstWhere(
-                    (v) => v.id == value,
-                    orElse: () => _completedSiteVisits.first,
-                  );
-                });
-              },
+              onChanged: _loadingSiteVisits
+                  ? null
+                  : (value) {
+                      setState(() {
+                        _selectedSiteVisitId = value;
+                        _selectedSiteVisit = _completedSiteVisits.firstWhere(
+                          (v) => v.id == value,
+                          orElse: () => _completedSiteVisits.first,
+                        );
+                      });
+                    },
             ),
             if (_completedSiteVisits.isEmpty && !_loadingSiteVisits)
               Padding(
                 padding: const EdgeInsets.only(top: 8),
                 child: Text(
                   'No completed site visits available. Complete a site visit to submit costs.',
-                  style: TextStyle(
-                    color: Colors.orange[700],
-                    fontSize: 12,
-                  ),
+                  style: TextStyle(color: Colors.orange[700], fontSize: 12),
                 ),
               ),
 
@@ -403,7 +415,9 @@ class _CostSubmissionFormScreenState extends ConsumerState<CostSubmissionFormScr
     final enumeratorFee = _selectedSiteVisit!.enumeratorFee ?? 0.0;
     final totalBudget = transportBudget + enumeratorFee;
     final totalBudgetCents = (totalBudget * 100).round();
-    final budgetUtilizationPercent = totalBudget > 0 ? (_totalCents / totalBudgetCents) * 100 : 0.0;
+    final budgetUtilizationPercent = totalBudget > 0
+        ? (_totalCents / totalBudgetCents) * 100
+        : 0.0;
     final isOverBudget = _totalCents > totalBudgetCents;
     final isNearBudget = budgetUtilizationPercent > 80 && !isOverBudget;
 
@@ -414,8 +428,8 @@ class _CostSubmissionFormScreenState extends ConsumerState<CostSubmissionFormScr
         decoration: BoxDecoration(
           gradient: LinearGradient(
             colors: isOverBudget
-              ? [Colors.red.shade50, Colors.red.shade100]
-              : isNearBudget
+                ? [Colors.red.shade50, Colors.red.shade100]
+                : isNearBudget
                 ? [Colors.orange.shade50, Colors.orange.shade100]
                 : [Colors.green.shade50, Colors.green.shade100],
             begin: Alignment.topLeft,
@@ -432,21 +446,32 @@ class _CostSubmissionFormScreenState extends ConsumerState<CostSubmissionFormScr
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: (isOverBudget ? Colors.red : isNearBudget ? Colors.orange : Colors.green).withOpacity(0.1),
+                    color:
+                        (isOverBudget
+                                ? Colors.red
+                                : isNearBudget
+                                ? Colors.orange
+                                : Colors.green)
+                            .withOpacity(0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Icon(
-                    isOverBudget ? Icons.warning : isNearBudget ? Icons.warning_amber : Icons.check_circle,
-                    color: isOverBudget ? Colors.red : isNearBudget ? Colors.orange : Colors.green,
+                    isOverBudget
+                        ? Icons.warning
+                        : isNearBudget
+                        ? Icons.warning_amber
+                        : Icons.check_circle,
+                    color: isOverBudget
+                        ? Colors.red
+                        : isNearBudget
+                        ? Colors.orange
+                        : Colors.green,
                   ),
                 ),
                 const SizedBox(width: 12),
                 const Text(
                   'Budget Information',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
               ],
             ),
@@ -456,7 +481,10 @@ class _CostSubmissionFormScreenState extends ConsumerState<CostSubmissionFormScr
                 Expanded(
                   child: _buildBudgetItem(
                     'Transport Budget',
-                    service.formatCurrency((transportBudget * 100).round(), currency: _selectedCurrency),
+                    service.formatCurrency(
+                      (transportBudget * 100).round(),
+                      currency: _selectedCurrency,
+                    ),
                     Icons.directions_car,
                     const Color(0xFF1976D2),
                   ),
@@ -465,7 +493,10 @@ class _CostSubmissionFormScreenState extends ConsumerState<CostSubmissionFormScr
                 Expanded(
                   child: _buildBudgetItem(
                     'Enumerator Fee',
-                    service.formatCurrency((enumeratorFee * 100).round(), currency: _selectedCurrency),
+                    service.formatCurrency(
+                      (enumeratorFee * 100).round(),
+                      currency: _selectedCurrency,
+                    ),
                     Icons.person,
                     const Color(0xFF7B1FA2),
                   ),
@@ -475,7 +506,10 @@ class _CostSubmissionFormScreenState extends ConsumerState<CostSubmissionFormScr
             const SizedBox(height: 12),
             _buildBudgetItem(
               'Total Available Budget',
-              service.formatCurrency(totalBudgetCents, currency: _selectedCurrency),
+              service.formatCurrency(
+                totalBudgetCents,
+                currency: _selectedCurrency,
+              ),
               Icons.account_balance_wallet,
               const Color(0xFF388E3C),
             ),
@@ -484,14 +518,22 @@ class _CostSubmissionFormScreenState extends ConsumerState<CostSubmissionFormScr
               'Current Total Cost',
               service.formatCurrency(_totalCents, currency: _selectedCurrency),
               Icons.calculate,
-              isOverBudget ? Colors.red : isNearBudget ? Colors.orange : const Color(0xFF1976D2),
+              isOverBudget
+                  ? Colors.red
+                  : isNearBudget
+                  ? Colors.orange
+                  : const Color(0xFF1976D2),
             ),
             const SizedBox(height: 8),
             LinearProgressIndicator(
               value: budgetUtilizationPercent / 100,
               backgroundColor: Colors.grey.shade300,
               valueColor: AlwaysStoppedAnimation<Color>(
-                isOverBudget ? Colors.red : isNearBudget ? Colors.orange : Colors.green,
+                isOverBudget
+                    ? Colors.red
+                    : isNearBudget
+                    ? Colors.orange
+                    : Colors.green,
               ),
             ),
             const SizedBox(height: 4),
@@ -499,7 +541,11 @@ class _CostSubmissionFormScreenState extends ConsumerState<CostSubmissionFormScr
               '${budgetUtilizationPercent.toStringAsFixed(1)}% of budget used',
               style: TextStyle(
                 fontSize: 12,
-                color: isOverBudget ? Colors.red : isNearBudget ? Colors.orange : Colors.green,
+                color: isOverBudget
+                    ? Colors.red
+                    : isNearBudget
+                    ? Colors.orange
+                    : Colors.green,
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -540,7 +586,11 @@ class _CostSubmissionFormScreenState extends ConsumerState<CostSubmissionFormScr
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.warning_amber, color: Colors.orange, size: 16),
+                    const Icon(
+                      Icons.warning_amber,
+                      color: Colors.orange,
+                      size: 16,
+                    ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
@@ -562,7 +612,12 @@ class _CostSubmissionFormScreenState extends ConsumerState<CostSubmissionFormScr
     );
   }
 
-  Widget _buildBudgetItem(String label, String amount, IconData icon, Color color) {
+  Widget _buildBudgetItem(
+    String label,
+    String amount,
+    IconData icon,
+    Color color,
+  ) {
     return Row(
       children: [
         Container(
@@ -700,21 +755,21 @@ class _CostSubmissionFormScreenState extends ConsumerState<CostSubmissionFormScr
                     color: const Color(0xFF4CAF50).withOpacity(0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: const Icon(Icons.attach_money, color: Color(0xFF4CAF50)),
+                  child: const Icon(
+                    Icons.attach_money,
+                    color: Color(0xFF4CAF50),
+                  ),
                 ),
                 const SizedBox(width: 12),
                 const Text(
                   'Currency',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
               ],
             ),
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
-              value: _selectedCurrency,
+              initialValue: _selectedCurrency,
               decoration: InputDecoration(
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
@@ -723,7 +778,10 @@ class _CostSubmissionFormScreenState extends ConsumerState<CostSubmissionFormScr
                 fillColor: Colors.grey[50],
               ),
               items: const [
-                DropdownMenuItem(value: 'SDG', child: Text('SDG - Sudanese Pound')),
+                DropdownMenuItem(
+                  value: 'SDG',
+                  child: Text('SDG - Sudanese Pound'),
+                ),
                 DropdownMenuItem(value: 'USD', child: Text('USD - US Dollar')),
                 DropdownMenuItem(value: 'EUR', child: Text('EUR - Euro')),
               ],
@@ -762,10 +820,7 @@ class _CostSubmissionFormScreenState extends ConsumerState<CostSubmissionFormScr
                 const SizedBox(width: 12),
                 const Text(
                   'Submission Notes',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
               ],
             ),
@@ -805,23 +860,20 @@ class _CostSubmissionFormScreenState extends ConsumerState<CostSubmissionFormScr
                     color: const Color(0xFFF44336).withOpacity(0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: const Icon(Icons.attach_file, color: Color(0xFFF44336)),
+                  child: const Icon(
+                    Icons.attach_file,
+                    color: Color(0xFFF44336),
+                  ),
                 ),
                 const SizedBox(width: 12),
                 const Text(
                   'Supporting Documents',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
                 const Spacer(),
                 Text(
                   '${_documents.length}/10',
-                  style: TextStyle(
-                    color: Colors.grey[600],
-                    fontSize: 14,
-                  ),
+                  style: TextStyle(color: Colors.grey[600], fontSize: 14),
                 ),
               ],
             ),
@@ -837,7 +889,11 @@ class _CostSubmissionFormScreenState extends ConsumerState<CostSubmissionFormScr
                 child: Center(
                   child: Column(
                     children: [
-                      Icon(Icons.cloud_upload, size: 48, color: Colors.grey[400]),
+                      Icon(
+                        Icons.cloud_upload,
+                        size: 48,
+                        color: Colors.grey[400],
+                      ),
                       const SizedBox(height: 8),
                       Text(
                         'No documents attached',
@@ -883,10 +939,7 @@ class _CostSubmissionFormScreenState extends ConsumerState<CostSubmissionFormScr
       ),
       child: Row(
         children: [
-          Icon(
-            _getDocumentIcon(doc.filename),
-            color: const Color(0xFFF44336),
-          ),
+          Icon(_getDocumentIcon(doc.filename), color: const Color(0xFFF44336)),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -894,18 +947,13 @@ class _CostSubmissionFormScreenState extends ConsumerState<CostSubmissionFormScr
               children: [
                 Text(
                   doc.filename,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w500,
-                  ),
+                  style: const TextStyle(fontWeight: FontWeight.w500),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
                 Text(
                   doc.type,
-                  style: TextStyle(
-                    color: Colors.grey[600],
-                    fontSize: 12,
-                  ),
+                  style: TextStyle(color: Colors.grey[600], fontSize: 12),
                 ),
               ],
             ),
@@ -947,7 +995,7 @@ class _CostSubmissionFormScreenState extends ConsumerState<CostSubmissionFormScr
 
       if (result != null && result.files.isNotEmpty) {
         final file = result.files.first;
-        
+
         // Validate file
         final service = ref.read(costSubmissionServiceProvider);
         final validation = service.validateDocument(
@@ -977,9 +1025,9 @@ class _CostSubmissionFormScreenState extends ConsumerState<CostSubmissionFormScr
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error picking file: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error picking file: $e')));
       }
     }
   }
@@ -1021,7 +1069,9 @@ class _CostSubmissionFormScreenState extends ConsumerState<CostSubmissionFormScr
                 ),
               )
             : Text(
-                widget.editSubmissionId == null ? 'SUBMIT COSTS' : 'UPDATE SUBMISSION',
+                widget.editSubmissionId == null
+                    ? 'SUBMIT COSTS'
+                    : 'UPDATE SUBMISSION',
                 style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
@@ -1039,11 +1089,11 @@ class _CostSubmissionFormScreenState extends ConsumerState<CostSubmissionFormScr
 
     final service = ref.read(costSubmissionServiceProvider);
     final currentUser = Supabase.instance.client.auth.currentUser;
-    
+
     if (currentUser == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('User not authenticated')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('User not authenticated')));
       return;
     }
 
@@ -1059,10 +1109,13 @@ class _CostSubmissionFormScreenState extends ConsumerState<CostSubmissionFormScr
     }
 
     // CONSTRAINT 2: Validate project linkage - site visit must be linked to a project
-    if (_selectedSiteVisit!.mmpId == null || _selectedSiteVisit!.mmpId!.isEmpty) {
+    if (_selectedSiteVisit!.mmpId == null ||
+        _selectedSiteVisit!.mmpId!.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Cannot submit costs: Site visit is not linked to a project'),
+          content: Text(
+            'Cannot submit costs: Site visit is not linked to a project',
+          ),
           backgroundColor: Colors.red,
         ),
       );
@@ -1071,14 +1124,18 @@ class _CostSubmissionFormScreenState extends ConsumerState<CostSubmissionFormScr
 
     // CONSTRAINT 3: Validate assignment - site visit must be assigned to current user (unless admin/supervisor)
     final profile = ref.read(currentUserProfileProvider);
-    final isAdminOrSupervisor = profile?.role == 'admin' || 
-                                 profile?.role == 'supervisor' ||
-                                 profile?.role == 'financeAdmin';
-    
-    if (!isAdminOrSupervisor && _selectedSiteVisit!.assignedTo != currentUser.id) {
+    final isAdminOrSupervisor =
+        profile?.role == 'admin' ||
+        profile?.role == 'supervisor' ||
+        profile?.role == 'financeAdmin';
+
+    if (!isAdminOrSupervisor &&
+        _selectedSiteVisit!.assignedTo != currentUser.id) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('You can only submit costs for site visits assigned to you'),
+          content: Text(
+            'You can only submit costs for site visits assigned to you',
+          ),
           backgroundColor: Colors.red,
         ),
       );
@@ -1089,32 +1146,34 @@ class _CostSubmissionFormScreenState extends ConsumerState<CostSubmissionFormScr
     try {
       // Query mmp_files to get projectId
       final mmpResponse = await Supabase.instance.client
-        .from('mmp_files')
-        .select('project_id')
-        .eq('id', _selectedSiteVisit!.mmpId!)
-        .maybeSingle();
-      
+          .from('mmp_files')
+          .select('project_id')
+          .eq('id', _selectedSiteVisit!.mmpId!)
+          .maybeSingle();
+
       if (mmpResponse == null || mmpResponse['project_id'] == null) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Cannot submit costs: Site visit project information not found'),
+            content: Text(
+              'Cannot submit costs: Site visit project information not found',
+            ),
             backgroundColor: Colors.red,
           ),
         );
         return;
       }
-      
+
       final projectId = mmpResponse['project_id'] as String;
-      
+
       // Check if user is a member of this project
       // Note: Assuming project_team_members table exists with user_id and project_id
       final membershipResponse = await Supabase.instance.client
-        .from('project_team_members')
-        .select('id')
-        .eq('user_id', currentUser.id)
-        .eq('project_id', projectId)
-        .maybeSingle();
-      
+          .from('project_team_members')
+          .select('id')
+          .eq('user_id', currentUser.id)
+          .eq('project_id', projectId)
+          .maybeSingle();
+
       if (membershipResponse == null) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -1183,8 +1242,10 @@ class _CostSubmissionFormScreenState extends ConsumerState<CostSubmissionFormScr
         // Create new submission
         final request = CreateCostSubmissionRequest(
           siteVisitId: _selectedSiteVisitId!,
-          transportationCostCents: _parseCents(_transportCentsController.text) ?? 0,
-          accommodationCostCents: _parseCents(_accommodationCentsController.text) ?? 0,
+          transportationCostCents:
+              _parseCents(_transportCentsController.text) ?? 0,
+          accommodationCostCents:
+              _parseCents(_accommodationCentsController.text) ?? 0,
           mealAllowanceCents: _parseCents(_mealCentsController.text) ?? 0,
           otherCostsCents: _parseCents(_otherCentsController.text) ?? 0,
           currency: _selectedCurrency,
@@ -1210,8 +1271,10 @@ class _CostSubmissionFormScreenState extends ConsumerState<CostSubmissionFormScr
       } else {
         // Update existing submission
         final request = UpdateCostSubmissionRequest(
-          transportationCostCents: _parseCents(_transportCentsController.text) ?? 0,
-          accommodationCostCents: _parseCents(_accommodationCentsController.text) ?? 0,
+          transportationCostCents:
+              _parseCents(_transportCentsController.text) ?? 0,
+          accommodationCostCents:
+              _parseCents(_accommodationCentsController.text) ?? 0,
           mealAllowanceCents: _parseCents(_mealCentsController.text) ?? 0,
           otherCostsCents: _parseCents(_otherCentsController.text) ?? 0,
           transportationDetails: _transportDetailsController.text.isNotEmpty
@@ -1232,10 +1295,9 @@ class _CostSubmissionFormScreenState extends ConsumerState<CostSubmissionFormScr
           supportingDocuments: _documents.isNotEmpty ? _documents : null,
         );
 
-        await ref.read(updateCostSubmissionProvider.notifier).update(
-              widget.editSubmissionId!,
-              request,
-            );
+        await ref
+            .read(updateCostSubmissionProvider.notifier)
+            .update(widget.editSubmissionId!, request);
       }
 
       if (mounted) {
@@ -1254,10 +1316,7 @@ class _CostSubmissionFormScreenState extends ConsumerState<CostSubmissionFormScr
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: Colors.red,
-          ),
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
         );
       }
     } finally {

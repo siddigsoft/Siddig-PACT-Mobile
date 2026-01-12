@@ -1,4 +1,6 @@
 /// Advanced transaction search widget matching TSX TransactionSearch component
+library;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -11,18 +13,19 @@ class TransactionSearchWidget extends ConsumerStatefulWidget {
   final TransactionSearchFilters initialFilters;
 
   const TransactionSearchWidget({
-    Key? key,
+    super.key,
     this.onSearch,
     this.onClear,
     this.initialFilters = const TransactionSearchFilters(),
-  }) : super(key: key);
+  });
 
   @override
   ConsumerState<TransactionSearchWidget> createState() =>
       _TransactionSearchWidgetState();
 }
 
-class _TransactionSearchWidgetState extends ConsumerState<TransactionSearchWidget> {
+class _TransactionSearchWidgetState
+    extends ConsumerState<TransactionSearchWidget> {
   late TextEditingController _searchController;
   late TextEditingController _minAmountController;
   late TextEditingController _maxAmountController;
@@ -34,12 +37,15 @@ class _TransactionSearchWidgetState extends ConsumerState<TransactionSearchWidge
   @override
   void initState() {
     super.initState();
-    _searchController =
-        TextEditingController(text: widget.initialFilters.searchTerm ?? '');
-    _minAmountController =
-        TextEditingController(text: widget.initialFilters.minAmount?.toString() ?? '');
-    _maxAmountController =
-        TextEditingController(text: widget.initialFilters.maxAmount?.toString() ?? '');
+    _searchController = TextEditingController(
+      text: widget.initialFilters.searchTerm ?? '',
+    );
+    _minAmountController = TextEditingController(
+      text: widget.initialFilters.minAmount?.toString() ?? '',
+    );
+    _maxAmountController = TextEditingController(
+      text: widget.initialFilters.maxAmount?.toString() ?? '',
+    );
     _startDate = widget.initialFilters.startDate;
     _endDate = widget.initialFilters.endDate;
     _selectedType = widget.initialFilters.type;
@@ -55,12 +61,16 @@ class _TransactionSearchWidgetState extends ConsumerState<TransactionSearchWidge
 
   void _applyFilters() {
     final filters = TransactionSearchFilters(
-      searchTerm: _searchController.text.isEmpty ? null : _searchController.text,
+      searchTerm: _searchController.text.isEmpty
+          ? null
+          : _searchController.text,
       type: _selectedType,
-      minAmount:
-          _minAmountController.text.isEmpty ? null : double.tryParse(_minAmountController.text),
-      maxAmount:
-          _maxAmountController.text.isEmpty ? null : double.tryParse(_maxAmountController.text),
+      minAmount: _minAmountController.text.isEmpty
+          ? null
+          : double.tryParse(_minAmountController.text),
+      maxAmount: _maxAmountController.text.isEmpty
+          ? null
+          : double.tryParse(_maxAmountController.text),
       startDate: _startDate,
       endDate: _endDate,
     );
@@ -126,10 +136,7 @@ class _TransactionSearchWidgetState extends ConsumerState<TransactionSearchWidge
               children: [
                 const Text(
                   'Search & Filter',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                 ),
                 IconButton(
                   icon: Icon(
@@ -137,8 +144,9 @@ class _TransactionSearchWidgetState extends ConsumerState<TransactionSearchWidge
                         ? Icons.expand_less
                         : Icons.expand_more,
                   ),
-                  onPressed: () =>
-                      setState(() => _showAdvancedFilters = !_showAdvancedFilters),
+                  onPressed: () => setState(
+                    () => _showAdvancedFilters = !_showAdvancedFilters,
+                  ),
                   tooltip: _showAdvancedFilters
                       ? 'Hide advanced filters'
                       : 'Show advanced filters',
@@ -168,7 +176,7 @@ class _TransactionSearchWidgetState extends ConsumerState<TransactionSearchWidge
               const SizedBox(height: 16),
               // Type filter
               DropdownButtonFormField<String>(
-                value: _selectedType,
+                initialValue: _selectedType,
                 hint: const Text('Transaction Type'),
                 decoration: InputDecoration(
                   prefixIcon: const Icon(Icons.category),
@@ -181,10 +189,7 @@ class _TransactionSearchWidgetState extends ConsumerState<TransactionSearchWidge
                   ),
                 ),
                 items: [
-                  const DropdownMenuItem(
-                    value: null,
-                    child: Text('All Types'),
-                  ),
+                  const DropdownMenuItem(value: null, child: Text('All Types')),
                   const DropdownMenuItem(
                     value: TRANSACTION_TYPE_EARNING,
                     child: Text('Earnings'),
@@ -366,7 +371,9 @@ class _TransactionSearchWidgetState extends ConsumerState<TransactionSearchWidge
                           child: Text(
                             _startDate == null
                                 ? 'Select start date'
-                                : DateFormat('MMM dd, yyyy').format(_startDate!),
+                                : DateFormat(
+                                    'MMM dd, yyyy',
+                                  ).format(_startDate!),
                           ),
                         ),
                       ),

@@ -2,7 +2,6 @@
 // Enforces geographic and role-based constraints for data collectors and coordinators
 // Based on the comprehensive constraints document
 
-import 'package:flutter/foundation.dart';
 import '../models/site_visit.dart';
 import '../models/pact_user_profile.dart';
 
@@ -12,11 +11,7 @@ class ConstraintCheckResult {
   final String? reason;
   final String? action; // 'view', 'claim', 'accept', etc.
 
-  ConstraintCheckResult({
-    required this.allowed,
-    this.reason,
-    this.action,
-  });
+  ConstraintCheckResult({required this.allowed, this.reason, this.action});
 
   factory ConstraintCheckResult.allow() => ConstraintCheckResult(allowed: true);
 
@@ -32,7 +27,7 @@ class SiteVisitConstraints {
     if (user.stateId == null || user.stateId!.isEmpty) {
       return ConstraintCheckResult.deny(
         'Your profile has no state assigned. Contact your supervisor.',
-        action: 'view'
+        action: 'view',
       );
     }
 
@@ -40,12 +35,15 @@ class SiteVisitConstraints {
   }
 
   /// Check if a user can view assigned/accepted/ongoing/completed sites
-  static ConstraintCheckResult canViewAssignedSites(PACTUserProfile user, SiteVisit visit) {
+  static ConstraintCheckResult canViewAssignedSites(
+    PACTUserProfile user,
+    SiteVisit visit,
+  ) {
     // User can only see sites assigned to them
     if (visit.assignedTo != user.id) {
       return ConstraintCheckResult.deny(
         'You can only view sites assigned to you.',
-        action: 'view'
+        action: 'view',
       );
     }
 
@@ -63,9 +61,10 @@ class SiteVisitConstraints {
     final visitState = visit.state.toLowerCase().trim();
 
     // State must match (case-insensitive, substring matching)
-    final stateMatches = visitState == userState ||
-                        visitState.contains(userState) ||
-                        userState.contains(visitState);
+    final stateMatches =
+        visitState == userState ||
+        visitState.contains(userState) ||
+        userState.contains(visitState);
 
     if (!stateMatches) return false;
 
@@ -75,9 +74,10 @@ class SiteVisitConstraints {
       final userLocality = user.localityId!.toLowerCase().trim();
       final visitLocality = visit.locality.toLowerCase().trim();
 
-      final localityMatches = visitLocality == userLocality ||
-                             visitLocality.contains(userLocality) ||
-                             userLocality.contains(visitLocality);
+      final localityMatches =
+          visitLocality == userLocality ||
+          visitLocality.contains(userLocality) ||
+          userLocality.contains(visitLocality);
 
       return localityMatches;
     }
@@ -87,18 +87,22 @@ class SiteVisitConstraints {
   }
 
   /// Check if user can claim a site (comprehensive check)
-  static ConstraintCheckResult canClaimSite(SiteVisit visit, PACTUserProfile user) {
+  static ConstraintCheckResult canClaimSite(
+    SiteVisit visit,
+    PACTUserProfile user,
+  ) {
     // Check 1: Field worker status
-    final isFieldWorker = user.role == 'dataCollector' ||
-                         user.role.toLowerCase() == 'datacollector' ||
-                         user.role == 'coordinator';
+    final isFieldWorker =
+        user.role == 'dataCollector' ||
+        user.role.toLowerCase() == 'datacollector' ||
+        user.role == 'coordinator';
 
     final isSuperAdmin = user.role.toLowerCase() == 'superadmin';
 
     if (!isFieldWorker && !isSuperAdmin) {
       return ConstraintCheckResult.deny(
         'Only data collectors and coordinators can claim sites.',
-        action: 'claim'
+        action: 'claim',
       );
     }
 
@@ -111,7 +115,7 @@ class SiteVisitConstraints {
     if (user.classification == null) {
       return ConstraintCheckResult.deny(
         'You must have an active classification to claim sites. Contact your supervisor to get classified.',
-        action: 'claim'
+        action: 'claim',
       );
     }
 
@@ -121,7 +125,7 @@ class SiteVisitConstraints {
         user.classification!.effectiveUntil!.isBefore(now)) {
       return ConstraintCheckResult.deny(
         'Your classification has expired. Contact your supervisor to renew it.',
-        action: 'claim'
+        action: 'claim',
       );
     }
 
@@ -129,21 +133,22 @@ class SiteVisitConstraints {
     if (user.stateId == null || user.stateId!.isEmpty) {
       return ConstraintCheckResult.deny(
         'Your profile has no state assigned. Contact your supervisor.',
-        action: 'claim'
+        action: 'claim',
       );
     }
 
     final userState = user.stateId!.toLowerCase().trim();
     final siteState = visit.state.toLowerCase().trim();
 
-    final stateMatches = siteState == userState ||
-                        siteState.contains(userState) ||
-                        userState.contains(siteState);
+    final stateMatches =
+        siteState == userState ||
+        siteState.contains(userState) ||
+        userState.contains(siteState);
 
     if (!stateMatches) {
       return ConstraintCheckResult.deny(
         'This site is in ${visit.state}, but you are assigned to ${user.stateId}.',
-        action: 'claim'
+        action: 'claim',
       );
     }
 
@@ -152,14 +157,15 @@ class SiteVisitConstraints {
       final userLocality = user.localityId!.toLowerCase().trim();
       final visitLocality = visit.locality.toLowerCase().trim();
 
-      final localityMatches = visitLocality == userLocality ||
-                             visitLocality.contains(userLocality) ||
-                             userLocality.contains(visitLocality);
+      final localityMatches =
+          visitLocality == userLocality ||
+          visitLocality.contains(userLocality) ||
+          userLocality.contains(visitLocality);
 
       if (!localityMatches) {
         return ConstraintCheckResult.deny(
           'This site is in ${visit.locality}, but you are assigned to ${user.localityId}.',
-          action: 'claim'
+          action: 'claim',
         );
       }
     }
@@ -168,7 +174,7 @@ class SiteVisitConstraints {
     if (user.status != 'approved' && user.status != 'active') {
       return ConstraintCheckResult.deny(
         'Your account is not active. Contact your supervisor.',
-        action: 'claim'
+        action: 'claim',
       );
     }
 
@@ -176,13 +182,19 @@ class SiteVisitConstraints {
   }
 
   /// Check if user can accept a site (similar to claim but for accepted sites)
-  static ConstraintCheckResult canAcceptSite(SiteVisit visit, PACTUserProfile user) {
+  static ConstraintCheckResult canAcceptSite(
+    SiteVisit visit,
+    PACTUserProfile user,
+  ) {
     // Same checks as claiming
     return canClaimSite(visit, user);
   }
 
   /// Filter site visits based on user constraints
-  static List<SiteVisit> filterVisibleSites(List<SiteVisit> allSites, PACTUserProfile user) {
+  static List<SiteVisit> filterVisibleSites(
+    List<SiteVisit> allSites,
+    PACTUserProfile user,
+  ) {
     final filtered = <SiteVisit>[];
 
     for (final visit in allSites) {
@@ -194,8 +206,10 @@ class SiteVisitConstraints {
         if (viewCheck.allowed && siteMatchesUserGeography(visit, user)) {
           filtered.add(visit);
         }
-      } else if (status == 'assigned' || status == 'accepted' ||
-                 status == 'ongoing' || status == 'completed') {
+      } else if (status == 'assigned' ||
+          status == 'accepted' ||
+          status == 'ongoing' ||
+          status == 'completed') {
         // Assigned sites: only if assigned to user
         final viewCheck = canViewAssignedSites(user, visit);
         if (viewCheck.allowed) {
@@ -214,17 +228,20 @@ class SiteVisitConstraints {
       'stateId': user.stateId,
       'stateName': user.stateId, // Could be enhanced to get actual state name
       'localityId': user.localityId,
-      'localityName': user.localityId, // Could be enhanced to get actual locality name
+      'localityName':
+          user.localityId, // Could be enhanced to get actual locality name
       'hubId': user.hubId,
       'hubName': user.hubId, // Could be enhanced to get actual hub name
     };
   }
 
   /// Check if user has required profile configuration
-  static ConstraintCheckResult hasRequiredProfileConfiguration(PACTUserProfile user) {
+  static ConstraintCheckResult hasRequiredProfileConfiguration(
+    PACTUserProfile user,
+  ) {
     if (user.stateId == null || user.stateId!.isEmpty) {
       return ConstraintCheckResult.deny(
-        'Your profile does not have a state assigned. You will not be able to see or claim any dispatched sites.'
+        'Your profile does not have a state assigned. You will not be able to see or claim any dispatched sites.',
       );
     }
 
@@ -242,22 +259,25 @@ class SiteVisitConstraints {
       'status': user.status,
       'hasClassification': user.classification != null,
       'classificationLevel': user.classification?.level,
-      'classificationActive': user.classification != null &&
-                             (user.classification!.effectiveUntil == null ||
-                              user.classification!.effectiveUntil!.isAfter(DateTime.now())),
+      'classificationActive':
+          user.classification != null &&
+          (user.classification!.effectiveUntil == null ||
+              user.classification!.effectiveUntil!.isAfter(DateTime.now())),
       'geographicInfo': geographicInfo,
       'profileConfigured': profileCheck.allowed,
       'profileConfigurationMessage': profileCheck.reason,
-      'isFieldWorker': user.role == 'dataCollector' ||
-                      user.role.toLowerCase() == 'datacollector' ||
-                      user.role == 'coordinator',
+      'isFieldWorker':
+          user.role == 'dataCollector' ||
+          user.role.toLowerCase() == 'datacollector' ||
+          user.role == 'coordinator',
       'isSuperAdmin': user.role.toLowerCase() == 'superadmin',
-      'canClaimSites': profileCheck.allowed &&
-                      (user.classification != null) &&
-                      (user.role == 'dataCollector' ||
-                       user.role.toLowerCase() == 'datacollector' ||
-                       user.role == 'coordinator' ||
-                       user.role.toLowerCase() == 'superadmin'),
+      'canClaimSites':
+          profileCheck.allowed &&
+          (user.classification != null) &&
+          (user.role == 'dataCollector' ||
+              user.role.toLowerCase() == 'datacollector' ||
+              user.role == 'coordinator' ||
+              user.role.toLowerCase() == 'superadmin'),
     };
   }
 }

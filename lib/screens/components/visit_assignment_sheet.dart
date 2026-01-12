@@ -2,9 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../../models/site_visit.dart';
-import '../../models/visit_status.dart';
 import '../../theme/app_colors.dart';
 
 class VisitAssignmentSheet extends StatefulWidget {
@@ -42,8 +40,8 @@ class _VisitAssignmentSheetState extends State<VisitAssignmentSheet> {
               (visit) =>
                   visit.siteName.toLowerCase().contains(query.toLowerCase()) ||
                   visit.locationString.toLowerCase().contains(
-                        query.toLowerCase(),
-                      ),
+                    query.toLowerCase(),
+                  ),
             )
             .toList();
       }
@@ -137,100 +135,103 @@ class _VisitAssignmentSheetState extends State<VisitAssignmentSheet> {
 
   Widget _buildVisitCard(SiteVisit visit) {
     return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
-      // Made non-clickable (offline-friendly viewing only)
-      child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Text(
-                      visit.siteName,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
+          margin: const EdgeInsets.only(bottom: 12),
+          elevation: 2,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          // Made non-clickable (offline-friendly viewing only)
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        visit.siteName,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 6,
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.shade50,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        'Priority: ${visit.priority ?? 'Normal'}',
+                        style: TextStyle(
+                          color: Colors.blue.shade700,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
                     ),
-                    decoration: BoxDecoration(
-                      color: Colors.blue.shade50,
-                      borderRadius: BorderRadius.circular(20),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  visit.locationString,
+                  style: const TextStyle(fontSize: 16, color: Colors.black87),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Due: ${visit.dueDate?.toLocal().toString().split('.')[0] ?? 'Flexible'}',
+                  style: TextStyle(fontSize: 14, color: Colors.grey.shade700),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Icon(
+                      Icons.location_on,
+                      size: 16,
+                      color: Colors.red.shade400,
                     ),
-                    child: Text(
-                      'Priority: ${visit.priority ?? 'Normal'}',
-                      style: TextStyle(
-                        color: Colors.blue.shade700,
+                    const SizedBox(width: 4),
+                    Text(
+                      '${_calculateDistance(visit)} km away',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: Colors.black87,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text(
-                visit.locationString,
-                style: const TextStyle(fontSize: 16, color: Colors.black87),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                'Due: ${visit.dueDate?.toLocal().toString().split('.')[0] ?? 'Flexible'}',
-                style: TextStyle(fontSize: 14, color: Colors.grey.shade700),
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Icon(
-                    Icons.location_on,
-                    size: 16,
-                    color: Colors.red.shade400,
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    '${_calculateDistance(visit)} km away',
-                    style: const TextStyle(
-                      fontSize: 14,
-                      color: Colors.black87,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const Spacer(),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade200,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Text(
-                      'View Only',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.black54,
-                        fontWeight: FontWeight.w600,
+                    const Spacer(),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade200,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Text(
+                        'View Only',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.black54,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
-                  ),
-                ],
-              ),
-            ],
+                  ],
+                ),
+              ],
+            ),
           ),
-      ),
-    ).animate().fadeIn(duration: 300.ms, delay: 50.ms).slideY(
+        )
+        .animate()
+        .fadeIn(duration: 300.ms, delay: 50.ms)
+        .slideY(
           begin: 0.2,
           end: 0,
           duration: 300.ms,

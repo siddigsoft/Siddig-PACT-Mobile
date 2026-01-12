@@ -23,13 +23,13 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final WalletService _walletService = WalletService();
-  
+
   bool _isLoading = true;
   bool _isCoordinator = false;
   String? _userId;
   String? _userState;
   String? _userHub;
-  
+
   // Coordinator metrics
   int _totalOperations = 0;
   int _completedVisits = 0;
@@ -37,7 +37,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   int _pendingQueue = 0;
   double _completionRate = 0.0;
   List<SiteVisit> _coordinatorVisits = [];
-  
+
   // Data Collector metrics
   int _assigned = 0;
   int _today = 0;
@@ -53,7 +53,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Map<String, double>? _currentLocation;
   String? _locationLastUpdated;
   bool _isUpdatingLocation = false;
-  
+
   // Tab states
   String _coordinatorTab = 'overview';
   String _dataCollectorTab = 'my-visits';
@@ -91,10 +91,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
       if (profileResponse != null) {
         final role = (profileResponse['role'] as String?)?.toLowerCase() ?? '';
-        _isCoordinator = role == 'coordinator' || 
-                        role == 'field_coordinator' ||
-                        role == 'state_coordinator';
-        
+        _isCoordinator =
+            role == 'coordinator' ||
+            role == 'field_coordinator' ||
+            role == 'state_coordinator';
+
         _userState = profileResponse['state_id'] as String?;
         _userHub = profileResponse['hub_id'] as String?;
       }
@@ -118,7 +119,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void _setupRealtimeSubscription() {
     try {
       _realtimeChannel?.unsubscribe();
-      
+
       _realtimeChannel = Supabase.instance.client
           .channel('coordinator_dashboard_realtime')
           .onPostgresChanges(
@@ -165,8 +166,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
           .order('created_at', ascending: false)
           .limit(1000);
 
-      if (response == null) return;
-
       // Convert to SiteVisit objects
       final siteVisits = (response as List)
           .map((json) => SiteVisit.fromJson(json as Map<String, dynamic>))
@@ -176,34 +175,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
       // Calculate metrics (matching React implementation)
       _totalOperations = siteVisits.length;
-      
-      _completedVisits = siteVisits
-          .where((v) {
-            final status = v.status.toLowerCase();
-            return status == 'completed' || status == 'complete';
-          })
-          .length;
 
-      _activeOperations = siteVisits
-          .where((v) {
-            final status = v.status.toLowerCase();
-            return status == 'assigned' || 
-                   status == 'ongoing' ||
-                   status == 'in progress' ||
-                   status == 'in_progress' ||
-                   status == 'accepted';
-          })
-          .length;
+      _completedVisits = siteVisits.where((v) {
+        final status = v.status.toLowerCase();
+        return status == 'completed' || status == 'complete';
+      }).length;
 
-      _pendingQueue = siteVisits
-          .where((v) {
-            final status = v.status.toLowerCase();
-            return status == 'pending' || 
-                   status == 'dispatched' ||
-                   status == 'permitverified' ||
-                   status == 'permit_verified';
-          })
-          .length;
+      _activeOperations = siteVisits.where((v) {
+        final status = v.status.toLowerCase();
+        return status == 'assigned' ||
+            status == 'ongoing' ||
+            status == 'in progress' ||
+            status == 'in_progress' ||
+            status == 'accepted';
+      }).length;
+
+      _pendingQueue = siteVisits.where((v) {
+        final status = v.status.toLowerCase();
+        return status == 'pending' ||
+            status == 'dispatched' ||
+            status == 'permitverified' ||
+            status == 'permit_verified';
+      }).length;
 
       // Calculate completion rate
       if (_totalOperations > 0) {
@@ -244,30 +237,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
       // Combine and deduplicate results using a Map with id as key
       final allEntriesMap = <String, Map<String, dynamic>>{};
-      
+
       // Add entries from accepted_by query
-      if (acceptedByResponse != null) {
-        for (final entry in acceptedByResponse as List) {
-          final entryMap = entry as Map<String, dynamic>;
+      for (final entry in acceptedByResponse as List) {
+        final entryMap = entry as Map<String, dynamic>;
+        final entryId = entryMap['id'] as String?;
+        if (entryId != null) {
+          allEntriesMap[entryId] = entryMap;
+        }
+      }
+
+      // Add entries from additional_data->>'assigned_to' filter
+      for (final entry in allEntriesResponse as List) {
+        final entryMap = entry as Map<String, dynamic>;
+        final additionalData =
+            entryMap['additional_data'] as Map<String, dynamic>?;
+        final assignedTo = additionalData?['assigned_to'] as String?;
+
+        if (assignedTo == _userId) {
           final entryId = entryMap['id'] as String?;
           if (entryId != null) {
             allEntriesMap[entryId] = entryMap;
-          }
-        }
-      }
-      
-      // Add entries from additional_data->>'assigned_to' filter
-      if (allEntriesResponse != null) {
-        for (final entry in allEntriesResponse as List) {
-          final entryMap = entry as Map<String, dynamic>;
-          final additionalData = entryMap['additional_data'] as Map<String, dynamic>?;
-          final assignedTo = additionalData?['assigned_to'] as String?;
-          
-          if (assignedTo == _userId) {
-            final entryId = entryMap['id'] as String?;
-            if (entryId != null) {
-              allEntriesMap[entryId] = entryMap;
-            }
           }
         }
       }
@@ -283,55 +273,45 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _assigned = allVisits.length;
 
       // Filter by status
-      final acceptedVisits = allVisits
-          .where((v) {
-            final status = v.status.toLowerCase();
-            return status == 'assigned' || 
-                   status == 'accepted' ||
-                   status == 'permitverified' ||
-                   status == 'permit_verified';
-          })
-          .toList();
+      final acceptedVisits = allVisits.where((v) {
+        final status = v.status.toLowerCase();
+        return status == 'assigned' ||
+            status == 'accepted' ||
+            status == 'permitverified' ||
+            status == 'permit_verified';
+      }).toList();
 
-      _inProgress = allVisits
-          .where((v) {
-            final status = v.status.toLowerCase();
-            return status == 'inprogress' ||
-                   status == 'in_progress' ||
-                   status == 'ongoing';
-          })
-          .length;
+      _inProgress = allVisits.where((v) {
+        final status = v.status.toLowerCase();
+        return status == 'inprogress' ||
+            status == 'in_progress' ||
+            status == 'ongoing';
+      }).length;
 
-      _completed = allVisits
-          .where((v) {
-            final status = v.status.toLowerCase();
-            return status == 'completed' || status == 'complete';
-          })
-          .length;
+      _completed = allVisits.where((v) {
+        final status = v.status.toLowerCase();
+        return status == 'completed' || status == 'complete';
+      }).length;
 
       // Calculate today's visits
       final today = DateTime.now();
-      _today = acceptedVisits
-          .where((v) {
-            if (v.dueDate == null) return false;
-            final visitDate = v.dueDate!;
-            return visitDate.year == today.year &&
-                   visitDate.month == today.month &&
-                   visitDate.day == today.day;
-          })
-          .length;
+      _today = acceptedVisits.where((v) {
+        if (v.dueDate == null) return false;
+        final visitDate = v.dueDate!;
+        return visitDate.year == today.year &&
+            visitDate.month == today.month &&
+            visitDate.day == today.day;
+      }).length;
 
       // Calculate overdue visits
-      _overdue = acceptedVisits
-          .where((v) {
-            if (v.dueDate == null) return false;
-            final visitDate = v.dueDate!;
-            final todayStart = DateTime(today.year, today.month, today.day);
-            return visitDate.isBefore(todayStart) && 
-                   v.status.toLowerCase() != 'completed' &&
-                   v.status.toLowerCase() != 'complete';
-          })
-          .length;
+      _overdue = acceptedVisits.where((v) {
+        if (v.dueDate == null) return false;
+        final visitDate = v.dueDate!;
+        final todayStart = DateTime(today.year, today.month, today.day);
+        return visitDate.isBefore(todayStart) &&
+            v.status.toLowerCase() != 'completed' &&
+            v.status.toLowerCase() != 'complete';
+      }).length;
 
       // Get earnings from wallet
       try {
@@ -376,22 +356,35 @@ class _DashboardScreenState extends State<DashboardScreen> {
       if (data != null) {
         final location = data['location'];
         if (location != null) {
-          final locMap = location is Map ? location : 
-                        (location is String ? Map<String, dynamic>.from(
-                          Map<String, dynamic>.from(
-                            (location as String).split(',').asMap().map((i, v) => 
-                              MapEntry(i == 0 ? 'latitude' : 'longitude', double.tryParse(v.trim()) ?? 0.0)
-                            )
-                          )
-                        ) : null);
-          
+          final locMap = location is Map
+              ? location
+              : (location is String
+                    ? Map<String, dynamic>.from(
+                        Map<String, dynamic>.from(
+                          (location)
+                              .split(',')
+                              .asMap()
+                              .map(
+                                (i, v) => MapEntry(
+                                  i == 0 ? 'latitude' : 'longitude',
+                                  double.tryParse(v.trim()) ?? 0.0,
+                                ),
+                              ),
+                        ),
+                      )
+                    : null);
+
           if (locMap != null) {
             _currentLocation = {
-              'latitude': (locMap['latitude'] ?? locMap['lat'] ?? 0.0) as double,
-              'longitude': (locMap['longitude'] ?? locMap['lng'] ?? locMap['lon'] ?? 0.0) as double,
+              'latitude':
+                  (locMap['latitude'] ?? locMap['lat'] ?? 0.0) as double,
+              'longitude':
+                  (locMap['longitude'] ?? locMap['lng'] ?? locMap['lon'] ?? 0.0)
+                      as double,
             };
-            _hasLocation = _currentLocation!['latitude'] != 0.0 && 
-                          _currentLocation!['longitude'] != 0.0;
+            _hasLocation =
+                _currentLocation!['latitude'] != 0.0 &&
+                _currentLocation!['longitude'] != 0.0;
           }
         }
 
@@ -464,13 +457,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     if (completed.isEmpty) return 0;
 
-    final completedDates = completed
-        .where((v) => v.completedAt != null)
-        .map((v) => v.completedAt!.toLocal())
-        .map((d) => DateTime(d.year, d.month, d.day))
-        .toSet()
-        .toList()
-      ..sort((a, b) => b.compareTo(a));
+    final completedDates =
+        completed
+            .where((v) => v.completedAt != null)
+            .map((v) => v.completedAt!.toLocal())
+            .map((d) => DateTime(d.year, d.month, d.day))
+            .toSet()
+            .toList()
+          ..sort((a, b) => b.compareTo(a));
 
     if (completedDates.isEmpty) return 0;
 
@@ -553,7 +547,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 ),
                               ),
                               const SizedBox(height: 16),
-                              
+
                               // State/Hub indicator
                               if (_userState != null || _userHub != null)
                                 Container(
@@ -562,7 +556,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                     vertical: 6,
                                   ),
                                   decoration: BoxDecoration(
-                                    color: AppColors.accentGreen.withOpacity(0.1),
+                                    color: AppColors.accentGreen.withOpacity(
+                                      0.1,
+                                    ),
                                     borderRadius: BorderRadius.circular(20),
                                   ),
                                   child: Row(
@@ -575,7 +571,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                       ),
                                       const SizedBox(width: 4),
                                       Text(
-                                        _userState != null 
+                                        _userState != null
                                             ? 'State: $_userState'
                                             : 'Hub: $_userHub',
                                         style: GoogleFonts.poppins(
@@ -588,7 +584,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                   ),
                                 ),
                               const SizedBox(height: 24),
-                              
+
                               // Dashboard Cards
                               if (_isCoordinator)
                                 _buildCoordinatorCards()
@@ -601,7 +597,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               if (!_isCoordinator) _buildLocationCard(),
 
                               // Streak & Performance Banner (Data Collectors only)
-                              if (!_isCoordinator && (_streak > 0 || _completionRateDC > 0))
+                              if (!_isCoordinator &&
+                                  (_streak > 0 || _completionRateDC > 0))
                                 _buildPerformanceBanner(),
 
                               const SizedBox(height: 24),
@@ -640,7 +637,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
               child: DashboardCard(
                 title: 'Completed Visits',
                 value: _completedVisits.toString(),
-                subtitle: '${_completionRate.toStringAsFixed(1)}% completion rate',
+                subtitle:
+                    '${_completionRate.toStringAsFixed(1)}% completion rate',
                 icon: Icons.check_circle_outline,
                 color: AppColors.accentGreen,
               ),
@@ -771,7 +769,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   color: Colors.blue.shade600,
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Icon(Icons.location_on, color: Colors.white, size: 20),
+                child: const Icon(
+                  Icons.location_on,
+                  color: Colors.white,
+                  size: 20,
+                ),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -790,7 +792,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         ),
                         const SizedBox(width: 8),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
                           decoration: BoxDecoration(
                             color: _hasLocation ? Colors.green : Colors.red,
                             borderRadius: BorderRadius.circular(12),
@@ -799,7 +804,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Icon(
-                                _hasLocation ? Icons.check_circle : Icons.cancel,
+                                _hasLocation
+                                    ? Icons.check_circle
+                                    : Icons.cancel,
                                 size: 12,
                                 color: Colors.white,
                               ),
@@ -881,10 +888,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ? const SizedBox(
                       width: 16,
                       height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
                     )
                   : const Icon(Icons.refresh),
-              label: Text(_isUpdatingLocation ? 'Updating...' : (_hasLocation ? 'Update Location' : 'Share Location')),
+              label: Text(
+                _isUpdatingLocation
+                    ? 'Updating...'
+                    : (_hasLocation ? 'Update Location' : 'Share Location'),
+              ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.blue.shade600,
                 foregroundColor: Colors.white,
@@ -915,7 +929,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
           if (_streak > 0) ...[
             Row(
               children: [
-                Icon(Icons.local_fire_department, color: Colors.orange.shade600, size: 24),
+                Icon(
+                  Icons.local_fire_department,
+                  color: Colors.orange.shade600,
+                  size: 24,
+                ),
                 const SizedBox(width: 8),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1022,10 +1040,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
           // Tab Buttons
           Row(
             children: [
-              Expanded(child: _buildTabButton('overview', 'Overview', Icons.list_alt)),
-              Expanded(child: _buildTabButton('upcoming', 'Upcoming', Icons.calendar_today)),
-              Expanded(child: _buildTabButton('calendar', 'Calendar', Icons.calendar_month)),
-              Expanded(child: _buildTabButton('costs', 'Costs', Icons.attach_money)),
+              Expanded(
+                child: _buildTabButton('overview', 'Overview', Icons.list_alt),
+              ),
+              Expanded(
+                child: _buildTabButton(
+                  'upcoming',
+                  'Upcoming',
+                  Icons.calendar_today,
+                ),
+              ),
+              Expanded(
+                child: _buildTabButton(
+                  'calendar',
+                  'Calendar',
+                  Icons.calendar_month,
+                ),
+              ),
+              Expanded(
+                child: _buildTabButton('costs', 'Costs', Icons.attach_money),
+              ),
             ],
           ),
           const Divider(height: 1),
@@ -1057,11 +1091,37 @@ class _DashboardScreenState extends State<DashboardScreen> {
           // Tab Buttons
           Row(
             children: [
-              Expanded(child: _buildTabButton('my-visits', 'Visits', Icons.location_on)),
-              Expanded(child: _buildTabButton('schedule', 'Schedule', Icons.calendar_today)),
-              Expanded(child: _buildTabButton('performance', 'Stats', Icons.trending_up)),
-              Expanded(child: _buildTabButton('wallet', 'Wallet', Icons.account_balance_wallet)),
-              Expanded(child: _buildTabButton('help', 'Help', Icons.help_outline)),
+              Expanded(
+                child: _buildTabButton(
+                  'my-visits',
+                  'Visits',
+                  Icons.location_on,
+                ),
+              ),
+              Expanded(
+                child: _buildTabButton(
+                  'schedule',
+                  'Schedule',
+                  Icons.calendar_today,
+                ),
+              ),
+              Expanded(
+                child: _buildTabButton(
+                  'performance',
+                  'Stats',
+                  Icons.trending_up,
+                ),
+              ),
+              Expanded(
+                child: _buildTabButton(
+                  'wallet',
+                  'Wallet',
+                  Icons.account_balance_wallet,
+                ),
+              ),
+              Expanded(
+                child: _buildTabButton('help', 'Help', Icons.help_outline),
+              ),
             ],
           ),
           const Divider(height: 1),
@@ -1076,10 +1136,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _buildTabButton(String tab, String label, IconData icon) {
-    final isActive = _isCoordinator 
-        ? _coordinatorTab == tab 
+    final isActive = _isCoordinator
+        ? _coordinatorTab == tab
         : _dataCollectorTab == tab;
-    
+
     return InkWell(
       onTap: () => setState(() {
         if (_isCoordinator) {
@@ -1172,22 +1232,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
       children: [
         Text(
           'Site Visits Overview',
-          style: GoogleFonts.poppins(
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-          ),
+          style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 16),
-        ..._coordinatorVisits.take(10).map((visit) => _buildVisitListItem(visit)),
+        ..._coordinatorVisits
+            .take(10)
+            .map((visit) => _buildVisitListItem(visit)),
       ],
     );
   }
 
   Widget _buildUpcomingTab() {
-    final upcoming = _coordinatorVisits
-        .where((v) => v.dueDate != null && v.dueDate!.isAfter(DateTime.now()))
-        .toList()
-      ..sort((a, b) => a.dueDate!.compareTo(b.dueDate!));
+    final upcoming =
+        _coordinatorVisits
+            .where(
+              (v) => v.dueDate != null && v.dueDate!.isAfter(DateTime.now()),
+            )
+            .toList()
+          ..sort((a, b) => a.dueDate!.compareTo(b.dueDate!));
 
     if (upcoming.isEmpty) {
       return Center(
@@ -1206,10 +1268,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       children: [
         Text(
           'Upcoming Site Visits (${upcoming.length})',
-          style: GoogleFonts.poppins(
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-          ),
+          style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 16),
         ...upcoming.take(20).map((visit) => _buildVisitListItem(visit)),
@@ -1219,15 +1278,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildCalendarTab() {
     // Simplified calendar view - just show upcoming visits by date
-    final upcoming = _coordinatorVisits
-        .where((v) => v.dueDate != null && v.dueDate!.isAfter(DateTime.now()))
-        .toList()
-      ..sort((a, b) => a.dueDate!.compareTo(b.dueDate!));
+    final upcoming =
+        _coordinatorVisits
+            .where(
+              (v) => v.dueDate != null && v.dueDate!.isAfter(DateTime.now()),
+            )
+            .toList()
+          ..sort((a, b) => a.dueDate!.compareTo(b.dueDate!));
 
     final groupedByDate = <DateTime, List<SiteVisit>>{};
     for (final visit in upcoming) {
       if (visit.dueDate != null) {
-        final date = DateTime(visit.dueDate!.year, visit.dueDate!.month, visit.dueDate!.day);
+        final date = DateTime(
+          visit.dueDate!.year,
+          visit.dueDate!.month,
+          visit.dueDate!.day,
+        );
         groupedByDate.putIfAbsent(date, () => []).add(visit);
       }
     }
@@ -1249,10 +1315,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       children: [
         Text(
           'Calendar View',
-          style: GoogleFonts.poppins(
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-          ),
+          style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 16),
         ...groupedByDate.entries.map((entry) {
@@ -1284,10 +1347,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       children: [
         Text(
           'Cost Summary',
-          style: GoogleFonts.poppins(
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-          ),
+          style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 16),
         Container(
@@ -1298,9 +1358,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
           child: Column(
             children: [
-              _buildCostRow('Total Operations', _totalOperations.toString(), Icons.assessment),
+              _buildCostRow(
+                'Total Operations',
+                _totalOperations.toString(),
+                Icons.assessment,
+              ),
               const Divider(),
-              _buildCostRow('Completed', _completedVisits.toString(), Icons.check_circle),
+              _buildCostRow(
+                'Completed',
+                _completedVisits.toString(),
+                Icons.check_circle,
+              ),
               const Divider(),
               _buildCostRow('Active', _activeOperations.toString(), Icons.work),
               const Divider(),
@@ -1320,10 +1388,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           Icon(icon, size: 20, color: AppColors.primaryBlue),
           const SizedBox(width: 12),
           Expanded(
-            child: Text(
-              label,
-              style: GoogleFonts.poppins(fontSize: 14),
-            ),
+            child: Text(label, style: GoogleFonts.poppins(fontSize: 14)),
           ),
           Text(
             value,
@@ -1338,31 +1403,30 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _buildMyVisitsTab() {
-    final overdue = _dataCollectorVisits
-        .where((v) {
-          if (v.dueDate == null) return false;
-          final today = DateTime.now();
-          final todayStart = DateTime(today.year, today.month, today.day);
-          return v.dueDate!.isBefore(todayStart) &&
-                 v.status.toLowerCase() != 'completed' &&
-                 v.status.toLowerCase() != 'complete';
-        })
-        .toList();
+    final overdue = _dataCollectorVisits.where((v) {
+      if (v.dueDate == null) return false;
+      final today = DateTime.now();
+      final todayStart = DateTime(today.year, today.month, today.day);
+      return v.dueDate!.isBefore(todayStart) &&
+          v.status.toLowerCase() != 'completed' &&
+          v.status.toLowerCase() != 'complete';
+    }).toList();
 
     final today = DateTime.now();
-    final todaysVisits = _dataCollectorVisits
-        .where((v) {
-          if (v.dueDate == null) return false;
-          return v.dueDate!.year == today.year &&
-                 v.dueDate!.month == today.month &&
-                 v.dueDate!.day == today.day;
-        })
-        .toList();
+    final todaysVisits = _dataCollectorVisits.where((v) {
+      if (v.dueDate == null) return false;
+      return v.dueDate!.year == today.year &&
+          v.dueDate!.month == today.month &&
+          v.dueDate!.day == today.day;
+    }).toList();
 
-    final upcoming = _dataCollectorVisits
-        .where((v) => v.dueDate != null && v.dueDate!.isAfter(DateTime.now()))
-        .toList()
-      ..sort((a, b) => a.dueDate!.compareTo(b.dueDate!));
+    final upcoming =
+        _dataCollectorVisits
+            .where(
+              (v) => v.dueDate != null && v.dueDate!.isAfter(DateTime.now()),
+            )
+            .toList()
+          ..sort((a, b) => a.dueDate!.compareTo(b.dueDate!));
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1393,7 +1457,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ],
                 ),
                 const SizedBox(height: 12),
-                ...overdue.take(5).map((visit) => _buildVisitListItem(visit, isOverdue: true)),
+                ...overdue
+                    .take(5)
+                    .map(
+                      (visit) => _buildVisitListItem(visit, isOverdue: true),
+                    ),
               ],
             ),
           ),
@@ -1428,7 +1496,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
               padding: const EdgeInsets.all(32),
               child: Column(
                 children: [
-                  Icon(Icons.location_off, size: 48, color: AppColors.textLight),
+                  Icon(
+                    Icons.location_off,
+                    size: 48,
+                    color: AppColors.textLight,
+                  ),
                   const SizedBox(height: 16),
                   Text(
                     'No visits assigned at the moment.',
@@ -1461,10 +1533,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       children: [
         Text(
           'Performance Stats',
-          style: GoogleFonts.poppins(
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-          ),
+          style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 16),
         Container(
@@ -1476,14 +1545,30 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
           child: Column(
             children: [
-              _buildStatRow('Completion Rate', '${_completionRateDC.toStringAsFixed(1)}%', Icons.trending_up),
+              _buildStatRow(
+                'Completion Rate',
+                '${_completionRateDC.toStringAsFixed(1)}%',
+                Icons.trending_up,
+              ),
               const Divider(),
-              _buildStatRow('Completed', _completed.toString(), Icons.check_circle),
+              _buildStatRow(
+                'Completed',
+                _completed.toString(),
+                Icons.check_circle,
+              ),
               const Divider(),
-              _buildStatRow('Total Assigned', _assigned.toString(), Icons.assignment),
+              _buildStatRow(
+                'Total Assigned',
+                _assigned.toString(),
+                Icons.assignment,
+              ),
               if (_averageVisitTime != null) ...[
                 const Divider(),
-                _buildStatRow('Avg Visit Time', '$_averageVisitTime min', Icons.access_time),
+                _buildStatRow(
+                  'Avg Visit Time',
+                  '$_averageVisitTime min',
+                  Icons.access_time,
+                ),
               ],
             ],
           ),
@@ -1500,10 +1585,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           Icon(icon, size: 20, color: AppColors.primaryBlue),
           const SizedBox(width: 12),
           Expanded(
-            child: Text(
-              label,
-              style: GoogleFonts.poppins(fontSize: 14),
-            ),
+            child: Text(label, style: GoogleFonts.poppins(fontSize: 14)),
           ),
           Text(
             value,
@@ -1523,10 +1605,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       children: [
         Text(
           'Wallet Summary',
-          style: GoogleFonts.poppins(
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-          ),
+          style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 16),
         Container(
@@ -1571,33 +1650,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
       children: [
         Text(
           'Quick Guide',
-          style: GoogleFonts.poppins(
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-          ),
+          style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 16),
-        _buildHelpCard(
-          'Starting a Visit',
-          [
-            '1. Find your assigned visit',
-            '2. Click "Start" button',
-            '3. Enable location permissions',
-            '4. Complete the visit report',
-          ],
-          Icons.play_arrow,
-        ),
+        _buildHelpCard('Starting a Visit', [
+          '1. Find your assigned visit',
+          '2. Click "Start" button',
+          '3. Enable location permissions',
+          '4. Complete the visit report',
+        ], Icons.play_arrow),
         const SizedBox(height: 12),
-        _buildHelpCard(
-          'Completing a Visit',
-          [
-            '1. Fill in all required fields',
-            '2. Add photos if needed',
-            '3. Submit the report',
-            '4. Wait for verification',
-          ],
-          Icons.check_circle,
-        ),
+        _buildHelpCard('Completing a Visit', [
+          '1. Fill in all required fields',
+          '2. Add photos if needed',
+          '3. Submit the report',
+          '4. Wait for verification',
+        ], Icons.check_circle),
         const SizedBox(height: 16),
         Container(
           padding: const EdgeInsets.all(16),
@@ -1624,23 +1692,39 @@ class _DashboardScreenState extends State<DashboardScreen> {
               const SizedBox(height: 8),
               Text(
                 'Contact your coordinator or supervisor for assistance with:',
-                style: GoogleFonts.poppins(fontSize: 12, color: AppColors.textLight),
+                style: GoogleFonts.poppins(
+                  fontSize: 12,
+                  color: AppColors.textLight,
+                ),
               ),
               const SizedBox(height: 8),
-              ...['Visit assignments', 'Technical issues', 'Payment questions', 'Report problems']
-                  .map((item) => Padding(
-                        padding: const EdgeInsets.only(left: 16, top: 4),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.circle, size: 6, color: AppColors.textLight),
-                            const SizedBox(width: 8),
-                            Text(
-                              item,
-                              style: GoogleFonts.poppins(fontSize: 12, color: AppColors.textLight),
-                            ),
-                          ],
+              ...[
+                'Visit assignments',
+                'Technical issues',
+                'Payment questions',
+                'Report problems',
+              ].map(
+                (item) => Padding(
+                  padding: const EdgeInsets.only(left: 16, top: 4),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.circle,
+                        size: 6,
+                        color: AppColors.textLight,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        item,
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          color: AppColors.textLight,
                         ),
-                      )),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ],
           ),
         ),
@@ -1672,16 +1756,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ],
           ),
           const SizedBox(height: 12),
-          ...steps.map((step) => Padding(
-                padding: const EdgeInsets.only(left: 8, top: 4),
-                child: Text(
-                  step,
-                  style: GoogleFonts.poppins(
-                    fontSize: 12,
-                    color: AppColors.textLight,
-                  ),
+          ...steps.map(
+            (step) => Padding(
+              padding: const EdgeInsets.only(left: 8, top: 4),
+              child: Text(
+                step,
+                style: GoogleFonts.poppins(
+                  fontSize: 12,
+                  color: AppColors.textLight,
                 ),
-              )),
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -1755,9 +1841,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Color _getStatusColor(String status) {
     final s = status.toLowerCase();
     if (s == 'completed' || s == 'complete') return Colors.green;
-    if (s == 'in progress' || s == 'in_progress' || s == 'ongoing') return Colors.blue;
+    if (s == 'in progress' || s == 'in_progress' || s == 'ongoing')
+      return Colors.blue;
     if (s == 'pending' || s == 'assigned') return Colors.orange;
     return AppColors.textLight;
   }
 }
-

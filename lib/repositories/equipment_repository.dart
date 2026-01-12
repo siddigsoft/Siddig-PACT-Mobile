@@ -1,14 +1,9 @@
-import 'package:sqflite/sqflite.dart';
 import '../models/equipment.dart';
 import 'base_repository.dart';
 
 class EquipmentRepository extends BaseRepository<Equipment> {
-  EquipmentRepository({
-    required super.database,
-    required super.supabaseService,
-  }) : super(
-          tableName: 'equipment',
-        );
+  EquipmentRepository({required super.database, required super.supabaseService})
+    : super(tableName: 'equipment');
 
   @override
   Map<String, dynamic> toMap(Equipment item) => item.toJson();

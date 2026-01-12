@@ -49,9 +49,9 @@ class PaymentMethodsScreen extends ConsumerWidget {
           const SizedBox(height: 8),
           Text(
             'Add a payment method to receive funds',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Colors.grey[600],
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: Colors.grey[600]),
           ),
         ],
       ),
@@ -167,10 +167,7 @@ class PaymentMethodsScreen extends ConsumerWidget {
                       const SizedBox(height: 4),
                       Text(
                         method.paymentType.displayName,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey[600],
-                        ),
+                        style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                       ),
                     ],
                   ),
@@ -237,11 +234,15 @@ class PaymentMethodsScreen extends ConsumerWidget {
     );
   }
 
-  void _setAsDefault(BuildContext context, WidgetRef ref, PaymentMethod method) async {
+  void _setAsDefault(
+    BuildContext context,
+    WidgetRef ref,
+    PaymentMethod method,
+  ) async {
     try {
       final notifier = ref.read(paymentMethodsProvider.notifier);
       await notifier.setDefaultPaymentMethod(method.id);
-      
+
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -253,16 +254,17 @@ class PaymentMethodsScreen extends ConsumerWidget {
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: Colors.red,
-          ),
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
         );
       }
     }
   }
 
-  void _confirmDelete(BuildContext context, WidgetRef ref, PaymentMethod method) {
+  void _confirmDelete(
+    BuildContext context,
+    WidgetRef ref,
+    PaymentMethod method,
+  ) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -286,11 +288,15 @@ class PaymentMethodsScreen extends ConsumerWidget {
     );
   }
 
-  void _deletePaymentMethod(BuildContext context, WidgetRef ref, PaymentMethod method) async {
+  void _deletePaymentMethod(
+    BuildContext context,
+    WidgetRef ref,
+    PaymentMethod method,
+  ) async {
     try {
       final notifier = ref.read(paymentMethodsProvider.notifier);
       await notifier.removePaymentMethod(method.id);
-      
+
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -302,10 +308,7 @@ class PaymentMethodsScreen extends ConsumerWidget {
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: Colors.red,
-          ),
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
         );
       }
     }
@@ -368,7 +371,7 @@ class _AddPaymentMethodDialogState extends State<AddPaymentMethodDialog> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               DropdownButtonFormField<PaymentType>(
-                value: _selectedType,
+                initialValue: _selectedType,
                 decoration: const InputDecoration(
                   labelText: 'Payment Type',
                   border: OutlineInputBorder(),
@@ -558,15 +561,23 @@ class _AddPaymentMethodDialogState extends State<AddPaymentMethodDialog> {
       final request = CreatePaymentMethodRequest(
         type: _selectedType,
         // Map provider name or cardholder name to 'name' field based on type
-        name: _selectedType == PaymentType.bank 
+        name: _selectedType == PaymentType.bank
             ? _bankNameController.text
             : _selectedType == PaymentType.mobileMoney
-                ? _providerNameController.text
-                : _cardholderNameController.text,
-        bankName: _selectedType == PaymentType.bank ? _bankNameController.text : null,
-        accountNumber: _selectedType == PaymentType.bank ? _accountNumberController.text : null,
-        phoneNumber: _selectedType == PaymentType.mobileMoney ? _phoneNumberController.text : null,
-        cardNumber: _selectedType == PaymentType.card ? _cardNumberController.text : null,
+            ? _providerNameController.text
+            : _cardholderNameController.text,
+        bankName: _selectedType == PaymentType.bank
+            ? _bankNameController.text
+            : null,
+        accountNumber: _selectedType == PaymentType.bank
+            ? _accountNumberController.text
+            : null,
+        phoneNumber: _selectedType == PaymentType.mobileMoney
+            ? _phoneNumberController.text
+            : null,
+        cardNumber: _selectedType == PaymentType.card
+            ? _cardNumberController.text
+            : null,
       );
 
       final notifier = widget.ref.read(paymentMethodsProvider.notifier);
@@ -588,10 +599,7 @@ class _AddPaymentMethodDialogState extends State<AddPaymentMethodDialog> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: Colors.red,
-          ),
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
         );
       }
     }

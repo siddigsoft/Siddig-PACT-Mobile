@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../theme/app_colors.dart';
-import '../theme/app_design_system.dart';
 import '../widgets/app_widgets.dart';
 import '../providers/offline_provider.dart';
 import '../providers/active_visit_provider.dart';
@@ -55,7 +53,9 @@ class _StartVisitButtonState extends ConsumerState<StartVisitButton> {
             : Icon(isCurrentVisit ? Icons.play_arrow : Icons.play_circle_fill),
         label: Text(_getButtonText(isCurrentVisit)),
         style: ElevatedButton.styleFrom(
-          backgroundColor: isCurrentVisit ? AppColors.success : AppColors.primaryOrange,
+          backgroundColor: isCurrentVisit
+              ? AppColors.success
+              : AppColors.primaryOrange,
           foregroundColor: Colors.white,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
@@ -127,7 +127,7 @@ class _StartVisitButtonState extends ConsumerState<StartVisitButton> {
   Future<void> _startVisitOnline() async {
     final supabase = Supabase.instance.client;
     final userId = supabase.auth.currentUser?.id;
-    
+
     if (userId == null) {
       throw Exception('User not authenticated');
     }
@@ -143,20 +143,22 @@ class _StartVisitButtonState extends ConsumerState<StartVisitButton> {
             'start_location': {
               'latitude': null, // Will be updated by GPS tracking
               'longitude': null,
-            }
-          }
+            },
+          },
         })
         .eq('id', widget.visit.id);
   }
 
   Future<void> _startVisitOffline() async {
     // Use offline provider to queue the start
-    await ref.read(startSiteVisitOfflineProvider((
-      siteEntryId: widget.visit.id,
-      siteName: widget.visit.siteName,
-      siteCode: widget.visit.siteCode,
-      state: widget.visit.state,
-      locality: widget.visit.locality,
-    )).future);
+    await ref.read(
+      startSiteVisitOfflineProvider((
+        siteEntryId: widget.visit.id,
+        siteName: widget.visit.siteName,
+        siteCode: widget.visit.siteCode,
+        state: widget.visit.state,
+        locality: widget.visit.locality,
+      )).future,
+    );
   }
 }

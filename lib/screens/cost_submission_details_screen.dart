@@ -8,10 +8,7 @@ import 'cost_submission_form_screen.dart';
 class CostSubmissionDetailsScreen extends ConsumerWidget {
   final String submissionId;
 
-  const CostSubmissionDetailsScreen({
-    super.key,
-    required this.submissionId,
-  });
+  const CostSubmissionDetailsScreen({super.key, required this.submissionId});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -33,7 +30,7 @@ class CostSubmissionDetailsScreen extends ConsumerWidget {
             data: (submission) {
               if (submission == null) return const SizedBox.shrink();
               if (!submission.canEdit) return const SizedBox.shrink();
-              
+
               return PopupMenuButton<String>(
                 icon: const Icon(Icons.more_vert, color: Colors.white),
                 onSelected: (value) {
@@ -114,7 +111,10 @@ class CostSubmissionDetailsScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildHeader(CostSubmission submission, CostSubmissionService service) {
+  Widget _buildHeader(
+    CostSubmission submission,
+    CostSubmissionService service,
+  ) {
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
@@ -143,18 +143,12 @@ class CostSubmissionDetailsScreen extends ConsumerWidget {
           const SizedBox(height: 4),
           Text(
             '${submission.totalCostCents} cents',
-            style: const TextStyle(
-              color: Colors.white70,
-              fontSize: 14,
-            ),
+            style: const TextStyle(color: Colors.white70, fontSize: 14),
           ),
           const SizedBox(height: 16),
           Text(
             'Submitted ${service.getRelativeTime(submission.submittedAt)}',
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 14,
-            ),
+            style: const TextStyle(color: Colors.white, fontSize: 14),
           ),
         ],
       ),
@@ -164,7 +158,7 @@ class CostSubmissionDetailsScreen extends ConsumerWidget {
   Widget _buildStatusBadge(CostSubmissionStatus status) {
     Color color;
     String label;
-    
+
     switch (status) {
       case CostSubmissionStatus.pending:
         color = const Color(0xFFFF9800);
@@ -210,7 +204,10 @@ class CostSubmissionDetailsScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildCostBreakdown(CostSubmission submission, CostSubmissionService service) {
+  Widget _buildCostBreakdown(
+    CostSubmission submission,
+    CostSubmissionService service,
+  ) {
     final breakdown = service.getCostBreakdown(submission);
     final percentages = service.getCostPercentages(submission);
 
@@ -226,10 +223,7 @@ class CostSubmissionDetailsScreen extends ConsumerWidget {
             children: [
               const Text(
                 'Cost Breakdown',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 16),
               ...breakdown.entries.map((entry) {
@@ -249,7 +243,10 @@ class CostSubmissionDetailsScreen extends ConsumerWidget {
                             ),
                           ),
                           Text(
-                            service.formatCurrency(entry.value, currency: submission.currency),
+                            service.formatCurrency(
+                              entry.value,
+                              currency: submission.currency,
+                            ),
                             style: const TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.bold,
@@ -280,7 +277,7 @@ class CostSubmissionDetailsScreen extends ConsumerWidget {
                     ],
                   ),
                 );
-              }).toList(),
+              }),
             ],
           ),
         ),
@@ -303,7 +300,10 @@ class CostSubmissionDetailsScreen extends ConsumerWidget {
     }
   }
 
-  Widget _buildDetails(CostSubmission submission, CostSubmissionService service) {
+  Widget _buildDetails(
+    CostSubmission submission,
+    CostSubmissionService service,
+  ) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
       child: Card(
@@ -316,19 +316,25 @@ class CostSubmissionDetailsScreen extends ConsumerWidget {
             children: [
               const Text(
                 'Details',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 16),
               _buildDetailRow('Site Visit', submission.siteVisitId),
-              _buildDetailRow('Submitted', service.formatDateTime(submission.submittedAt)),
+              _buildDetailRow(
+                'Submitted',
+                service.formatDateTime(submission.submittedAt),
+              ),
               _buildDetailRow('Currency', submission.currency),
               if (submission.transportationDetails != null)
-                _buildDetailRow('Transportation Details', submission.transportationDetails!),
+                _buildDetailRow(
+                  'Transportation Details',
+                  submission.transportationDetails!,
+                ),
               if (submission.accommodationDetails != null)
-                _buildDetailRow('Accommodation Details', submission.accommodationDetails!),
+                _buildDetailRow(
+                  'Accommodation Details',
+                  submission.accommodationDetails!,
+                ),
               if (submission.mealDetails != null)
                 _buildDetailRow('Meal Details', submission.mealDetails!),
               if (submission.otherCostsDetails != null)
@@ -337,18 +343,12 @@ class CostSubmissionDetailsScreen extends ConsumerWidget {
                 const Divider(height: 24),
                 const Text(
                   'Notes',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                  ),
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                 ),
                 const SizedBox(height: 8),
                 Text(
                   submission.submissionNotes!,
-                  style: TextStyle(
-                    color: Colors.grey[700],
-                    fontSize: 14,
-                  ),
+                  style: TextStyle(color: Colors.grey[700], fontSize: 14),
                 ),
               ],
             ],
@@ -368,19 +368,13 @@ class CostSubmissionDetailsScreen extends ConsumerWidget {
             width: 140,
             child: Text(
               label,
-              style: TextStyle(
-                color: Colors.grey[600],
-                fontSize: 14,
-              ),
+              style: TextStyle(color: Colors.grey[600], fontSize: 14),
             ),
           ),
           Expanded(
             child: Text(
               value,
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-              ),
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
             ),
           ),
         ],
@@ -403,14 +397,14 @@ class CostSubmissionDetailsScreen extends ConsumerWidget {
                 children: [
                   const Text(
                     'Supporting Documents',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                   const Spacer(),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: const Color(0xFF1976D2).withOpacity(0.1),
                       borderRadius: BorderRadius.circular(12),
@@ -426,7 +420,9 @@ class CostSubmissionDetailsScreen extends ConsumerWidget {
                 ],
               ),
               const SizedBox(height: 16),
-              ...submission.supportingDocuments.map((doc) => _buildDocumentItem(doc)),
+              ...submission.supportingDocuments.map(
+                (doc) => _buildDocumentItem(doc),
+              ),
             ],
           ),
         ),
@@ -464,10 +460,7 @@ class CostSubmissionDetailsScreen extends ConsumerWidget {
                 ),
                 Text(
                   doc.type,
-                  style: TextStyle(
-                    color: Colors.grey[600],
-                    fontSize: 12,
-                  ),
+                  style: TextStyle(color: Colors.grey[600], fontSize: 12),
                 ),
               ],
             ),
@@ -497,7 +490,10 @@ class CostSubmissionDetailsScreen extends ConsumerWidget {
     }
   }
 
-  Widget _buildReviewSection(CostSubmission submission, CostSubmissionService service) {
+  Widget _buildReviewSection(
+    CostSubmission submission,
+    CostSubmissionService service,
+  ) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
       child: Card(
@@ -510,47 +506,35 @@ class CostSubmissionDetailsScreen extends ConsumerWidget {
             children: [
               const Text(
                 'Review',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 16),
               if (submission.reviewedAt != null)
-                _buildDetailRow('Reviewed', service.formatDateTime(submission.reviewedAt!)),
+                _buildDetailRow(
+                  'Reviewed',
+                  service.formatDateTime(submission.reviewedAt!),
+                ),
               if (submission.reviewerNotes != null) ...[
                 const Text(
                   'Reviewer Notes',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                  ),
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                 ),
                 const SizedBox(height: 8),
                 Text(
                   submission.reviewerNotes!,
-                  style: TextStyle(
-                    color: Colors.grey[700],
-                    fontSize: 14,
-                  ),
+                  style: TextStyle(color: Colors.grey[700], fontSize: 14),
                 ),
               ],
               if (submission.approvalNotes != null) ...[
                 const SizedBox(height: 12),
                 const Text(
                   'Approval Notes',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                  ),
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                 ),
                 const SizedBox(height: 8),
                 Text(
                   submission.approvalNotes!,
-                  style: TextStyle(
-                    color: Colors.grey[700],
-                    fontSize: 14,
-                  ),
+                  style: TextStyle(color: Colors.grey[700], fontSize: 14),
                 ),
               ],
             ],
@@ -560,13 +544,16 @@ class CostSubmissionDetailsScreen extends ConsumerWidget {
     );
   }
 
-  Future<void> _handleEdit(BuildContext context, WidgetRef ref, CostSubmission submission) async {
+  Future<void> _handleEdit(
+    BuildContext context,
+    WidgetRef ref,
+    CostSubmission submission,
+  ) async {
     final result = await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => CostSubmissionFormScreen(
-          editSubmissionId: submission.id,
-        ),
+        builder: (context) =>
+            CostSubmissionFormScreen(editSubmissionId: submission.id),
       ),
     );
 
@@ -576,12 +563,18 @@ class CostSubmissionDetailsScreen extends ConsumerWidget {
     }
   }
 
-  Future<void> _handleCancel(BuildContext context, WidgetRef ref, CostSubmission submission) async {
+  Future<void> _handleCancel(
+    BuildContext context,
+    WidgetRef ref,
+    CostSubmission submission,
+  ) async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Cancel Submission'),
-        content: const Text('Are you sure you want to cancel this cost submission?'),
+        content: const Text(
+          'Are you sure you want to cancel this cost submission?',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -601,8 +594,10 @@ class CostSubmissionDetailsScreen extends ConsumerWidget {
 
     if (confirm == true && context.mounted) {
       try {
-        await ref.read(cancelCostSubmissionProvider.notifier).cancel(submission.id);
-        
+        await ref
+            .read(cancelCostSubmissionProvider.notifier)
+            .cancel(submission.id);
+
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -615,10 +610,7 @@ class CostSubmissionDetailsScreen extends ConsumerWidget {
       } catch (e) {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Error: $e'),
-              backgroundColor: Colors.red,
-            ),
+            SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
           );
         }
       }
