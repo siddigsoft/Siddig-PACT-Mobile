@@ -178,8 +178,6 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
     try {
       // Fetch sites assigned to this coordinator
       // Primary method: forwarded_to_user_id (same as dashboard)
-      // Also check additional_data for assigned_to field
-      // Regional filters applied only if coordinator has them in profile
 
       debugPrint('=== FETCHING SITES FOR VERIFICATION ===');
       debugPrint('User ID: $_userId');
@@ -187,7 +185,7 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
       debugPrint('User Hub: $_userHub');
       debugPrint('User Locality: $_userLocality');
 
-      // PRIMARY APPROACH: Fetch by forwarded_to_user_id (same as dashboard)
+      // Fetch by forwarded_to_user_id
       List<Map<String, dynamic>> sites = [];
 
       try {
@@ -206,67 +204,7 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
         debugPrint('Error fetching by forwarded_to_user_id: $e');
       }
 
-      // SECONDARY APPROACH: Also check additional_data for assigned_to
-      // Fetch all sites and filter in memory (more reliable than JSONB query)
-      if (sites.length < 50) {
-        // Only do this if we got few results, to avoid performance issues
-        try {
-          final response2 = await _supabase
-              .from('mmp_site_entries')
-              .select('*, mmp_files(name, workflow)')
-              .order('created_at', ascending: false)
-              .limit(500);
-
-          if (response2 != null) {
-            // Filter in memory for sites where additional_data contains assigned_to
-            final additionalSites = (response2 as List).where((site) {
-              final additionalData = site['additional_data'] as Map<String, dynamic>?;
-              if (additionalData == null) return false;
-              final assignedTo = additionalData['assigned_to']?.toString();
-              return assignedTo == _userId;
-            }).toList();
-
-            // Add sites not already in list (avoid duplicates)
-            for (final site in additionalSites) {
-              final exists = sites.any((s) => s['id'] == site['id']);
-              if (!exists) {
-                sites.add(Map<String, dynamic>.from(site));
-              }
-            }
-            debugPrint('Sites added from additional_data assigned_to: ${additionalSites.length}');
-            debugPrint('Total sites after both queries: ${sites.length}');
-          }
-        } catch (e) {
-          debugPrint('Error fetching by additional_data assigned_to: $e');
-        }
-      }
-
-      // FALLBACK: If still no sites and user has state, try by state/hub
-      if (sites.isEmpty && _userState != null && _userState!.isNotEmpty) {
-        try {
-          debugPrint('No sites found by user assignment, trying by state/hub...');
-          var query = _supabase
-              .from('mmp_site_entries')
-              .select('*, mmp_files(name, workflow)')
-              .eq('state', _userState!);
-
-          if (_userHub != null && _userHub!.isNotEmpty) {
-            query = query.eq('hub_office', _userHub!);
-          }
-
-          final response3 = await query
-              .order('created_at', ascending: false)
-              .limit(1000);
-          if (response3 != null) {
-            sites.addAll(List<Map<String, dynamic>>.from(response3));
-            debugPrint('Sites found by state/hub: ${sites.length}');
-          }
-        } catch (e) {
-          debugPrint('Error fetching by state/hub: $e');
-        }
-      }
-
-      debugPrint('Total sites fetched before filtering: ${sites.length}');
+      debugPrint('Total sites fetched: ${sites.length}');
 
       // Do not filter by locality; show all sites forwarded/assigned to the coordinator.
       // This matches the dashboard behavior and avoids hiding sites when locality differs.
@@ -356,35 +294,6 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
       debugPrint(
         'Tab counts - New: ${_newSites.length}, CP Verification: ${_cpVerificationSites.length}, Verified: ${_verifiedSites.length}, Approved: ${_approvedSites.length}, Completed: ${_completedSites.length}, Rejected: ${_rejectedSites.length}',
       );
-      
-      // FALLBACK: If we have sites but they're not categorized, add them to "New" tab
-      // This ensures sites are visible even if status/permit logic doesn't match exactly
-      if (sites.isNotEmpty) {
-        final categorizedCount = _newSites.length +
-            _cpVerificationSites.length +
-            _verifiedSites.length +
-            _approvedSites.length +
-            _completedSites.length +
-            _rejectedSites.length;
-        if (categorizedCount < sites.length) {
-          final uncategorized = sites.where((s) {
-            final id = s['id'];
-            return !_newSites.any((ns) => ns['id'] == id) &&
-                !_cpVerificationSites.any((cps) => cps['id'] == id) &&
-                !_verifiedSites.any((vs) => vs['id'] == id) &&
-                !_approvedSites.any((as) => as['id'] == id) &&
-                !_completedSites.any((cs) => cs['id'] == id) &&
-                !_rejectedSites.any((rs) => rs['id'] == id);
-          }).toList();
-          
-          debugPrint('WARNING: ${uncategorized.length} sites were not categorized!');
-          debugPrint('Uncategorized sites: ${uncategorized.map((s) => '${s['id']}: status="${s['status']}"').join(', ')}');
-          
-          // Add uncategorized sites to "New" tab as fallback
-          _newSites.addAll(uncategorized);
-          debugPrint('Added ${uncategorized.length} uncategorized sites to New tab (fallback)');
-        }
-      }
 
       if (mounted) {
         setState(() {});
