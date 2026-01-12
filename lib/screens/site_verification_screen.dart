@@ -4202,9 +4202,10 @@ class _PermitVerificationDialogState extends State<_PermitVerificationDialog> {
                   ),
                 ],
               ),
-              ),
             ),
-          ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -4688,6 +4689,74 @@ class _PermitVerificationDialogState extends State<_PermitVerificationDialog> {
       debugPrint('State permit uploaded but requirement is not set correctly: $_statePermitRequirement');
     }
     _handleComplete(uploadedOverride: true);
+  }
+
+  void _handleComplete({bool? uploadedOverride}) {
+    // Validate that we have the required information
+    if (_statePermitRequirement == null) {
+      debugPrint('Cannot complete: statePermitRequirement is not set');
+      return;
+    }
+
+    // Determine the effective uploaded flag
+    final effectiveUploaded = uploadedOverride ?? _statePermitUploaded;
+
+    // Additional validation: if requirement is 'required_have_it', uploaded must be true
+    if (_statePermitRequirement == 'required_have_it' && !effectiveUploaded) {
+      debugPrint('Cannot complete: state permit is required but not uploaded');
+    }
+
+    // Additional validation: if requirement is 'required_dont_have_it', canWorkWithout must be set
+    if (_statePermitRequirement == 'required_dont_have_it' && _canWorkWithoutStatePermit == null) {
+      debugPrint('Cannot complete: state permit is required but canWorkWithout is not set');
+      return;
+    }
+
+    final state = widget.site['state']?.toString() ?? '';
+
+    final decision = PermitDecision(
+      statePermit: PermitStatus(
+        requirement: _statePermitRequirement,
+        canWorkWithout: _canWorkWithoutStatePermit,
+        uploaded: effectiveUploaded,
+      ),
+      localityPermit: PermitStatus(uploaded: false), // Not handled in this dialog
+    );
+
+    // Generate summary message based on decision (matching web code)
+    String message = '';
+    if (_statePermitRequirement == 'not_required') {
+      message =
+          'No state permit is required for $state. The verification process for the state permit is complete. You will now proceed to verify the permits for the localities.';
+    } else if (_statePermitRequirement == 'required_have_it' && effectiveUploaded) {
+      message =
+          'The state permit for $state has been uploaded successfully. The verification process for the state permit is complete. You will now proceed to verify the permits for the localities.';
+    } else if (_statePermitRequirement == 'required_dont_have_it' &&
+        _canWorkWithoutStatePermit == 'yes') {
+      message =
+          'A state permit is required for $state, but you can proceed without it. The verification process for the state permit is complete. You will now proceed to verify the permits for the localities.';
+    } else if (_statePermitRequirement == 'required_dont_have_it' &&
+        _canWorkWithoutStatePermit == 'no') {
+      message =
+          'The MMP has been sent back to FOM because a state permit is required for $state and you cannot proceed without it. No further action is needed here.';
+    }
+
+    setState(() {
+      _confirmationMessage = message;
+      _pendingDecision = decision;
+      _confirmationDialogOpen = true;
+    });
+  }
+
+  void _handleConfirmationOkay() {
+    if (_pendingDecision != null) {
+      widget.onComplete(_pendingDecision!);
+    }
+    setState(() {
+      _confirmationDialogOpen = false;
+      _pendingDecision = null;
+    });
+    Navigator.pop(context);
   }
 
   Widget _buildOptionWithDescription(
