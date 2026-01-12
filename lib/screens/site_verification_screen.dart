@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
@@ -12,6 +13,8 @@ import '../models/site_visit.dart';
 import '../services/site_visit_service.dart';
 import '../l10n/app_localizations.dart';
 import '../widgets/custom_drawer_menu.dart';
+import '../widgets/reusable_app_bar.dart';
+import '../widgets/modern_app_header.dart';
 
 /// Permit decision structure for state and locality permits
 class PermitDecision {
@@ -92,7 +95,8 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
   String? _userLocality; // For locality-specific coordinators
   String? _userRole; // User's role (admin, coordinator, dataCollector, etc.)
   List<String> _userProjectIds = []; // Projects the user is a member of
-  bool _isAdminOrSuperUser = false; // Whether user is admin/supervisor (can see all projects)
+  bool _isAdminOrSuperUser =
+      false; // Whether user is admin/supervisor (can see all projects)
 
   // DM Activities that require date range (distribution start, end, expected visit)
   // Based on CoordinatorSites.tsx - only GFA, CBT, EBSFP
@@ -172,10 +176,11 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
       _userRole = profile?['role']?.toString().toLowerCase();
 
       // Check if user is admin or supervisor (can see all projects)
-      _isAdminOrSuperUser = _userRole == 'admin' || 
-                           _userRole == 'super_admin' || 
-                           _userRole == 'supervisor' ||
-                           _userRole == 'fom';
+      _isAdminOrSuperUser =
+          _userRole == 'admin' ||
+          _userRole == 'super_admin' ||
+          _userRole == 'supervisor' ||
+          _userRole == 'fom';
 
       // Fetch user's project memberships (for non-admin users)
       if (!_isAdminOrSuperUser) {
@@ -205,70 +210,85 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
   Future<void> _fetchUserProjectMemberships() async {
     try {
       _userProjectIds = [];
-      
-      debugPrint('[_fetchUserProjectMemberships] Fetching projects for user: $_userId');
-      
+
+      debugPrint(
+        '[_fetchUserProjectMemberships] Fetching projects for user: $_userId',
+      );
+
       // Try to fetch from team_members table first (if it exists)
       try {
         final response = await _supabase
             .from('team_members')
             .select('project_id')
             .eq('user_id', _userId!);
-        
+
         if (response != null && (response as List).isNotEmpty) {
           _userProjectIds = (response as List)
               .map((m) => m['project_id']?.toString())
               .where((id) => id != null && id.isNotEmpty)
               .cast<String>()
               .toList();
-          debugPrint('User project IDs from team_members: ${_userProjectIds.length}');
+          debugPrint(
+            'User project IDs from team_members: ${_userProjectIds.length}',
+          );
         } else {
-          debugPrint('team_members table returned empty or doesn\'t exist, checking projects table');
+          debugPrint(
+            'team_members table returned empty or doesn\'t exist, checking projects table',
+          );
         }
       } catch (e) {
-        debugPrint('Error fetching from team_members table (may not exist): $e');
+        debugPrint(
+          'Error fetching from team_members table (may not exist): $e',
+        );
       }
-      
+
       // ALWAYS check projects table for team composition (primary source)
       // This matches the web app's useUserProjects hook
       try {
         final projectsResponse = await _supabase
             .from('projects')
             .select('id, team');
-        
+
         if (projectsResponse != null) {
-          debugPrint('Checking ${(projectsResponse as List).length} projects for user membership');
+          debugPrint(
+            'Checking ${(projectsResponse as List).length} projects for user membership',
+          );
           int foundCount = 0;
-          
+
           for (final project in projectsResponse as List) {
             final projectId = project['id']?.toString();
             if (projectId == null) continue;
-            
+
             final team = project['team'] as Map<String, dynamic>?;
             if (team == null) continue;
-            
+
             bool isMember = false;
-            
+
             // Check if user is project manager (can be UUID or name)
             final projectManager = team['projectManager'];
             if (projectManager != null) {
               // Check both UUID and name (in case it's stored as name)
-              if (projectManager == _userId || 
-                  (projectManager is String && projectManager.contains(_userId!))) {
+              if (projectManager == _userId ||
+                  (projectManager is String &&
+                      projectManager.contains(_userId!))) {
                 isMember = true;
-                debugPrint('Found user as project manager in project: $projectId');
+                debugPrint(
+                  'Found user as project manager in project: $projectId',
+                );
               }
             }
-            
+
             // Check if user is in members array
             if (!isMember) {
               final members = team['members'] as List?;
               if (members != null && members.contains(_userId)) {
                 isMember = true;
-                debugPrint('Found user in members array for project: $projectId');
+                debugPrint(
+                  'Found user in members array for project: $projectId',
+                );
               }
             }
-            
+
             // Check if user is in teamComposition (primary method)
             if (!isMember) {
               final teamComposition = team['teamComposition'] as List?;
@@ -278,27 +298,33 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
                     final memberUserId = member['userId']?.toString();
                     if (memberUserId == _userId) {
                       isMember = true;
-                      debugPrint('Found user in teamComposition for project: $projectId (role: ${member['role']})');
+                      debugPrint(
+                        'Found user in teamComposition for project: $projectId (role: ${member['role']})',
+                      );
                       break;
                     }
                   }
                 }
               }
             }
-            
+
             if (isMember && !_userProjectIds.contains(projectId)) {
               _userProjectIds.add(projectId);
               foundCount++;
             }
           }
-          
-          debugPrint('User project IDs from projects table: $foundCount (total: ${_userProjectIds.length})');
+
+          debugPrint(
+            'User project IDs from projects table: $foundCount (total: ${_userProjectIds.length})',
+          );
         }
       } catch (e2) {
         debugPrint('Error fetching from projects table: $e2');
       }
-      
-      debugPrint('User is member of ${_userProjectIds.length} projects: $_userProjectIds');
+
+      debugPrint(
+        'User is member of ${_userProjectIds.length} projects: $_userProjectIds',
+      );
     } catch (e) {
       debugPrint('Error fetching user project memberships: $e');
     }
@@ -340,17 +366,19 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
         sites = sites.where((site) {
           final mmpFile = site['mmp_files'] as Map<String, dynamic>? ?? {};
           final projectId = mmpFile['project_id']?.toString();
-          
+
           // If site has no project ID, exclude it (user must be in project to see sites)
           if (projectId == null || projectId.isEmpty) {
             return false;
           }
-          
+
           // Site must be in one of user's projects
           return _userProjectIds.contains(projectId);
         }).toList();
-        
-        debugPrint('Filtered sites by project membership: ${sites.length} of $beforeCount');
+
+        debugPrint(
+          'Filtered sites by project membership: ${sites.length} of $beforeCount',
+        );
       }
 
       // SECONDARY APPROACH: Also check additional_data for assigned_to
@@ -372,15 +400,16 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
               if (additionalData == null) return false;
               final assignedTo = additionalData['assigned_to']?.toString();
               if (assignedTo != _userId) return false;
-              
+
               // Also filter by project membership (for non-admin users)
               if (!_isAdminOrSuperUser) {
-                final mmpFile = site['mmp_files'] as Map<String, dynamic>? ?? {};
+                final mmpFile =
+                    site['mmp_files'] as Map<String, dynamic>? ?? {};
                 final projectId = mmpFile['project_id']?.toString();
                 if (projectId == null || projectId.isEmpty) return false;
                 if (!_userProjectIds.contains(projectId)) return false;
               }
-              
+
               return true;
             }).toList();
 
@@ -887,150 +916,156 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
         currentUser: _supabase.auth.currentUser,
         onClose: () => _scaffoldKey.currentState?.closeDrawer(),
       ),
-      backgroundColor: const Color(0xFFF5F7FA),
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.menu, color: Colors.white),
-          onPressed: () => _scaffoldKey.currentState?.openDrawer(),
-          tooltip: 'Menu',
-        ),
-        title: Text(
-          'Site Verification',
-          style: GoogleFonts.poppins(
-            fontWeight: FontWeight.w600,
-            fontSize: 20,
-            color: Colors.white,
-          ),
-        ),
-        backgroundColor: AppColors.primaryBlue,
-        elevation: 0,
-        actions: [
-          Container(
-            margin: const EdgeInsets.only(right: 8),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(12),
+      backgroundColor: AppColors.backgroundGray,
+      body: SafeArea(
+        child: Column(
+          children: [
+            // Header
+            ReusableAppBar(
+              title: 'Site Verification',
+              scaffoldKey: _scaffoldKey,
+              actions: [
+                HeaderActionButton(
+                  icon: Icons.refresh,
+                  tooltip: 'Refresh',
+                  backgroundColor: AppColors.primaryBlue,
+                  color: Colors.white,
+                  onPressed: _loadData,
+                ),
+              ],
             ),
-            child: IconButton(
-              icon: const Icon(Icons.refresh, color: Colors.white),
-              onPressed: _loadData,
-              tooltip: 'Refresh',
+
+            // Tabs container
+            Container(
+              margin: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.shadowColor.withOpacity(0.06),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: TabBar(
+                controller: _tabController,
+                isScrollable: true,
+                indicator: BoxDecoration(
+                  color: AppColors.primaryBlue,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                indicatorSize: TabBarIndicatorSize.tab,
+                labelColor: Colors.white,
+                unselectedLabelColor: AppColors.textDark,
+                labelStyle: GoogleFonts.poppins(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                ),
+                unselectedLabelStyle: GoogleFonts.poppins(
+                  fontWeight: FontWeight.w500,
+                  fontSize: 12,
+                ),
+                tabs: [
+                  _buildTab(
+                    icon: Icons.fiber_new_rounded,
+                    label: 'New',
+                    count: _newSites.length,
+                    badgeColor: AppColors.primaryBlue,
+                  ),
+                  _buildTab(
+                    icon: Icons.fact_check_outlined,
+                    label: 'CP Verification',
+                    count: _cpVerificationSites.length,
+                    badgeColor: Colors.blue,
+                  ),
+                  _buildTab(
+                    icon: Icons.verified_outlined,
+                    label: 'Verified',
+                    count: _verifiedSites.length,
+                    badgeColor: Colors.green,
+                  ),
+                  _buildTab(
+                    icon: Icons.thumb_up_outlined,
+                    label: 'Approved',
+                    count: _approvedSites.length,
+                    badgeColor: Colors.teal,
+                  ),
+                  _buildTab(
+                    icon: Icons.check_circle_outline,
+                    label: 'Completed',
+                    count: _completedSites.length,
+                    badgeColor: Colors.purple,
+                  ),
+                  _buildTab(
+                    icon: Icons.cancel_outlined,
+                    label: 'Rejected',
+                    count: _rejectedSites.length,
+                    badgeColor: Colors.red,
+                    highlightIfNonZero: true,
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
-        bottom: TabBar(
-          controller: _tabController,
-          isScrollable: true,
-          indicatorColor: Colors.white,
-          indicatorWeight: 3,
-          indicatorSize: TabBarIndicatorSize.label,
-          labelColor: Colors.white,
-          unselectedLabelColor: Colors.white60,
-          labelStyle: GoogleFonts.poppins(
-            fontWeight: FontWeight.w600,
-            fontSize: 13,
-          ),
-          unselectedLabelStyle: GoogleFonts.poppins(
-            fontWeight: FontWeight.w500,
-            fontSize: 12,
-          ),
-          tabs: [
-            // Tab 1: New
-            _buildTab(
-              icon: Icons.fiber_new_rounded,
-              label: 'New',
-              count: _newSites.length,
-              badgeColor: Colors.orange,
+
+            // Search
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.shadowColor.withOpacity(0.05),
+                      blurRadius: 12,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
+                ),
+                child: TextField(
+                  decoration: InputDecoration(
+                    prefixIcon: const Icon(Icons.search),
+                    hintText: 'Search by site name, code, state, or locality',
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 12,
+                    ),
+                  ),
+                  onChanged: (value) {
+                    setState(() {
+                      _searchQuery = value.trim();
+                    });
+                  },
+                ),
+              ),
             ),
-            // Tab 2: CP Verification
-            _buildTab(
-              icon: Icons.fact_check_outlined,
-              label: 'CP Verification',
-              count: _cpVerificationSites.length,
-              badgeColor: Colors.blue,
-            ),
-            // Tab 3: Verified
-            _buildTab(
-              icon: Icons.verified_outlined,
-              label: 'Verified',
-              count: _verifiedSites.length,
-              badgeColor: Colors.green,
-            ),
-            // Tab 4: Approved
-            _buildTab(
-              icon: Icons.thumb_up_outlined,
-              label: 'Approved',
-              count: _approvedSites.length,
-              badgeColor: Colors.teal,
-            ),
-            // Tab 5: Completed
-            _buildTab(
-              icon: Icons.check_circle_outline,
-              label: 'Completed',
-              count: _completedSites.length,
-              badgeColor: Colors.purple,
-            ),
-            // Tab 6: Rejected
-            _buildTab(
-              icon: Icons.cancel_outlined,
-              label: 'Rejected',
-              count: _rejectedSites.length,
-              badgeColor: Colors.red,
-              highlightIfNonZero: true,
+
+            // Content
+            Expanded(
+              child: _isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : TabBarView(
+                      controller: _tabController,
+                      children: [
+                        _buildNewTabContent(),
+                        _buildSiteList(_cpVerificationSites, 'cp_verification'),
+                        _buildSiteList(_verifiedSites, 'verified'),
+                        _buildSiteList(_approvedSites, 'approved'),
+                        _buildSiteList(_completedSites, 'completed'),
+                        _buildSiteList(_rejectedSites, 'rejected'),
+                      ],
+                    ),
             ),
           ],
         ),
-      ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-            child: TextField(
-              decoration: InputDecoration(
-                prefixIcon: const Icon(Icons.search),
-                hintText: 'Search by site name, code, state, or locality',
-                filled: true,
-                fillColor: Colors.white,
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 0,
-                ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(24),
-                  borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(24),
-                  borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(24),
-                  borderSide: BorderSide(color: AppColors.primaryBlue),
-                ),
-              ),
-              onChanged: (value) {
-                setState(() {
-                  _searchQuery = value.trim();
-                });
-              },
-            ),
-          ),
-          Expanded(
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : TabBarView(
-                    controller: _tabController,
-                    children: [
-                      _buildNewTabContent(),
-                      _buildSiteList(_cpVerificationSites, 'cp_verification'),
-                      _buildSiteList(_verifiedSites, 'verified'),
-                      _buildSiteList(_approvedSites, 'approved'),
-                      _buildSiteList(_completedSites, 'completed'),
-                      _buildSiteList(_rejectedSites, 'rejected'),
-                    ],
-                  ),
-          ),
-        ],
       ),
     );
   }
@@ -1266,12 +1301,12 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
             leading: Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: Colors.orange.withOpacity(0.1),
+                color: AppColors.backgroundGray,
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: const Icon(
+              child: Icon(
                 Icons.warning_amber_rounded,
-                color: Colors.orange,
+                color: AppColors.primaryBlue,
                 size: 20,
               ),
             ),
@@ -1289,14 +1324,17 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
             trailing: Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
-                color: Colors.orange,
+                color: Colors.white,
                 borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: AppColors.primaryBlue.withOpacity(0.12),
+                ),
               ),
               child: Text(
                 '${sites.length}',
                 style: GoogleFonts.poppins(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w600,
+                  color: AppColors.primaryBlue,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ),
@@ -1316,7 +1354,12 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
                             'Manage state permit (${sitesNeedingStatePermit.length})',
                           ),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.orange,
+                            backgroundColor: Colors.white,
+                            foregroundColor: AppColors.primaryBlue,
+                            side: BorderSide(
+                              color: AppColors.primaryBlue.withOpacity(0.12),
+                            ),
+                            elevation: 0,
                           ),
                           onPressed: () => _handleStateCardClick(state, sites),
                         ),
@@ -1390,15 +1433,17 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
                       vertical: 4,
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.orange.withOpacity(0.12),
+                      color: Colors.white,
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.orange.withOpacity(0.2)),
+                      border: Border.all(
+                        color: AppColors.primaryBlue.withOpacity(0.12),
+                      ),
                     ),
                     child: Text(
                       'Skipped',
                       style: GoogleFonts.poppins(
                         fontSize: 11,
-                        color: Colors.orange[800],
+                        color: AppColors.primaryBlue,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -1503,13 +1548,27 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
     if (filteredSites.isEmpty) {
       if (sites.isNotEmpty && _searchQuery.isNotEmpty) {
         return Center(
-          child: Text(
-            'No sites match your search',
-            style: GoogleFonts.poppins(
-              fontSize: 14,
-              color: const Color(0xFF6B7280),
-            ),
-            textAlign: TextAlign.center,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.search_off, size: 64, color: const Color(0xFF9CA3AF)),
+              const SizedBox(height: 12),
+              Text(
+                'No sites match your search',
+                style: GoogleFonts.poppins(
+                  fontSize: 14,
+                  color: const Color(0xFF6B7280),
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: () {
+                  setState(() => _searchQuery = '');
+                },
+                child: const Text('Clear search'),
+              ),
+            ],
           ),
         );
       }
@@ -1535,8 +1594,8 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
               _getEmptyMessage(category),
               style: GoogleFonts.poppins(
                 fontSize: 16,
-                fontWeight: FontWeight.w500,
-                color: const Color(0xFF6B7280),
+                fontWeight: FontWeight.w600,
+                color: const Color(0xFF374151),
               ),
               textAlign: TextAlign.center,
             ),
@@ -1545,9 +1604,22 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
               _getEmptySubMessage(category),
               style: GoogleFonts.poppins(
                 fontSize: 13,
-                color: const Color(0xFF9CA3AF),
+                color: const Color(0xFF6B7280),
               ),
               textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 18),
+            ElevatedButton.icon(
+              onPressed: _loadData,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Refresh'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primaryBlue,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                elevation: 3,
+              ),
             ),
           ],
         ),
@@ -1582,30 +1654,85 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
-              elevation: 2,
-              child: ExpansionTile(
-                title: Text(
-                  key,
-                  style: GoogleFonts.poppins(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 15,
+              elevation: 3,
+              child: Column(
+                children: [
+                  // Header row for group
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                stateName,
+                                style: GoogleFonts.poppins(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 15,
+                                  color: const Color(0xFF111827),
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                localityName,
+                                style: GoogleFonts.poppins(
+                                  fontSize: 12,
+                                  color: const Color(0xFF6B7280),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        ElevatedButton.icon(
+                          onPressed: () => _showBulkVerifyDialog(
+                            stateName,
+                            localityName,
+                            localitySites,
+                          ),
+                          icon: const Icon(Icons.verified, size: 18),
+                          label: Text('Verify All (${localitySites.length})'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF10B981),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 10,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            textStyle: GoogleFonts.poppins(
+                              fontWeight: FontWeight.w600,
+                            ),
+                            elevation: 6,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                trailing: ElevatedButton.icon(
-                  icon: const Icon(Icons.check_circle),
-                  label: Text('Verify All (${localitySites.length})'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
+
+                  // Divider
+                  const Divider(height: 1),
+
+                  // Site list under group
+                  Column(
+                    children: localitySites.map((s) {
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
+                        child: _buildSiteCard(s, category),
+                      );
+                    }).toList(),
                   ),
-                  onPressed: () => _showBulkVerifyDialog(
-                    stateName,
-                    localityName,
-                    localitySites,
-                  ),
-                ),
-                children: localitySites
-                    .map((s) => _buildSiteCard(s, category))
-                    .toList(),
+                ],
               ),
             );
           },
@@ -1719,15 +1846,19 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
 
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: const Color(0xFFE5E7EB), width: 1),
-      ),
+      elevation: 3,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
           color: Colors.white,
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.shadowColor.withOpacity(0.06),
+              blurRadius: 18,
+              offset: const Offset(0, 8),
+            ),
+          ],
         ),
         child: InkWell(
           onTap: () => _showSiteDetails(site, category),
@@ -1776,6 +1907,39 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
                               letterSpacing: 0.5,
                             ),
                           ),
+                          if (projectName.isNotEmpty) ...[
+                            const SizedBox(height: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppColors.backgroundGray,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.folder,
+                                    size: 14,
+                                    color: AppColors.textDark,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    projectName,
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 12,
+                                      color: const Color(0xFF374151),
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     ),
@@ -1989,7 +2153,7 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
           ),
         ),
       ),
-    );
+    ).animate().fadeIn(duration: 300.ms);
   }
 
   Widget _buildStatusChip(String status) {
@@ -2045,7 +2209,7 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
       case 'pending':
       case 'dispatched':
       case 'assigned':
-        return Colors.orange;
+        return AppColors.primaryBlue;
       case 'permits_attached':
         return Colors.blue;
       case 'verified':
@@ -2183,44 +2347,33 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
       return Row(
         children: [
           Expanded(
-            child: Container(
-              decoration: BoxDecoration(
-                color: AppColors.primaryBlue,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.primaryBlue.withOpacity(0.3),
-                    blurRadius: 8,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
+            child: ElevatedButton.icon(
+              onPressed: () => _showPermitVerificationDialog(site),
+              icon: Icon(
+                !hasStatePermit
+                    ? Icons.upload_file
+                    : !hasLocalityPermit
+                    ? Icons.location_on
+                    : Icons.check_circle,
+                size: 18,
               ),
-              child: ElevatedButton.icon(
-                onPressed: () => _showPermitVerificationDialog(site),
-                icon: Icon(
-                  !hasStatePermit
-                      ? Icons.upload_file
-                      : !hasLocalityPermit
-                      ? Icons.location_on
-                      : Icons.check_circle,
-                  size: 18,
+              label: Text(
+                !hasStatePermit
+                    ? 'Upload State Permit'
+                    : !hasLocalityPermit
+                    ? 'Upload Locality Permit'
+                    : 'Permits Complete',
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primaryBlue,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                label: Text(
-                  !hasStatePermit
-                      ? 'Upload State Permit'
-                      : !hasLocalityPermit
-                      ? 'Upload Locality Permit'
-                      : 'Permits Complete',
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.transparent,
-                  foregroundColor: Colors.white,
-                  shadowColor: Colors.transparent,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
+                textStyle: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+                elevation: 6,
+                shadowColor: AppColors.primaryBlue.withOpacity(0.25),
               ),
             ),
           ),
@@ -2248,31 +2401,20 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
       return Row(
         children: [
           Expanded(
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.blue,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.blue.withOpacity(0.3),
-                    blurRadius: 8,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: ElevatedButton.icon(
-                onPressed: () => _showLocalityPermitDialog(site),
-                icon: const Icon(Icons.location_on, size: 18),
-                label: const Text('Upload Locality Permit'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.transparent,
-                  foregroundColor: Colors.white,
-                  shadowColor: Colors.transparent,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+            child: ElevatedButton.icon(
+              onPressed: () => _showLocalityPermitDialog(site),
+              icon: const Icon(Icons.location_on, size: 18),
+              label: const Text('Upload Locality Permit'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primaryBlue,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
                 ),
+                textStyle: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+                elevation: 6,
+                shadowColor: AppColors.primaryBlue.withOpacity(0.25),
               ),
             ),
           ),
@@ -2298,35 +2440,23 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
       // Show Verify Site button for CP verification sites
       return SizedBox(
         width: double.infinity,
-        child: Container(
-          decoration: BoxDecoration(
-            color: const Color(0xFF10B981),
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF10B981).withOpacity(0.3),
-                blurRadius: 8,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: ElevatedButton.icon(
-            onPressed: () => _verifySite(site),
-            icon: const Icon(Icons.verified, size: 20),
-            label: const Text('Verify Site'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.transparent,
-              foregroundColor: Colors.white,
-              shadowColor: Colors.transparent,
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              textStyle: GoogleFonts.poppins(
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-              ),
+        child: ElevatedButton.icon(
+          onPressed: () => _verifySite(site),
+          icon: const Icon(Icons.verified, size: 20),
+          label: const Text('Verify Site'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF10B981),
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
             ),
+            textStyle: GoogleFonts.poppins(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+            ),
+            elevation: 6,
+            shadowColor: const Color(0xFF10B981).withOpacity(0.25),
           ),
         ),
       );
@@ -2335,24 +2465,21 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
       return Row(
         children: [
           Expanded(
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.orange,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: ElevatedButton.icon(
-                onPressed: () => _verifySite(site),
-                icon: const Icon(Icons.refresh, size: 18),
-                label: const Text('Re-verify Site'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.transparent,
-                  foregroundColor: Colors.white,
-                  shadowColor: Colors.transparent,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+            child: OutlinedButton.icon(
+              onPressed: () => _verifySite(site),
+              icon: Icon(Icons.refresh, size: 18, color: AppColors.primaryBlue),
+              label: const Text('Re-verify Site'),
+              style: OutlinedButton.styleFrom(
+                backgroundColor: Colors.white,
+                foregroundColor: AppColors.primaryBlue,
+                side: BorderSide(
+                  color: AppColors.primaryBlue.withOpacity(0.12),
                 ),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                textStyle: GoogleFonts.poppins(fontWeight: FontWeight.w600),
               ),
             ),
           ),
@@ -2415,7 +2542,7 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Site returned to FOM: $reason'),
-            backgroundColor: Colors.orange,
+            backgroundColor: AppColors.primaryBlue,
           ),
         );
       }
@@ -2828,7 +2955,7 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
               ],
             ),
             backgroundColor: newStatus == 'returned_to_fom'
-                ? Colors.orange
+                ? AppColors.primaryBlue
                 : newStatus == 'permits_attached'
                 ? Colors.green
                 : AppColors.primaryBlue,
@@ -2997,7 +3124,7 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
                   content: Text(
                     'State permit not found - upload state permit first',
                   ),
-                  backgroundColor: Colors.orange,
+                  backgroundColor: AppColors.primaryBlue,
                 ),
               );
             },
@@ -3517,7 +3644,11 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
           builder: (context) => AlertDialog(
             title: Row(
               children: [
-                Icon(Icons.warning_amber, color: Colors.orange, size: 28),
+                Icon(
+                  Icons.warning_amber,
+                  color: AppColors.primaryBlue,
+                  size: 28,
+                ),
                 const SizedBox(width: 12),
                 const Text('Warning'),
               ],
@@ -3530,7 +3661,9 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
               ),
               ElevatedButton(
                 onPressed: () => Navigator.pop(context, true),
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primaryBlue,
+                ),
                 child: const Text('Proceed'),
               ),
             ],
@@ -3900,12 +4033,11 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
           .eq('id', siteId);
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text('Site returned to FOM'),
-          backgroundColor: Colors.orange,
+          backgroundColor: AppColors.primaryBlue,
         ),
       );
-
       await _loadData();
     } catch (e) {
       debugPrint('Error returning site: $e');
@@ -4327,19 +4459,19 @@ class _SiteDetailsSheet extends StatelessWidget {
       decoration: BoxDecoration(
         color: isComplete
             ? Colors.green.withOpacity(0.1)
-            : Colors.orange.withOpacity(0.1),
+            : AppColors.primaryBlue.withOpacity(0.06),
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
           color: isComplete
               ? Colors.green.withOpacity(0.3)
-              : Colors.orange.withOpacity(0.3),
+              : AppColors.primaryBlue.withOpacity(0.12),
         ),
       ),
       child: Row(
         children: [
           Icon(
             isComplete ? Icons.check_circle : Icons.pending,
-            color: isComplete ? Colors.green : Colors.orange,
+            color: isComplete ? Colors.green : AppColors.primaryBlue,
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -4354,7 +4486,9 @@ class _SiteDetailsSheet extends StatelessWidget {
                   status,
                   style: GoogleFonts.poppins(
                     fontSize: 12,
-                    color: isComplete ? Colors.green[700] : Colors.orange[700],
+                    color: isComplete
+                        ? Colors.green[700]
+                        : AppColors.primaryBlue,
                   ),
                 ),
               ],
@@ -4719,14 +4853,17 @@ class _PermitVerificationDialogState extends State<_PermitVerificationDialog> {
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: Colors.orange[200]!, width: 1),
+        side: BorderSide(
+          color: AppColors.primaryBlue.withOpacity(0.12),
+          width: 1,
+        ),
       ),
       child: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Colors.orange[50]!.withOpacity(0.5), Colors.white],
+            colors: [AppColors.primaryBlue.withOpacity(0.05), Colors.white],
           ),
           borderRadius: BorderRadius.circular(12),
         ),
@@ -4739,7 +4876,7 @@ class _PermitVerificationDialogState extends State<_PermitVerificationDialog> {
                 children: [
                   Icon(
                     Icons.warning_amber,
-                    color: Colors.orange[600],
+                    color: AppColors.primaryBlue,
                     size: 24,
                   ),
                   const SizedBox(width: 8),
@@ -4748,7 +4885,7 @@ class _PermitVerificationDialogState extends State<_PermitVerificationDialog> {
                     style: GoogleFonts.poppins(
                       fontSize: 18,
                       fontWeight: FontWeight.w600,
-                      color: Colors.orange[800],
+                      color: AppColors.primaryBlue,
                     ),
                   ),
                 ],
@@ -4765,15 +4902,17 @@ class _PermitVerificationDialogState extends State<_PermitVerificationDialog> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.orange[50],
+                  color: AppColors.primaryBlue.withOpacity(0.05),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.orange[200]!),
+                  border: Border.all(
+                    color: AppColors.primaryBlue.withOpacity(0.12),
+                  ),
                 ),
                 child: Row(
                   children: [
                     Icon(
                       Icons.info_outline,
-                      color: Colors.orange[600],
+                      color: AppColors.primaryBlue,
                       size: 20,
                     ),
                     const SizedBox(width: 10),
@@ -4782,7 +4921,7 @@ class _PermitVerificationDialogState extends State<_PermitVerificationDialog> {
                         'The state permit is required but you don\'t have it. Can you proceed with the verification without it?',
                         style: GoogleFonts.poppins(
                           fontSize: 13,
-                          color: Colors.orange[800],
+                          color: AppColors.primaryBlue,
                         ),
                       ),
                     ),
@@ -5416,14 +5555,17 @@ class _PermitVerificationDialogState extends State<_PermitVerificationDialog> {
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: Colors.orange[200]!, width: 1),
+        side: BorderSide(
+          color: AppColors.primaryBlue.withOpacity(0.12),
+          width: 1,
+        ),
       ),
       child: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Colors.orange[50]!.withOpacity(0.5), Colors.white],
+            colors: [AppColors.primaryBlue.withOpacity(0.05), Colors.white],
           ),
           borderRadius: BorderRadius.circular(12),
         ),
@@ -5436,7 +5578,7 @@ class _PermitVerificationDialogState extends State<_PermitVerificationDialog> {
                 children: [
                   Icon(
                     Icons.warning_amber,
-                    color: Colors.orange[600],
+                    color: AppColors.primaryBlue,
                     size: 24,
                   ),
                   const SizedBox(width: 8),
@@ -5445,7 +5587,7 @@ class _PermitVerificationDialogState extends State<_PermitVerificationDialog> {
                     style: GoogleFonts.poppins(
                       fontSize: 18,
                       fontWeight: FontWeight.w600,
-                      color: Colors.orange[800],
+                      color: AppColors.primaryBlue,
                     ),
                   ),
                 ],
@@ -5462,15 +5604,17 @@ class _PermitVerificationDialogState extends State<_PermitVerificationDialog> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.orange[50],
+                  color: AppColors.primaryBlue.withOpacity(0.05),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.orange[200]!),
+                  border: Border.all(
+                    color: AppColors.primaryBlue.withOpacity(0.12),
+                  ),
                 ),
                 child: Row(
                   children: [
                     Icon(
                       Icons.info_outline,
-                      color: Colors.orange[600],
+                      color: AppColors.primaryBlue,
                       size: 20,
                     ),
                     const SizedBox(width: 10),
@@ -5479,7 +5623,7 @@ class _PermitVerificationDialogState extends State<_PermitVerificationDialog> {
                         'The locality permit is required but you don\'t have it. Can you proceed with the verification without it?',
                         style: GoogleFonts.poppins(
                           fontSize: 13,
-                          color: Colors.orange[800],
+                          color: AppColors.primaryBlue,
                         ),
                       ),
                     ),
@@ -6506,7 +6650,7 @@ class _LocalityPermitDialogState extends State<_LocalityPermitDialog> {
         _buildConfirmOption(
           'No, State Permit is not yet uploaded',
           Icons.error_outline,
-          Colors.orange,
+          AppColors.primaryBlue,
           false,
           _statePermitConfirmed == false && _currentStep == 0,
         ),
@@ -6853,7 +6997,7 @@ class _LocalityPermitDialogState extends State<_LocalityPermitDialog> {
               content: Text(
                 'Locality permit upload cancelled: dates are required',
               ),
-              backgroundColor: Colors.orange,
+              backgroundColor: AppColors.primaryBlue,
             ),
           );
           return;
@@ -7359,7 +7503,7 @@ class _VerificationDialogState extends State<_VerificationDialog> {
                       color: widget.isDMActivity
                           ? Colors.blue.withOpacity(0.1)
                           : isMultiVisit
-                          ? Colors.orange.withOpacity(0.1)
+                          ? AppColors.primaryBlue.withOpacity(0.06)
                           : isUrgent
                           ? Colors.red.withOpacity(0.1)
                           : Colors.green.withOpacity(0.1),
@@ -7368,7 +7512,7 @@ class _VerificationDialogState extends State<_VerificationDialog> {
                         color: widget.isDMActivity
                             ? Colors.blue.withOpacity(0.3)
                             : isMultiVisit
-                            ? Colors.orange.withOpacity(0.3)
+                            ? AppColors.primaryBlue.withOpacity(0.3)
                             : isUrgent
                             ? Colors.red.withOpacity(0.3)
                             : Colors.green.withOpacity(0.3),
@@ -7388,7 +7532,7 @@ class _VerificationDialogState extends State<_VerificationDialog> {
                         color: widget.isDMActivity
                             ? Colors.blue[700]
                             : isMultiVisit
-                            ? Colors.orange[700]
+                            ? AppColors.primaryBlue
                             : isUrgent
                             ? Colors.red[700]
                             : Colors.green[700],
