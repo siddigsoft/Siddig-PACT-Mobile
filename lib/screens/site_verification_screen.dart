@@ -127,7 +127,7 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
 
   // Sites categorized by verification status (matching web app tabs)
   List<Map<String, dynamic>> _newSites =
-      []; // Tab 1: New (Pending/Dispatched needing permits)
+      []; // Tab 1: New (Only Pending status sites)
   List<Map<String, dynamic>> _cpVerificationSites =
       []; // Tab 2: CP Verification (permits attached)
   List<Map<String, dynamic>> _verifiedSites = []; // Tab 3: Verified
@@ -466,24 +466,14 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
       // CATEGORIZE SITES INTO 6 TABS (matching web app CoordinatorSites.tsx)
       // ============================================================================
 
-      // Tab 1: NEW - Match web app CoordinatorSites.tsx
-      // Status in: 'Pending', 'Dispatched', 'assigned', 'inProgress', 'in_progress'
+      // Tab 1: NEW - Only show sites with Pending status
+      // Note: Dispatched sites and other statuses are excluded
       _newSites = sites.where((s) {
         final rawStatus = s['status']?.toString() ?? '';
         final lowerStatus = rawStatus.toLowerCase();
 
-        final isNewStatus =
-            rawStatus == 'Pending' ||
-            rawStatus == 'Dispatched' ||
-            rawStatus == 'inProgress' ||
-            lowerStatus == 'pending' ||
-            lowerStatus == 'dispatched' ||
-            lowerStatus == 'assigned' ||
-            lowerStatus == 'in_progress' ||
-            lowerStatus == 'inprogress' ||
-            lowerStatus == 'in progress';
-
-        return isNewStatus;
+        // Only include sites with Pending status (case-insensitive)
+        return rawStatus == 'Pending' || lowerStatus == 'pending';
       }).toList();
 
       debugPrint('New sites count: ${_newSites.length}');
