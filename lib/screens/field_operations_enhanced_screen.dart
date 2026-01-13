@@ -1958,11 +1958,6 @@ class _MMPScreenState extends State<MMPScreen> {
         }
       }
 
-      // Create wallet transaction (optional - you may need to implement this)
-      try {} catch (e) {
-        debugPrint('Error creating wallet transaction: $e');
-      }
-
       // Verify session is still valid before reloading data
       currentSession = supabase.auth.currentSession;
       if (currentSession == null || currentSession.isExpired) {
