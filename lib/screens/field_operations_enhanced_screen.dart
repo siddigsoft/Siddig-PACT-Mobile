@@ -730,12 +730,12 @@ class _MMPScreenState extends State<MMPScreen> {
   }
 
   Future<void> _loadUnsyncedCompletedVisits() async {
-    // This would load from offline DB if you have one
-    // For now, we'll check for completed sites that might be unsynced
+    // Load completed sites that don't have a synced report
     try {
       if (_userId == null) return;
 
-      final response = await Supabase.instance.client
+      // First, get all completed sites
+      final sitesResponse = await Supabase.instance.client
           .from('mmp_site_entries')
           .select('*, mmp_files(project_id)')
           .eq('accepted_by', _userId!)
@@ -743,12 +743,55 @@ class _MMPScreenState extends State<MMPScreen> {
           .order('created_at', ascending: false)
           .limit(100);
 
-      // Filter for potentially unsynced visits (you may need additional logic)
-      List<Map<String, dynamic>> unsyncedSites = (response as List)
+      final allCompletedSites = (sitesResponse as List)
           .map((e) => e as Map<String, dynamic>)
+          .toList();
+
+      if (allCompletedSites.isEmpty) {
+        _unsyncedCompletedVisits = [];
+        return;
+      }
+
+      // Get all site IDs
+      final siteIds = allCompletedSites
+          .map((site) => site['id']?.toString())
+          .where((id) => id != null && id.isNotEmpty)
+          .cast<String>()
+          .toList();
+
+      // Check which sites have synced reports
+      final reportsResponse = await Supabase.instance.client
+          .from('reports')
+          .select('site_visit_id, is_synced')
+          .in_('site_visit_id', siteIds);
+
+      final syncedSiteIds = <String>{};
+      if (reportsResponse != null) {
+        for (final report in reportsResponse as List) {
+          final siteId = report['site_visit_id']?.toString();
+          final isSynced = report['is_synced'] as bool? ?? true;
+          if (siteId != null && isSynced) {
+            syncedSiteIds.add(siteId);
+          }
+        }
+      }
+
+      // Also check additional_data for visit_report_submitted flag (backup check)
+      final sitesWithReportFlag = allCompletedSites.where((site) {
+        final additionalData = site['additional_data'] as Map<String, dynamic>?;
+        return additionalData?['visit_report_submitted'] == true;
+      }).map((site) => site['id']?.toString()).where((id) => id != null).toSet();
+
+      // Combine both checks - if site has synced report OR report_submitted flag, it's synced
+      final allSyncedSiteIds = syncedSiteIds.union(sitesWithReportFlag);
+
+      // Filter for sites that are NOT synced
+      List<Map<String, dynamic>> unsyncedSites = allCompletedSites
           .where((site) {
-            // Add logic to determine if unsynced
-            return true; // Placeholder
+            final siteId = site['id']?.toString();
+            if (siteId == null) return false;
+            // Site is unsynced if it doesn't have a synced report
+            return !allSyncedSiteIds.contains(siteId);
           })
           .toList();
 
