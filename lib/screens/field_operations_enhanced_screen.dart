@@ -759,31 +759,76 @@ class _MMPScreenState extends State<MMPScreen> {
           .cast<String>()
           .toList();
 
-      // Check which sites have synced reports
-      final reportsResponse = await Supabase.instance.client
-          .from('reports')
-          .select('site_visit_id, is_synced')
-          .in_('site_visit_id', siteIds);
+      // Check which sites have reports (query once for efficiency)
+      final syncedSiteIds = <String>{}; // Sites with is_synced = true
+      final sitesWithAnyReport = <String>{}; // Sites with any report (fallback)
+      try {
+        if (siteIds.isNotEmpty) {
+          final reportsResponse = await Supabase.instance.client
+              .from('reports')
+              .select('site_visit_id, is_synced')
+              .inFilter('site_visit_id', siteIds);
 
-      final syncedSiteIds = <String>{};
-      if (reportsResponse != null) {
-        for (final report in reportsResponse as List) {
-          final siteId = report['site_visit_id']?.toString();
-          final isSynced = report['is_synced'] as bool? ?? true;
-          if (siteId != null && isSynced) {
-            syncedSiteIds.add(siteId);
+          if (reportsResponse != null && reportsResponse is List) {
+            debugPrint(
+              '[_loadUnsyncedCompletedVisits] Found ${reportsResponse.length} reports for ${siteIds.length} sites',
+            );
+            for (final report in reportsResponse) {
+              final siteId = report['site_visit_id']?.toString();
+              if (siteId == null) continue;
+
+              // Track all sites with any report (fallback check)
+              sitesWithAnyReport.add(siteId);
+
+              // Track sites with explicitly synced reports
+              // is_synced defaults to false in schema, so null/false means unsynced
+              final isSynced = report['is_synced'] as bool? ?? false;
+              if (isSynced == true) {
+                syncedSiteIds.add(siteId);
+                debugPrint(
+                  '[_loadUnsyncedCompletedVisits] Site $siteId has synced report (is_synced=true)',
+                );
+              } else {
+                debugPrint(
+                  '[_loadUnsyncedCompletedVisits] Site $siteId has report but is_synced=$isSynced',
+                );
+              }
+            }
+          } else {
+            debugPrint(
+              '[_loadUnsyncedCompletedVisits] No reports found or invalid response',
+            );
           }
         }
+      } catch (e) {
+        debugPrint(
+          '[_loadUnsyncedCompletedVisits] Error querying reports: $e',
+        );
       }
 
       // Also check additional_data for visit_report_submitted flag (backup check)
-      final sitesWithReportFlag = allCompletedSites.where((site) {
-        final additionalData = site['additional_data'] as Map<String, dynamic>?;
-        return additionalData?['visit_report_submitted'] == true;
-      }).map((site) => site['id']?.toString()).where((id) => id != null).toSet();
+      final sitesWithReportFlag = allCompletedSites
+          .where((site) {
+            final additionalData = site['additional_data'] as Map<String, dynamic>?;
+            return additionalData?['visit_report_submitted'] == true;
+          })
+          .map((site) => site['id']?.toString())
+          .where((id) => id != null && id.isNotEmpty)
+          .cast<String>()
+          .toSet();
 
-      // Combine both checks - if site has synced report OR report_submitted flag, it's synced
-      final allSyncedSiteIds = syncedSiteIds.union(sitesWithReportFlag);
+      // Combine all checks - if site has:
+      // 1. Synced report (is_synced = true), OR
+      // 2. visit_report_submitted flag, OR
+      // 3. Any report at all (fallback for online completions where is_synced might not be set)
+      // then it's considered synced
+      final allSyncedSiteIds = syncedSiteIds
+          .union(sitesWithReportFlag)
+          .union(sitesWithAnyReport);
+
+      debugPrint(
+        '[_loadUnsyncedCompletedVisits] Total synced sites: ${allSyncedSiteIds.length} (explicitly synced: ${syncedSiteIds.length}, with flag: ${sitesWithReportFlag.length}, with any report: ${sitesWithAnyReport.length})',
+      );
 
       // Filter for sites that are NOT synced
       List<Map<String, dynamic>> unsyncedSites = allCompletedSites
@@ -1986,11 +2031,6 @@ class _MMPScreenState extends State<MMPScreen> {
         }
       }
 
-      // Create wallet transaction (optional - you may need to implement this)
-      try {} catch (e) {
-        debugPrint('Error creating wallet transaction: $e');
-      }
-
       // Verify session is still valid before reloading data
       currentSession = supabase.auth.currentSession;
       if (currentSession == null || currentSession.isExpired) {
@@ -2093,6 +2133,39 @@ class _MMPScreenState extends State<MMPScreen> {
         );
       }
     }
+  }
+
+  /// Check if a site has a synced report
+  bool _hasSyncedReport(Map<String, dynamic> site) {
+    final siteId = site['id']?.toString();
+    if (siteId == null) return false;
+
+    // Check if site is in unsynced list - if it is, it's definitely not synced
+    final isUnsynced = _unsyncedCompletedVisits.any(
+      (uv) => uv['id']?.toString() == siteId,
+    );
+    if (isUnsynced) return false;
+
+    // Check additional_data flag (most reliable indicator)
+    final additionalData = site['additional_data'] as Map<String, dynamic>?;
+    if (additionalData?['visit_report_submitted'] == true) {
+      return true;
+    }
+
+    // If status is completed and not in unsynced list, it's synced
+    final status = (site['status'] as String? ?? '').toLowerCase();
+    if (status == 'completed' || status == 'complete') {
+      // If it's completed and not in unsynced list, it must be synced
+      return true;
+    }
+
+    // For in-progress sites, check if visit_report_id exists in additional_data
+    // This indicates a report was submitted even if status hasn't updated yet
+    if (additionalData?['visit_report_id'] != null) {
+      return true;
+    }
+
+    return false;
   }
 
   List<Map<String, dynamic>> _getFilteredSites(
@@ -2674,9 +2747,12 @@ class _MMPScreenState extends State<MMPScreen> {
       case 'drafts':
         sitesToShow = _mySites.where((site) {
           final status = (site['status'] as String? ?? '').toLowerCase();
-          return status == 'in progress' ||
+          final isInProgress = status == 'in progress' ||
               status == 'in_progress' ||
               status == 'ongoing';
+          
+          // Only show in drafts if it's in progress AND doesn't have a synced report
+          return isInProgress && !_hasSyncedReport(site);
         }).toList();
         break;
       case 'outbox':
@@ -2685,14 +2761,9 @@ class _MMPScreenState extends State<MMPScreen> {
       case 'sent':
         sitesToShow = _mySites
             .where((site) {
-              final status = (site['status'] as String? ?? '').toLowerCase();
-              return status == 'completed' || status == 'complete';
-            })
-            .where((site) {
-              // Exclude unsynced
-              return !_unsyncedCompletedVisits.any(
-                (uv) => uv['id'] == site['id'],
-              );
+              // Include sites with synced reports (regardless of status)
+              // OR sites with completed status that are synced
+              return _hasSyncedReport(site);
             })
             .toList();
         break;
