@@ -685,7 +685,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ReusableAppBar(
                 title: 'Dashboard',
                 scaffoldKey: _scaffoldKey,
-                showLanguageSwitcher: true,
+                showLanguageSwitcher: false,
                 showNotifications: true,
                 onNotificationTap: () => NotificationsPanel.show(context),
                 showUserAvatar: true,

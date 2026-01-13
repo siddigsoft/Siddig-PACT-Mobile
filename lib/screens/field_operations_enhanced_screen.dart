@@ -2208,10 +2208,12 @@ class _MMPScreenState extends State<MMPScreen> {
               ReusableAppBar(
                 title: 'MMP Management',
                 scaffoldKey: _scaffoldKey,
-                showLanguageSwitcher: true,
+                showLanguageSwitcher: false,
                 showNotifications: true,
                 onNotificationTap: () => NotificationsPanel.show(context),
                 showUserAvatar: true,
+                
+                
               ),
               Expanded(
                 child: _isLoading
