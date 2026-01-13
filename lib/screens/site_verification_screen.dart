@@ -2597,7 +2597,10 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
         await _completeLocalityWithoutUploadSingle(site);
       } else {
         // Cannot proceed - send back to FOM
-        await _sendSiteBackToFOM(site, 'Locality permit is required for $locality but coordinator cannot proceed without it.');
+        await _sendSiteBackToFOM(
+          site,
+          'Locality permit is required for $locality but coordinator cannot proceed without it.',
+        );
       }
       return;
     }
@@ -2617,7 +2620,8 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
           _showPermitVerificationDialog(site);
         },
         startOnUpload: true,
-        initialStateConfirmed: true, // assume state is uploaded since in locality tab
+        initialStateConfirmed:
+            true, // assume state is uploaded since in locality tab
       ),
     );
   }
@@ -3204,8 +3208,12 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
         await _completeBulkLocalityWithoutUpload(state, locality, sites);
       } else {
         // Cannot proceed - send back to FOM
-        await _sendBulkSitesBackToFOM(state, locality, sites,
-            'Locality permit is required for $locality but coordinator cannot proceed without it.');
+        await _sendBulkSitesBackToFOM(
+          state,
+          locality,
+          sites,
+          'Locality permit is required for $locality but coordinator cannot proceed without it.',
+        );
       }
       return;
     }
@@ -3433,9 +3441,7 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              'Sent $updated site(s) back to FOM: $reason',
-            ),
+            content: Text('Sent $updated site(s) back to FOM: $reason'),
             backgroundColor: Colors.orange,
           ),
         );
@@ -3454,7 +3460,9 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
   }
 
   // Single site versions for individual locality verification
-  Future<void> _markLocalityPermitNotRequiredSingle(Map<String, dynamic> site) async {
+  Future<void> _markLocalityPermitNotRequiredSingle(
+    Map<String, dynamic> site,
+  ) async {
     try {
       setState(() => _isLoading = true);
 
@@ -3464,7 +3472,8 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
       );
 
       additionalData['locality_permit_not_required'] = true;
-      additionalData['locality_permit_requirement_set_at'] = DateTime.now().toIso8601String();
+      additionalData['locality_permit_requirement_set_at'] = DateTime.now()
+          .toIso8601String();
       additionalData['locality_permit_requirement_set_by'] = _userId;
 
       await _supabase
@@ -3481,7 +3490,9 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Locality permit marked as not required - moved to CP verification'),
+            content: Text(
+              'Locality permit marked as not required - moved to CP verification',
+            ),
             backgroundColor: Colors.green,
           ),
         );
@@ -3500,7 +3511,9 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
     }
   }
 
-  Future<void> _completeLocalityWithoutUploadSingle(Map<String, dynamic> site) async {
+  Future<void> _completeLocalityWithoutUploadSingle(
+    Map<String, dynamic> site,
+  ) async {
     try {
       setState(() => _isLoading = true);
 
@@ -3509,7 +3522,8 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
         site['additional_data'] as Map<String, dynamic>? ?? {},
       );
 
-      final localityPermit = additionalData['locality_permit'] as Map<String, dynamic>? ?? {};
+      final localityPermit =
+          additionalData['locality_permit'] as Map<String, dynamic>? ?? {};
       localityPermit['requirement'] = 'required_dont_have_it';
       localityPermit['canWorkWithout'] = 'yes';
       additionalData['locality_permit'] = localityPermit;
@@ -3528,7 +3542,9 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Proceeding without locality permit - moved to CP verification'),
+            content: Text(
+              'Proceeding without locality permit - moved to CP verification',
+            ),
             backgroundColor: Colors.green,
           ),
         );
@@ -3547,7 +3563,10 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
     }
   }
 
-  Future<void> _sendSiteBackToFOM(Map<String, dynamic> site, String reason) async {
+  Future<void> _sendSiteBackToFOM(
+    Map<String, dynamic> site,
+    String reason,
+  ) async {
     try {
       setState(() => _isLoading = true);
 
@@ -8504,10 +8523,7 @@ class _BulkLocalityPermitRequirementDialogState
         children: [
           Text(
             'Verify locality permit requirements for ${widget.locality}, ${widget.state}',
-            style: GoogleFonts.poppins(
-              fontSize: 13,
-              color: Colors.grey[600],
-            ),
+            style: GoogleFonts.poppins(fontSize: 13, color: Colors.grey[600]),
           ),
           Text(
             '${widget.siteCount} sites will be affected',
@@ -8557,7 +8573,9 @@ class _BulkLocalityPermitRequirementDialogState
         ),
         ElevatedButton(
           onPressed: _localityPermitRequirement != null
-              ? () => Navigator.of(context).pop({'requirement': _localityPermitRequirement})
+              ? () => Navigator.of(
+                  context,
+                ).pop({'requirement': _localityPermitRequirement})
               : null,
           style: ElevatedButton.styleFrom(
             backgroundColor: AppColors.primaryBlue,
@@ -8602,7 +8620,9 @@ class _BulkLocalityPermitRequirementDialogState
         child: Row(
           children: [
             Icon(
-              isSelected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+              isSelected
+                  ? Icons.radio_button_checked
+                  : Icons.radio_button_unchecked,
               color: isSelected ? AppColors.primaryBlue : Colors.grey[400],
               size: 20,
             ),
@@ -8616,7 +8636,9 @@ class _BulkLocalityPermitRequirementDialogState
                     style: GoogleFonts.poppins(
                       fontSize: 14,
                       fontWeight: FontWeight.w500,
-                      color: isSelected ? AppColors.primaryBlue : Colors.black87,
+                      color: isSelected
+                          ? AppColors.primaryBlue
+                          : Colors.black87,
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -8663,11 +8685,7 @@ class _BulkLocalityPermitFollowUpDialogState
     return AlertDialog(
       title: Row(
         children: [
-          Icon(
-            Icons.warning_amber,
-            color: AppColors.primaryBlue,
-            size: 24,
-          ),
+          Icon(Icons.warning_amber, color: AppColors.primaryBlue, size: 24),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
@@ -8687,10 +8705,7 @@ class _BulkLocalityPermitFollowUpDialogState
         children: [
           Text(
             'You indicated the locality permit for ${widget.locality}, ${widget.state} is required but not available',
-            style: GoogleFonts.poppins(
-              fontSize: 13,
-              color: Colors.grey[600],
-            ),
+            style: GoogleFonts.poppins(fontSize: 13, color: Colors.grey[600]),
           ),
           Text(
             '${widget.siteCount} sites will be affected',
@@ -8763,7 +8778,9 @@ class _BulkLocalityPermitFollowUpDialogState
         ),
         ElevatedButton(
           onPressed: _canWorkWithoutLocalityPermit != null
-              ? () => Navigator.of(context).pop({'canWorkWithout': _canWorkWithoutLocalityPermit})
+              ? () => Navigator.of(
+                  context,
+                ).pop({'canWorkWithout': _canWorkWithoutLocalityPermit})
               : null,
           style: ElevatedButton.styleFrom(
             backgroundColor: _canWorkWithoutLocalityPermit == 'no'
@@ -8815,7 +8832,9 @@ class _BulkLocalityPermitFollowUpDialogState
         child: Row(
           children: [
             Icon(
-              isSelected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+              isSelected
+                  ? Icons.radio_button_checked
+                  : Icons.radio_button_unchecked,
               color: isSelected ? AppColors.primaryBlue : Colors.grey[400],
               size: 20,
             ),
@@ -8829,7 +8848,9 @@ class _BulkLocalityPermitFollowUpDialogState
                     style: GoogleFonts.poppins(
                       fontSize: 14,
                       fontWeight: FontWeight.w500,
-                      color: isSelected ? AppColors.primaryBlue : Colors.black87,
+                      color: isSelected
+                          ? AppColors.primaryBlue
+                          : Colors.black87,
                     ),
                   ),
                   const SizedBox(height: 4),
