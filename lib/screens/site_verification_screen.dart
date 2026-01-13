@@ -477,50 +477,34 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
       // CATEGORIZE SITES INTO 6 TABS (matching web app CoordinatorSites.tsx)
       // ============================================================================
 
-      // Tab 1: NEW - Sites needing permit verification (Pending/Dispatched without permits)
-      // Match web app: status === 'Pending' || 'Dispatched' || 'assigned' || 'inProgress' || 'in_progress'
+      // Tab 1: NEW - Match web app CoordinatorSites.tsx
+      // Status in: 'Pending', 'Dispatched', 'assigned', 'inProgress', 'in_progress'
       _newSites = sites.where((s) {
-        final status = s['status']?.toString().toLowerCase() ?? '';
-        final additionalData =
-            s['additional_data'] as Map<String, dynamic>? ?? {};
-        final hasStatePermit =
-            additionalData['state_permit_attached'] == true ||
-            additionalData['state_permit_not_required'] == true;
-        final hasLocalityPermit =
-            additionalData['locality_permit_attached'] == true;
+        final rawStatus = s['status']?.toString() ?? '';
+        final lowerStatus = rawStatus.toLowerCase();
 
-        // New sites: Pending/Dispatched/assigned that need permit verification
         final isNewStatus =
-            status == 'pending' ||
-            status == 'dispatched' ||
-            status == 'assigned' ||
-            status == 'in_progress' ||
-            status == 'inprogress' ||
-            status == 'in progress';
+            rawStatus == 'Pending' ||
+            rawStatus == 'Dispatched' ||
+            rawStatus == 'inProgress' ||
+            lowerStatus == 'pending' ||
+            lowerStatus == 'dispatched' ||
+            lowerStatus == 'assigned' ||
+            lowerStatus == 'in_progress' ||
+            lowerStatus == 'inprogress' ||
+            lowerStatus == 'in progress';
 
-        final needsPermits = !hasStatePermit || !hasLocalityPermit;
-
-        return isNewStatus && needsPermits;
+        return isNewStatus;
       }).toList();
 
       debugPrint('New sites count: ${_newSites.length}');
 
-      // Tab 2: CP VERIFICATION - Sites with permits attached, ready for verification
+      // Tab 2: CP VERIFICATION - Sites with permits attached (status = permits_attached)
       _cpVerificationSites = sites.where((s) {
         final status = s['status']?.toString().toLowerCase() ?? '';
-        final additionalData =
-            s['additional_data'] as Map<String, dynamic>? ?? {};
-        final hasStatePermit =
-            additionalData['state_permit_attached'] == true ||
-            additionalData['state_permit_not_required'] == true;
-        final hasLocalityPermit =
-            additionalData['locality_permit_attached'] == true;
 
-        // CP Verification: permits_attached status OR sites with both permits attached
-        return status == 'permits_attached' ||
-            ((status == 'dispatched' || status == 'assigned') &&
-                hasStatePermit &&
-                hasLocalityPermit);
+        // Match web app: permits_attached tab is purely status-based
+        return status == 'permits_attached';
       }).toList();
 
       // Tab 3: VERIFIED - Sites verified by coordinator, waiting for approval
@@ -544,15 +528,18 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
       // Tab 6: REJECTED - Sites rejected during verification
       _rejectedSites = sites.where((s) {
         final status = s['status']?.toString().toLowerCase() ?? '';
-        return status == 'rejected' || status == 'returned_to_fom';
+        // Match web app: rejected tab only shows explicit rejected status
+        return status == 'rejected';
       }).toList();
 
       debugPrint(
         'Tab counts - New: ${_newSites.length}, CP Verification: ${_cpVerificationSites.length}, Verified: ${_verifiedSites.length}, Approved: ${_approvedSites.length}, Completed: ${_completedSites.length}, Rejected: ${_rejectedSites.length}',
       );
 
-      // FALLBACK: If we have sites but they're not categorized, add them to "New" tab
-      // This ensures sites are visible even if status/permit logic doesn't match exactly
+      // FALLBACK: If we have sites but they're not categorized, we log them only.
+      // Unlike the previous behavior, we DO NOT force them into the New tab.
+      // This matches the web app where unknown statuses (including returned_to_fom)
+      // are not shown in coordinator tabs.
       if (sites.isNotEmpty) {
         final categorizedCount =
             _newSites.length +
@@ -573,16 +560,10 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
           }).toList();
 
           debugPrint(
-            'WARNING: ${uncategorized.length} sites were not categorized!',
+            'WARNING: ${uncategorized.length} sites were not categorized (they will not be shown in tabs).',
           );
           debugPrint(
             'Uncategorized sites: ${uncategorized.map((s) => '${s['id']}: status="${s['status']}"').join(', ')}',
-          );
-
-          // Add uncategorized sites to "New" tab as fallback
-          _newSites.addAll(uncategorized);
-          debugPrint(
-            'Added ${uncategorized.length} uncategorized sites to New tab (fallback)',
           );
         }
       }
@@ -3956,10 +3937,21 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
           mmpFile['workflow'] as Map<String, dynamic>? ?? {},
         );
 
+        final nowIso = DateTime.now().toIso8601String();
+
         workflow['coordinatorVerified'] = true;
-        workflow['coordinatorVerifiedAt'] = DateTime.now().toIso8601String();
+        workflow['coordinatorVerifiedAt'] = nowIso;
         workflow['coordinatorVerifiedBy'] = _userId;
-        workflow['currentStage'] = 'verified';
+
+        final currentStage = workflow['currentStage']?.toString();
+        if (currentStage == 'awaitingCoordinatorVerification') {
+          workflow['currentStage'] = 'verified';
+        } else {
+          workflow['currentStage'] =
+              (currentStage != null && currentStage.isNotEmpty)
+                  ? currentStage
+                  : 'verified';
+        }
 
         await _supabase
             .from('mmp_files')
