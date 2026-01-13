@@ -2,7 +2,6 @@
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/hub_operations_models.dart';
-import '../models/site_visit.dart';
 
 class SitesRegistryMatcher {
   final SupabaseClient _supabase = Supabase.instance.client;

@@ -226,45 +226,62 @@ class AuthenticationService {
       // CRITICAL: Always include role in metadata (defaults to 'dataCollector' if not provided)
       // This ensures the handle_new_user trigger can properly set the profile role
       // The database trigger reads from raw_user_meta_data->>'role'
-      final normalizedRole = (userData.role?.trim().toLowerCase() ?? 'dataCollector');
-      
+      final normalizedRole =
+          (userData.role?.trim().toLowerCase() ?? 'dataCollector');
+
       debugPrint('[AuthenticationService] Registering user with metadata:');
       debugPrint('  - role: $normalizedRole');
       debugPrint('  - hubId: ${userData.hubId}');
       debugPrint('  - stateId: ${userData.stateId}');
       debugPrint('  - localityId: ${userData.localityId}');
       debugPrint('  - email: ${userData.email}');
-      
+
       final response = await supabase.auth.signUp(
         email: userData.email,
         password: userData.password,
         data: {
           // Always include name (use email prefix if not provided)
-          'name': userData.name?.trim() ?? userData.email.split('@')[0],
+          'name': userData.name.trim() ?? userData.email.split('@')[0],
           // Include phone if provided
-          if (userData.phone != null && userData.phone!.trim().isNotEmpty) 'phone': userData.phone!.trim(),
+          if (userData.phone != null && userData.phone!.trim().isNotEmpty)
+            'phone': userData.phone!.trim(),
           // Include employeeId if provided
-          if (userData.employeeId != null && userData.employeeId!.trim().isNotEmpty) 'employeeId': userData.employeeId!.trim(),
+          if (userData.employeeId != null &&
+              userData.employeeId!.trim().isNotEmpty)
+            'employeeId': userData.employeeId!.trim(),
           // CRITICAL: Always include role (never null) - this is what the trigger reads
           'role': normalizedRole,
           // Include location data if provided (required for coordinators/data collectors)
-          if (userData.hubId != null && userData.hubId!.trim().isNotEmpty) 'hubId': userData.hubId!.trim(),
-          if (userData.stateId != null && userData.stateId!.trim().isNotEmpty) 'stateId': userData.stateId!.trim(),
-          if (userData.localityId != null && userData.localityId!.trim().isNotEmpty) 'localityId': userData.localityId!.trim(),
+          if (userData.hubId != null && userData.hubId!.trim().isNotEmpty)
+            'hubId': userData.hubId!.trim(),
+          if (userData.stateId != null && userData.stateId!.trim().isNotEmpty)
+            'stateId': userData.stateId!.trim(),
+          if (userData.localityId != null &&
+              userData.localityId!.trim().isNotEmpty)
+            'localityId': userData.localityId!.trim(),
           // Include avatar if provided
-          if (userData.avatar != null && userData.avatar!.trim().isNotEmpty) 'avatar': userData.avatar!.trim(),
+          if (userData.avatar != null && userData.avatar!.trim().isNotEmpty)
+            'avatar': userData.avatar!.trim(),
         },
       );
 
       if (response.user == null) {
-        debugPrint('[AuthenticationService] Registration failed: No user returned');
+        debugPrint(
+          '[AuthenticationService] Registration failed: No user returned',
+        );
         return false;
       }
 
-      debugPrint('[AuthenticationService] Registration successful. User ID: ${response.user?.id}');
-      debugPrint('[AuthenticationService] User metadata sent: ${response.user?.userMetadata}');
-      debugPrint('[AuthenticationService] User awaits email verification and admin approval.');
-      
+      debugPrint(
+        '[AuthenticationService] Registration successful. User ID: ${response.user?.id}',
+      );
+      debugPrint(
+        '[AuthenticationService] User metadata sent: ${response.user?.userMetadata}',
+      );
+      debugPrint(
+        '[AuthenticationService] User awaits email verification and admin approval.',
+      );
+
       return true;
     } on AuthException catch (e) {
       debugPrint('[AuthenticationService] Supabase signup error: ${e.message}');
@@ -311,16 +328,14 @@ class AuthenticationService {
           .eq('user_id', authResponse.user!.id);
 
       final userRoles = <app_models.AppRole>[];
-      if (rolesData is List) {
-        for (final roleData in rolesData) {
-          final roleStr = roleData['role'] as String?;
-          if (roleStr != null) {
-            try {
-              final role = _stringToAppRole(roleStr);
-              userRoles.add(role);
-            } catch (e) {
-              debugPrint('Failed to parse role: $roleStr');
-            }
+      for (final roleData in rolesData) {
+        final roleStr = roleData['role'] as String?;
+        if (roleStr != null) {
+          try {
+            final role = _stringToAppRole(roleStr);
+            userRoles.add(role);
+          } catch (e) {
+            debugPrint('Failed to parse role: $roleStr');
           }
         }
       }
@@ -438,16 +453,14 @@ class AuthenticationService {
             .eq('user_id', user.id);
 
         final userRoles = <app_models.AppRole>[];
-        if (rolesData is List) {
-          for (final roleData in rolesData) {
-            final roleStr = roleData['role'] as String?;
-            if (roleStr != null) {
-              try {
-                final role = _stringToAppRole(roleStr);
-                userRoles.add(role);
-              } catch (e) {
-                debugPrint('Failed to parse role: $roleStr');
-              }
+        for (final roleData in rolesData) {
+          final roleStr = roleData['role'] as String?;
+          if (roleStr != null) {
+            try {
+              final role = _stringToAppRole(roleStr);
+              userRoles.add(role);
+            } catch (e) {
+              debugPrint('Failed to parse role: $roleStr');
             }
           }
         }

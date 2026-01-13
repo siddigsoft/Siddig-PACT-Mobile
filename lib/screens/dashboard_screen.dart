@@ -101,13 +101,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
         _userState = profileResponse['state_id'] as String?;
         _userHub = profileResponse['hub_id'] as String?;
-        
+
         // Check if user is admin or supervisor (can see all projects)
-        _isAdminOrSuperUser = _userRole == 'admin' || 
-                             _userRole == 'super_admin' || 
-                             _userRole == 'supervisor' ||
-                             _userRole == 'fom';
-        
+        _isAdminOrSuperUser =
+            _userRole == 'admin' ||
+            _userRole == 'super_admin' ||
+            _userRole == 'supervisor' ||
+            _userRole == 'fom';
+
         // Fetch user's project memberships (for non-admin users)
         if (!_isAdminOrSuperUser) {
           await _fetchUserProjectMemberships();
@@ -171,100 +172,117 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Future<void> _fetchUserProjectMemberships() async {
     try {
       _userProjectIds = [];
-      
-      debugPrint('[_fetchUserProjectMemberships] Fetching projects for user: $_userId');
-      
+
+      debugPrint(
+        '[_fetchUserProjectMemberships] Fetching projects for user: $_userId',
+      );
+
       // Try to fetch from team_members table first (if it exists)
       try {
         final response = await Supabase.instance.client
             .from('team_members')
             .select('project_id')
             .eq('user_id', _userId!);
-        
-        if (response != null && (response as List).isNotEmpty) {
+
+        if ((response as List).isNotEmpty) {
           _userProjectIds = (response as List)
               .map((m) => m['project_id']?.toString())
               .where((id) => id != null && id.isNotEmpty)
               .cast<String>()
               .toList();
-          debugPrint('User project IDs from team_members: ${_userProjectIds.length}');
+          debugPrint(
+            'User project IDs from team_members: ${_userProjectIds.length}',
+          );
         } else {
-          debugPrint('team_members table returned empty or doesn\'t exist, checking projects table');
+          debugPrint(
+            'team_members table returned empty or doesn\'t exist, checking projects table',
+          );
         }
       } catch (e) {
-        debugPrint('Error fetching from team_members table (may not exist): $e');
+        debugPrint(
+          'Error fetching from team_members table (may not exist): $e',
+        );
       }
-      
+
       // ALWAYS check projects table for team composition (primary source)
       // This matches the web app's useUserProjects hook
       try {
         final projectsResponse = await Supabase.instance.client
             .from('projects')
             .select('id, team');
-        
-        if (projectsResponse != null) {
-          debugPrint('Checking ${(projectsResponse as List).length} projects for user membership');
-          int foundCount = 0;
-          
-          for (final project in projectsResponse as List) {
-            final projectId = project['id']?.toString();
-            if (projectId == null) continue;
-            
-            final team = project['team'] as Map<String, dynamic>?;
-            if (team == null) continue;
-            
-            bool isMember = false;
-            
-            // Check if user is project manager (can be UUID or name)
-            final projectManager = team['projectManager'];
-            if (projectManager != null) {
-              // Check both UUID and name (in case it's stored as name)
-              if (projectManager == _userId || 
-                  (projectManager is String && projectManager.contains(_userId!))) {
-                isMember = true;
-                debugPrint('Found user as project manager in project: $projectId');
-              }
+
+        debugPrint(
+          'Checking ${(projectsResponse as List).length} projects for user membership',
+        );
+        int foundCount = 0;
+
+        for (final project in projectsResponse as List) {
+          final projectId = project['id']?.toString();
+          if (projectId == null) continue;
+
+          final team = project['team'] as Map<String, dynamic>?;
+          if (team == null) continue;
+
+          bool isMember = false;
+
+          // Check if user is project manager (can be UUID or name)
+          final projectManager = team['projectManager'];
+          if (projectManager != null) {
+            // Check both UUID and name (in case it's stored as name)
+            if (projectManager == _userId ||
+                (projectManager is String &&
+                    projectManager.contains(_userId!))) {
+              isMember = true;
+              debugPrint(
+                'Found user as project manager in project: $projectId',
+              );
             }
-            
-            // Check if user is in members array
-            if (!isMember) {
-              final members = team['members'] as List?;
-              if (members != null && members.contains(_userId)) {
-                isMember = true;
-                debugPrint('Found user in members array for project: $projectId');
-              }
+          }
+
+          // Check if user is in members array
+          if (!isMember) {
+            final members = team['members'] as List?;
+            if (members != null && members.contains(_userId)) {
+              isMember = true;
+              debugPrint('Found user in members array for project: $projectId');
             }
-            
-            // Check if user is in teamComposition (primary method)
-            if (!isMember) {
-              final teamComposition = team['teamComposition'] as List?;
-              if (teamComposition != null) {
-                for (final member in teamComposition) {
-                  if (member is Map) {
-                    final memberUserId = member['userId']?.toString();
-                    if (memberUserId == _userId) {
-                      isMember = true;
-                      debugPrint('Found user in teamComposition for project: $projectId (role: ${member['role']})');
-                      break;
-                    }
+          }
+
+          // Check if user is in teamComposition (primary method)
+          if (!isMember) {
+            final teamComposition = team['teamComposition'] as List?;
+            if (teamComposition != null) {
+              for (final member in teamComposition) {
+                if (member is Map) {
+                  final memberUserId = member['userId']?.toString();
+                  if (memberUserId == _userId) {
+                    isMember = true;
+                    debugPrint(
+                      'Found user in teamComposition for project: $projectId (role: ${member['role']})',
+                    );
+                    break;
                   }
                 }
               }
             }
-            
-            if (isMember && !_userProjectIds.contains(projectId)) {
-              _userProjectIds.add(projectId);
-              foundCount++;
-            }
           }
-          
-          debugPrint('User project IDs from projects table: $foundCount (total: ${_userProjectIds.length})');
+
+          if (isMember && !_userProjectIds.contains(projectId)) {
+            _userProjectIds.add(projectId);
+            foundCount++;
+          }
         }
+
+        debugPrint(
+          'User project IDs from projects table: $foundCount (total: ${_userProjectIds.length})',
+        );
       } catch (e2) {
         debugPrint('Error fetching from projects table: $e2');
       }
-      
-      debugPrint('User is member of ${_userProjectIds.length} projects: $_userProjectIds');
+
+      debugPrint(
+        'User is member of ${_userProjectIds.length} projects: $_userProjectIds',
+      );
     } catch (e) {
       debugPrint('Error fetching user project memberships: $e');
     }
@@ -292,22 +310,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
         filteredResponse = filteredResponse.where((json) {
           final mmpFiles = json['mmp_files'] as Map<String, dynamic>?;
           final projectId = mmpFiles?['project_id']?.toString();
-          
+
           // If site has no project ID, exclude it
           if (projectId == null || projectId.isEmpty) {
             return false;
           }
-          
+
           // Site must be in one of user's projects
           return _userProjectIds.contains(projectId);
         }).toList();
-        
-        debugPrint('Filtered coordinator sites by project: ${filteredResponse.length} of $beforeCount');
+
+        debugPrint(
+          'Filtered coordinator sites by project: ${filteredResponse.length} of $beforeCount',
+        );
       }
 
       // Convert to SiteVisit objects
       final siteVisits = filteredResponse
-          .map((json) => SiteVisit.fromJson(json as Map<String, dynamic>))
+          .map((json) => SiteVisit.fromJson(json))
           .toList();
 
       _coordinatorVisits = siteVisits;
@@ -402,28 +422,31 @@ class _DashboardScreenState extends State<DashboardScreen> {
       }
 
       // Filter by project membership (for non-admin users) before converting to SiteVisit
-      List<Map<String, dynamic>> filteredEntries = allEntriesMap.values.toList();
+      List<Map<String, dynamic>> filteredEntries = allEntriesMap.values
+          .toList();
       if (!_isAdminOrSuperUser) {
         final beforeCount = filteredEntries.length;
         filteredEntries = filteredEntries.where((json) {
           final mmpFiles = json['mmp_files'] as Map<String, dynamic>?;
           final projectId = mmpFiles?['project_id']?.toString();
-          
+
           // If site has no project ID, exclude it
           if (projectId == null || projectId.isEmpty) {
             return false;
           }
-          
+
           // Site must be in one of user's projects
           return _userProjectIds.contains(projectId);
         }).toList();
-        
-        debugPrint('Filtered data collector sites by project: ${filteredEntries.length} of $beforeCount');
+
+        debugPrint(
+          'Filtered data collector sites by project: ${filteredEntries.length} of $beforeCount',
+        );
       }
 
       // Convert to SiteVisit objects
       final allVisits = filteredEntries
-          .map((json) => SiteVisit.fromJson(json as Map<String, dynamic>))
+          .map((json) => SiteVisit.fromJson(json))
           .toList();
 
       _dataCollectorVisits = allVisits;
@@ -2000,8 +2023,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Color _getStatusColor(String status) {
     final s = status.toLowerCase();
     if (s == 'completed' || s == 'complete') return Colors.green;
-    if (s == 'in progress' || s == 'in_progress' || s == 'ongoing')
+    if (s == 'in progress' || s == 'in_progress' || s == 'ongoing') {
       return Colors.blue;
+    }
     if (s == 'pending' || s == 'assigned') return Colors.orange;
     return AppColors.textLight;
   }

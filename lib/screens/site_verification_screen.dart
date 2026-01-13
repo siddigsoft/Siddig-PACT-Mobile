@@ -222,7 +222,7 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
             .select('project_id')
             .eq('user_id', _userId!);
 
-        if (response != null && (response as List).isNotEmpty) {
+        if ((response as List).isNotEmpty) {
           _userProjectIds = (response as List)
               .map((m) => m['project_id']?.toString())
               .where((id) => id != null && id.isNotEmpty)
@@ -249,75 +249,71 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
             .from('projects')
             .select('id, team');
 
-        if (projectsResponse != null) {
-          debugPrint(
-            'Checking ${(projectsResponse as List).length} projects for user membership',
-          );
-          int foundCount = 0;
+        debugPrint(
+          'Checking ${(projectsResponse as List).length} projects for user membership',
+        );
+        int foundCount = 0;
 
-          for (final project in projectsResponse as List) {
-            final projectId = project['id']?.toString();
-            if (projectId == null) continue;
+        for (final project in projectsResponse as List) {
+          final projectId = project['id']?.toString();
+          if (projectId == null) continue;
 
-            final team = project['team'] as Map<String, dynamic>?;
-            if (team == null) continue;
+          final team = project['team'] as Map<String, dynamic>?;
+          if (team == null) continue;
 
-            bool isMember = false;
+          bool isMember = false;
 
-            // Check if user is project manager (can be UUID or name)
-            final projectManager = team['projectManager'];
-            if (projectManager != null) {
-              // Check both UUID and name (in case it's stored as name)
-              if (projectManager == _userId ||
-                  (projectManager is String &&
-                      projectManager.contains(_userId!))) {
-                isMember = true;
-                debugPrint(
-                  'Found user as project manager in project: $projectId',
-                );
-              }
+          // Check if user is project manager (can be UUID or name)
+          final projectManager = team['projectManager'];
+          if (projectManager != null) {
+            // Check both UUID and name (in case it's stored as name)
+            if (projectManager == _userId ||
+                (projectManager is String &&
+                    projectManager.contains(_userId!))) {
+              isMember = true;
+              debugPrint(
+                'Found user as project manager in project: $projectId',
+              );
             }
+          }
 
-            // Check if user is in members array
-            if (!isMember) {
-              final members = team['members'] as List?;
-              if (members != null && members.contains(_userId)) {
-                isMember = true;
-                debugPrint(
-                  'Found user in members array for project: $projectId',
-                );
-              }
+          // Check if user is in members array
+          if (!isMember) {
+            final members = team['members'] as List?;
+            if (members != null && members.contains(_userId)) {
+              isMember = true;
+              debugPrint('Found user in members array for project: $projectId');
             }
+          }
 
-            // Check if user is in teamComposition (primary method)
-            if (!isMember) {
-              final teamComposition = team['teamComposition'] as List?;
-              if (teamComposition != null) {
-                for (final member in teamComposition) {
-                  if (member is Map) {
-                    final memberUserId = member['userId']?.toString();
-                    if (memberUserId == _userId) {
-                      isMember = true;
-                      debugPrint(
-                        'Found user in teamComposition for project: $projectId (role: ${member['role']})',
-                      );
-                      break;
-                    }
+          // Check if user is in teamComposition (primary method)
+          if (!isMember) {
+            final teamComposition = team['teamComposition'] as List?;
+            if (teamComposition != null) {
+              for (final member in teamComposition) {
+                if (member is Map) {
+                  final memberUserId = member['userId']?.toString();
+                  if (memberUserId == _userId) {
+                    isMember = true;
+                    debugPrint(
+                      'Found user in teamComposition for project: $projectId (role: ${member['role']})',
+                    );
+                    break;
                   }
                 }
               }
             }
-
-            if (isMember && !_userProjectIds.contains(projectId)) {
-              _userProjectIds.add(projectId);
-              foundCount++;
-            }
           }
 
-          debugPrint(
-            'User project IDs from projects table: $foundCount (total: ${_userProjectIds.length})',
-          );
+          if (isMember && !_userProjectIds.contains(projectId)) {
+            _userProjectIds.add(projectId);
+            foundCount++;
+          }
         }
+
+        debugPrint(
+          'User project IDs from projects table: $foundCount (total: ${_userProjectIds.length})',
+        );
       } catch (e2) {
         debugPrint('Error fetching from projects table: $e2');
       }
@@ -352,10 +348,8 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
             .order('created_at', ascending: false)
             .limit(1000);
 
-        if (response != null) {
-          sites.addAll(List<Map<String, dynamic>>.from(response));
-          debugPrint('Sites found by forwarded_to_user_id: ${sites.length}');
-        }
+        sites.addAll(List<Map<String, dynamic>>.from(response));
+        debugPrint('Sites found by forwarded_to_user_id: ${sites.length}');
       } catch (e) {
         debugPrint('Error fetching by forwarded_to_user_id: $e');
       }
@@ -392,39 +386,36 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
               .order('created_at', ascending: false)
               .limit(500);
 
-          if (response2 != null) {
-            // Filter in memory for sites where additional_data contains assigned_to
-            final additionalSites = (response2 as List).where((site) {
-              final additionalData =
-                  site['additional_data'] as Map<String, dynamic>?;
-              if (additionalData == null) return false;
-              final assignedTo = additionalData['assigned_to']?.toString();
-              if (assignedTo != _userId) return false;
+          // Filter in memory for sites where additional_data contains assigned_to
+          final additionalSites = (response2 as List).where((site) {
+            final additionalData =
+                site['additional_data'] as Map<String, dynamic>?;
+            if (additionalData == null) return false;
+            final assignedTo = additionalData['assigned_to']?.toString();
+            if (assignedTo != _userId) return false;
 
-              // Also filter by project membership (for non-admin users)
-              if (!_isAdminOrSuperUser) {
-                final mmpFile =
-                    site['mmp_files'] as Map<String, dynamic>? ?? {};
-                final projectId = mmpFile['project_id']?.toString();
-                if (projectId == null || projectId.isEmpty) return false;
-                if (!_userProjectIds.contains(projectId)) return false;
-              }
-
-              return true;
-            }).toList();
-
-            // Add sites not already in list (avoid duplicates)
-            for (final site in additionalSites) {
-              final exists = sites.any((s) => s['id'] == site['id']);
-              if (!exists) {
-                sites.add(Map<String, dynamic>.from(site));
-              }
+            // Also filter by project membership (for non-admin users)
+            if (!_isAdminOrSuperUser) {
+              final mmpFile = site['mmp_files'] as Map<String, dynamic>? ?? {};
+              final projectId = mmpFile['project_id']?.toString();
+              if (projectId == null || projectId.isEmpty) return false;
+              if (!_userProjectIds.contains(projectId)) return false;
             }
-            debugPrint(
-              'Sites added from additional_data assigned_to: ${additionalSites.length}',
-            );
-            debugPrint('Total sites after both queries: ${sites.length}');
+
+            return true;
+          }).toList();
+
+          // Add sites not already in list (avoid duplicates)
+          for (final site in additionalSites) {
+            final exists = sites.any((s) => s['id'] == site['id']);
+            if (!exists) {
+              sites.add(Map<String, dynamic>.from(site));
+            }
           }
+          debugPrint(
+            'Sites added from additional_data assigned_to: ${additionalSites.length}',
+          );
+          debugPrint('Total sites after both queries: ${sites.length}');
         } catch (e) {
           debugPrint('Error fetching by additional_data assigned_to: $e');
         }
@@ -448,10 +439,8 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
           final response3 = await query
               .order('created_at', ascending: false)
               .limit(1000);
-          if (response3 != null) {
-            sites.addAll(List<Map<String, dynamic>>.from(response3));
-            debugPrint('Sites found by state/hub: ${sites.length}');
-          }
+          sites.addAll(List<Map<String, dynamic>>.from(response3));
+          debugPrint('Sites found by state/hub: ${sites.length}');
         } catch (e) {
           debugPrint('Error fetching by state/hub: $e');
         }
@@ -2404,7 +2393,7 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
             child: ElevatedButton.icon(
               onPressed: () => _showLocalityPermitDialog(site),
               icon: const Icon(Icons.location_on, size: 18),
-              label: const Text('Upload Locality Permit'),
+              label: const Text('Permit Status'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primaryBlue,
                 foregroundColor: Colors.white,
@@ -2563,8 +2552,57 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
   }
 
   /// Show Locality Permit Dialog for sites in Locality Permit tab
-  /// This dialog first asks if state permit is already uploaded before proceeding
-  void _showLocalityPermitDialog(Map<String, dynamic> site) {
+  /// This dialog first asks if locality permit is required, then proceeds accordingly
+  void _showLocalityPermitDialog(Map<String, dynamic> site) async {
+    final locality = site['locality']?.toString() ?? '';
+    final state = site['state']?.toString() ?? '';
+
+    // First show locality permit requirement dialog
+    final requirementResult = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (context) => _BulkLocalityPermitRequirementDialog(
+        locality: locality,
+        state: state,
+        siteCount: 1,
+      ),
+    );
+
+    if (requirementResult == null) return;
+
+    final localityPermitRequirement = requirementResult['requirement'];
+
+    // If not required, mark as not required
+    if (localityPermitRequirement == 'not_required') {
+      await _markLocalityPermitNotRequiredSingle(site);
+      return;
+    }
+
+    // If required but don't have it, show follow-up options
+    if (localityPermitRequirement == 'required_dont_have_it') {
+      final followUpResult = await showDialog<Map<String, dynamic>>(
+        context: context,
+        builder: (context) => _BulkLocalityPermitFollowUpDialog(
+          locality: locality,
+          state: state,
+          siteCount: 1,
+        ),
+      );
+
+      if (followUpResult == null) return;
+
+      final followUpChoice = followUpResult['canWorkWithout'];
+
+      if (followUpChoice == 'yes') {
+        // Can proceed without - complete without upload
+        await _completeLocalityWithoutUploadSingle(site);
+      } else {
+        // Cannot proceed - send back to FOM
+        await _sendSiteBackToFOM(site, 'Locality permit is required for $locality but coordinator cannot proceed without it.');
+      }
+      return;
+    }
+
+    // If required and will upload, proceed to upload dialog
     showDialog(
       context: context,
       builder: (context) => _LocalityPermitDialog(
@@ -2578,6 +2616,8 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
           Navigator.pop(context);
           _showPermitVerificationDialog(site);
         },
+        startOnUpload: true,
+        initialStateConfirmed: true, // assume state is uploaded since in locality tab
       ),
     );
   }
@@ -2873,6 +2913,26 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
           notificationMessage =
               'State permit skipped - Upload locality permit to continue';
         }
+      } else if (stateReq == 'required_dont_have_it' &&
+          (canWorkWithout == null || canWorkWithout == 'no')) {
+        // State permit required but not available - wait for locality permit
+        additionalData['state_permit_required_but_missing'] = true;
+        additionalData['state_permit_decision_at'] = DateTime.now()
+            .toIso8601String();
+
+        // Check locality permit
+        if (decision.localityPermit.uploaded) {
+          additionalData['locality_permit_attached'] = true;
+          additionalData['locality_permit_uploaded_at'] = DateTime.now()
+              .toIso8601String();
+          newStatus = 'permits_attached'; // Ready for verification
+          notificationMessage =
+              'Locality permit uploaded - State permit still required but missing';
+        } else {
+          // Don't change site status here; wait for locality permit
+          notificationMessage =
+              'State permit required but missing - Upload locality permit to continue';
+        }
       }
 
       // Update the site entry (include mmp_files when available)
@@ -3104,6 +3164,53 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
     final firstSite = sites.isNotEmpty ? sites.first : null;
     if (firstSite == null) return;
 
+    // First show locality permit requirement dialog
+    final requirementResult = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (context) => _BulkLocalityPermitRequirementDialog(
+        locality: locality,
+        state: state,
+        siteCount: sites.length,
+      ),
+    );
+
+    if (requirementResult == null) return;
+
+    final localityPermitRequirement = requirementResult['requirement'];
+
+    // If not required, mark as not required for all sites
+    if (localityPermitRequirement == 'not_required') {
+      await _markLocalityPermitNotRequired(state, locality, sites);
+      return;
+    }
+
+    // If required but don't have it, show follow-up options
+    if (localityPermitRequirement == 'required_dont_have_it') {
+      final followUpResult = await showDialog<Map<String, dynamic>>(
+        context: context,
+        builder: (context) => _BulkLocalityPermitFollowUpDialog(
+          locality: locality,
+          state: state,
+          siteCount: sites.length,
+        ),
+      );
+
+      if (followUpResult == null) return;
+
+      final followUpChoice = followUpResult['canWorkWithout'];
+
+      if (followUpChoice == 'yes') {
+        // Can proceed without - complete with locality required but not uploaded
+        await _completeBulkLocalityWithoutUpload(state, locality, sites);
+      } else {
+        // Cannot proceed - send back to FOM
+        await _sendBulkSitesBackToFOM(state, locality, sites,
+            'Locality permit is required for $locality but coordinator cannot proceed without it.');
+      }
+      return;
+    }
+
+    // If required and will upload, proceed to upload dialog
     final siteAdditional = Map<String, dynamic>.from(
       firstSite['additional_data'] as Map<String, dynamic>? ?? {},
     );
@@ -3142,6 +3249,349 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
     }
 
     await _bulkUpdateLocalityPermit(state, locality, decision);
+  }
+
+  Future<void> _markLocalityPermitNotRequired(
+    String state,
+    String locality,
+    List<Map<String, dynamic>> sites,
+  ) async {
+    try {
+      setState(() => _isLoading = true);
+
+      int updated = 0;
+
+      for (final site in sites) {
+        final siteId = site['id'].toString();
+        final additionalData = Map<String, dynamic>.from(
+          site['additional_data'] as Map<String, dynamic>? ?? {},
+        );
+
+        additionalData['locality_permit_not_required'] = true;
+        additionalData['locality_permit_requirement_set_at'] = DateTime.now()
+            .toIso8601String();
+        additionalData['locality_permit_requirement_set_by'] = _userId;
+
+        try {
+          await _supabase
+              .from('mmp_site_entries')
+              .update({
+                'additional_data': additionalData,
+                'status': 'permits_attached',
+                'updated_at': DateTime.now().toIso8601String(),
+              })
+              .eq('id', siteId);
+          updated++;
+        } catch (e) {
+          debugPrint('Failed to update site $siteId: $e');
+        }
+      }
+
+      setState(() => _isLoading = false);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Marked locality permit as not required for $updated site(s)',
+            ),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+      await _loadData();
+    } catch (e) {
+      setState(() => _isLoading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error updating sites: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _completeBulkLocalityWithoutUpload(
+    String state,
+    String locality,
+    List<Map<String, dynamic>> sites,
+  ) async {
+    try {
+      setState(() => _isLoading = true);
+
+      int updated = 0;
+
+      for (final site in sites) {
+        final siteId = site['id'].toString();
+        final additionalData = Map<String, dynamic>.from(
+          site['additional_data'] as Map<String, dynamic>? ?? {},
+        );
+
+        additionalData['locality_permit_required_but_not_uploaded'] = true;
+        additionalData['locality_permit_requirement_set_at'] = DateTime.now()
+            .toIso8601String();
+        additionalData['locality_permit_requirement_set_by'] = _userId;
+
+        try {
+          await _supabase
+              .from('mmp_site_entries')
+              .update({
+                'additional_data': additionalData,
+                'status': 'permits_attached',
+                'updated_at': DateTime.now().toIso8601String(),
+              })
+              .eq('id', siteId);
+          updated++;
+        } catch (e) {
+          debugPrint('Failed to update site $siteId: $e');
+        }
+      }
+
+      setState(() => _isLoading = false);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Completed locality verification without upload for $updated site(s)',
+            ),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+      await _loadData();
+    } catch (e) {
+      setState(() => _isLoading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error updating sites: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _sendBulkSitesBackToFOM(
+    String state,
+    String locality,
+    List<Map<String, dynamic>> sites,
+    String reason,
+  ) async {
+    try {
+      setState(() => _isLoading = true);
+
+      final eligibleStatuses = [
+        'Pending',
+        'Dispatched',
+        'assigned',
+        'inProgress',
+        'in_progress',
+      ];
+      final targetSites = _newSites.where((s) {
+        final sState = (s['state']?.toString() ?? '');
+        final sLocality = (s['locality']?.toString() ?? '');
+        final status = s['status']?.toString() ?? '';
+        return sState == state &&
+            sLocality == locality &&
+            eligibleStatuses.contains(status);
+      }).toList();
+
+      int updated = 0;
+
+      for (final site in targetSites) {
+        final siteId = site['id'].toString();
+        final additionalData = Map<String, dynamic>.from(
+          site['additional_data'] as Map<String, dynamic>? ?? {},
+        );
+
+        additionalData['sent_back_to_fom'] = true;
+        additionalData['sent_back_reason'] = reason;
+        additionalData['sent_back_at'] = DateTime.now().toIso8601String();
+        additionalData['sent_back_by'] = _userId;
+
+        try {
+          await _supabase
+              .from('mmp_site_entries')
+              .update({
+                'status': 'returned_to_fom',
+                'additional_data': additionalData,
+                'updated_at': DateTime.now().toIso8601String(),
+              })
+              .eq('id', siteId);
+          updated++;
+        } catch (e) {
+          debugPrint('Failed to update site $siteId: $e');
+        }
+      }
+
+      setState(() => _isLoading = false);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Sent $updated site(s) back to FOM: $reason',
+            ),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+    } catch (e) {
+      setState(() => _isLoading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error sending sites back to FOM: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  // Single site versions for individual locality verification
+  Future<void> _markLocalityPermitNotRequiredSingle(Map<String, dynamic> site) async {
+    try {
+      setState(() => _isLoading = true);
+
+      final siteId = site['id'].toString();
+      final additionalData = Map<String, dynamic>.from(
+        site['additional_data'] as Map<String, dynamic>? ?? {},
+      );
+
+      additionalData['locality_permit_not_required'] = true;
+      additionalData['locality_permit_requirement_set_at'] = DateTime.now().toIso8601String();
+      additionalData['locality_permit_requirement_set_by'] = _userId;
+
+      await _supabase
+          .from('mmp_site_entries')
+          .update({
+            'additional_data': additionalData,
+            'status': 'permits_attached',
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('id', siteId);
+
+      setState(() => _isLoading = false);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Locality permit marked as not required - moved to CP verification'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+      await _loadData();
+    } catch (e) {
+      setState(() => _isLoading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error updating site: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _completeLocalityWithoutUploadSingle(Map<String, dynamic> site) async {
+    try {
+      setState(() => _isLoading = true);
+
+      final siteId = site['id'].toString();
+      final additionalData = Map<String, dynamic>.from(
+        site['additional_data'] as Map<String, dynamic>? ?? {},
+      );
+
+      final localityPermit = additionalData['locality_permit'] as Map<String, dynamic>? ?? {};
+      localityPermit['requirement'] = 'required_dont_have_it';
+      localityPermit['canWorkWithout'] = 'yes';
+      additionalData['locality_permit'] = localityPermit;
+
+      await _supabase
+          .from('mmp_site_entries')
+          .update({
+            'additional_data': additionalData,
+            'status': 'permits_attached',
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('id', siteId);
+
+      setState(() => _isLoading = false);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Proceeding without locality permit - moved to CP verification'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+      await _loadData();
+    } catch (e) {
+      setState(() => _isLoading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error updating site: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _sendSiteBackToFOM(Map<String, dynamic> site, String reason) async {
+    try {
+      setState(() => _isLoading = true);
+
+      final siteId = site['id'].toString();
+      final additionalData = Map<String, dynamic>.from(
+        site['additional_data'] as Map<String, dynamic>? ?? {},
+      );
+
+      additionalData['sent_back_to_fom'] = true;
+      additionalData['sent_back_reason'] = reason;
+      additionalData['sent_back_at'] = DateTime.now().toIso8601String();
+      additionalData['sent_back_by'] = _userId;
+
+      await _supabase
+          .from('mmp_site_entries')
+          .update({
+            'status': 'returned_to_fom',
+            'additional_data': additionalData,
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('id', siteId);
+
+      setState(() => _isLoading = false);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Site sent back to FOM: $reason'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+      await _loadData();
+    } catch (e) {
+      setState(() => _isLoading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error sending site back to FOM: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _bulkUpdateLocalityPermit(
@@ -3305,10 +3755,11 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
       await _loadData();
     } catch (e) {
       debugPrint('Error performing bulk locality update: $e');
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
         );
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -3374,7 +3825,7 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
         updated++;
       }
 
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
@@ -3383,13 +3834,15 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
             backgroundColor: Colors.green,
           ),
         );
+      }
       await _loadData();
     } catch (e) {
       debugPrint('Error during proceed without locality permit: $e');
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
         );
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -3444,19 +3897,20 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
           (result['verification_notes'] as String?)?.trim() ?? '';
 
       if (visitDate == null) {
-        if (mounted)
+        if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: const Text('Please select a visit date'),
               backgroundColor: Colors.red,
             ),
           );
+        }
         return;
       }
 
       if (activityType == 'distribution') {
         if (distributionStart == null || distributionEnd == null) {
-          if (mounted)
+          if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: const Text(
@@ -3465,11 +3919,12 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
                 backgroundColor: Colors.red,
               ),
             );
+          }
           return;
         }
         if (visitDate.isBefore(distributionStart) ||
             visitDate.isAfter(distributionEnd)) {
-          if (mounted)
+          if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: const Text(
@@ -3478,23 +3933,25 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
                 backgroundColor: Colors.red,
               ),
             );
+          }
           return;
         }
       }
 
       if (activityType == 'multi_visit' && requiresFollowUp) {
         if (followUpDate == null) {
-          if (mounted)
+          if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: const Text('Please select a follow-up date'),
                 backgroundColor: Colors.red,
               ),
             );
+          }
           return;
         }
         if (followUpDate.isBefore(visitDate)) {
-          if (mounted)
+          if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: const Text(
@@ -3503,6 +3960,7 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
                 backgroundColor: Colors.red,
               ),
             );
+          }
           return;
         }
       }
@@ -3586,20 +4044,22 @@ class _SiteVerificationScreenState extends State<SiteVerificationScreen>
         updated++;
       }
 
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Verified $updated site(s) in $locality, $state'),
             backgroundColor: Colors.green,
           ),
         );
+      }
       await _loadData();
     } catch (e) {
       debugPrint('Error during bulk verify: $e');
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
         );
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -4560,13 +5020,16 @@ class _PermitVerificationDialogState extends State<_PermitVerificationDialog> {
       final lIssue = additional['locality_permit_issue_date'] as String?;
       final lExpiry = additional['locality_permit_expiry_date'] as String?;
       if (lIssue != null) _localityPermitIssueDate = DateTime.tryParse(lIssue);
-      if (lExpiry != null)
+      if (lExpiry != null) {
         _localityPermitExpiryDate = DateTime.tryParse(lExpiry);
+      }
 
-      if (additional['state_permit_attached'] == true)
+      if (additional['state_permit_attached'] == true) {
         _statePermitUploaded = true;
-      if (additional['locality_permit_attached'] == true)
+      }
+      if (additional['locality_permit_attached'] == true) {
         _localityPermitUploaded = true;
+      }
     } catch (e) {
       debugPrint('Failed to parse permit dates from additional_data: $e');
     }
@@ -4841,10 +5304,19 @@ class _PermitVerificationDialogState extends State<_PermitVerificationDialog> {
     if (_statePermitRequirement == 'required_have_it') {
       setState(() => _currentStep = _PermitStep.stateUpload);
     } else if (_statePermitRequirement == 'required_dont_have_it') {
+      // Required but don't have it - show follow-up question about working without it
       setState(() => _currentStep = _PermitStep.stateFollowUp);
-    } else {
-      // Not required - complete state and proceed to locality
-      _handleStateComplete();
+    } else if (_statePermitRequirement == 'not_required') {
+      // Not required - complete with state not required, locality required but not uploaded
+      final decision = PermitDecision(
+        statePermit: PermitStatus(requirement: 'not_required'),
+        localityPermit: PermitStatus(
+          requirement: 'required_have_it',
+          uploaded: false,
+        ),
+      );
+      widget.onComplete(decision);
+      Navigator.pop(context);
     }
   }
 
@@ -5008,8 +5480,20 @@ class _PermitVerificationDialogState extends State<_PermitVerificationDialog> {
     if (_canWorkWithoutStatePermit == null) return;
 
     if (_canWorkWithoutStatePermit == 'yes') {
-      // Can work without state permit - complete state and proceed to locality
-      _handleStateComplete();
+      // Can work without state permit - complete state verification and let user navigate to locality manually
+      final decision = PermitDecision(
+        statePermit: PermitStatus(
+          requirement: 'required_dont_have_it',
+          canWorkWithout: 'yes',
+          uploaded: false,
+        ),
+        localityPermit: PermitStatus(
+          requirement: 'required_have_it',
+          uploaded: false,
+        ),
+      );
+      widget.onComplete(decision);
+      Navigator.pop(context);
     } else {
       // Cannot work without - send back to FOM
       final state = widget.site['state']?.toString() ?? '';
@@ -5406,9 +5890,9 @@ class _PermitVerificationDialogState extends State<_PermitVerificationDialog> {
       children: [
         OutlinedButton.icon(
           onPressed: () =>
-              setState(() => _currentStep = _PermitStep.localityQuestion),
+              setState(() => _currentStep = _PermitStep.stateQuestion),
           icon: const Icon(Icons.arrow_back, size: 18),
-          label: Text('Back to Questions', style: GoogleFonts.poppins()),
+          label: Text('Back to State Question', style: GoogleFonts.poppins()),
           style: OutlinedButton.styleFrom(
             padding: const EdgeInsets.symmetric(vertical: 12),
           ),
@@ -6635,12 +7119,12 @@ class _LocalityPermitDialogState extends State<_LocalityPermitDialog> {
         ),
         const SizedBox(height: 20),
         Text(
-          'Is the State Permit already uploaded/verified?',
+          'Is the Local Permit required for this locality?',
           style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w500),
         ),
         const SizedBox(height: 16),
         _buildConfirmOption(
-          'Yes, State Permit is already uploaded',
+          'Yes, It is required continue to upload',
           Icons.check_circle,
           Colors.green,
           true,
@@ -6648,7 +7132,7 @@ class _LocalityPermitDialogState extends State<_LocalityPermitDialog> {
         ),
         const SizedBox(height: 8),
         _buildConfirmOption(
-          'No, State Permit is not yet uploaded',
+          'No, Local permit is not required for this locality',
           Icons.error_outline,
           AppColors.primaryBlue,
           false,
@@ -7967,6 +8451,398 @@ class _VerificationDialogState extends State<_VerificationDialog> {
               ),
             ),
             Icon(Icons.arrow_drop_down, color: Colors.grey[600]),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// Bulk Locality Permit Requirement Dialog
+class _BulkLocalityPermitRequirementDialog extends StatefulWidget {
+  final String locality;
+  final String state;
+  final int siteCount;
+
+  const _BulkLocalityPermitRequirementDialog({
+    required this.locality,
+    required this.state,
+    required this.siteCount,
+  });
+
+  @override
+  State<_BulkLocalityPermitRequirementDialog> createState() =>
+      _BulkLocalityPermitRequirementDialogState();
+}
+
+class _BulkLocalityPermitRequirementDialogState
+    extends State<_BulkLocalityPermitRequirementDialog> {
+  String? _localityPermitRequirement;
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Row(
+        children: [
+          Icon(Icons.location_on, color: Colors.green[600], size: 24),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Bulk Locality Permit Verification',
+              style: GoogleFonts.poppins(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: Colors.green[800],
+              ),
+            ),
+          ),
+        ],
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Verify locality permit requirements for ${widget.locality}, ${widget.state}',
+            style: GoogleFonts.poppins(
+              fontSize: 13,
+              color: Colors.grey[600],
+            ),
+          ),
+          Text(
+            '${widget.siteCount} sites will be affected',
+            style: GoogleFonts.poppins(
+              fontSize: 12,
+              color: Colors.grey[500],
+              fontStyle: FontStyle.italic,
+            ),
+          ),
+          const SizedBox(height: 24),
+          Text(
+            'Do you require a Locality permit in this locality?',
+            style: GoogleFonts.poppins(
+              fontSize: 16,
+              fontWeight: FontWeight.w500,
+              color: Colors.grey[800],
+            ),
+          ),
+          const SizedBox(height: 16),
+          _buildOptionWithDescription(
+            'Yes, it\'s required and I will upload it',
+            'I have the locality permit and will upload it now',
+            'required_have_it',
+            _localityPermitRequirement,
+            (value) => setState(() => _localityPermitRequirement = value),
+          ),
+          _buildOptionWithDescription(
+            'Yes, it\'s required but I don\'t have it',
+            'The locality permit is required but not available',
+            'required_dont_have_it',
+            _localityPermitRequirement,
+            (value) => setState(() => _localityPermitRequirement = value),
+          ),
+          _buildOptionWithDescription(
+            'No, it\'s not a requirement',
+            'Locality permit is not required in this locality',
+            'not_required',
+            _localityPermitRequirement,
+            (value) => setState(() => _localityPermitRequirement = value),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text('Cancel', style: GoogleFonts.poppins()),
+        ),
+        ElevatedButton(
+          onPressed: _localityPermitRequirement != null
+              ? () => Navigator.of(context).pop({'requirement': _localityPermitRequirement})
+              : null,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.primaryBlue,
+          ),
+          child: Text('Next', style: GoogleFonts.poppins(color: Colors.white)),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildOptionWithDescription(
+    String label,
+    String description,
+    String value,
+    String? selectedValue,
+    Function(String) onSelect,
+  ) {
+    final isSelected = selectedValue == value;
+    return InkWell(
+      onTap: () => onSelect(value),
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          gradient: isSelected
+              ? LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    AppColors.primaryBlue.withOpacity(0.15),
+                    AppColors.primaryBlue.withOpacity(0.05),
+                  ],
+                )
+              : null,
+          border: Border.all(
+            color: isSelected ? AppColors.primaryBlue : Colors.grey[300]!,
+            width: isSelected ? 2 : 1,
+          ),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              isSelected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+              color: isSelected ? AppColors.primaryBlue : Colors.grey[400],
+              size: 20,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: GoogleFonts.poppins(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: isSelected ? AppColors.primaryBlue : Colors.black87,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    description,
+                    style: GoogleFonts.poppins(
+                      fontSize: 12,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// Bulk Locality Permit Follow-up Dialog
+class _BulkLocalityPermitFollowUpDialog extends StatefulWidget {
+  final String locality;
+  final String state;
+  final int siteCount;
+
+  const _BulkLocalityPermitFollowUpDialog({
+    required this.locality,
+    required this.state,
+    required this.siteCount,
+  });
+
+  @override
+  State<_BulkLocalityPermitFollowUpDialog> createState() =>
+      _BulkLocalityPermitFollowUpDialogState();
+}
+
+class _BulkLocalityPermitFollowUpDialogState
+    extends State<_BulkLocalityPermitFollowUpDialog> {
+  String? _canWorkWithoutLocalityPermit;
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Row(
+        children: [
+          Icon(
+            Icons.warning_amber,
+            color: AppColors.primaryBlue,
+            size: 24,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Locality Permit Not Available',
+              style: GoogleFonts.poppins(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: AppColors.primaryBlue,
+              ),
+            ),
+          ),
+        ],
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'You indicated the locality permit for ${widget.locality}, ${widget.state} is required but not available',
+            style: GoogleFonts.poppins(
+              fontSize: 13,
+              color: Colors.grey[600],
+            ),
+          ),
+          Text(
+            '${widget.siteCount} sites will be affected',
+            style: GoogleFonts.poppins(
+              fontSize: 12,
+              color: Colors.grey[500],
+              fontStyle: FontStyle.italic,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.primaryBlue.withOpacity(0.05),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: AppColors.primaryBlue.withOpacity(0.12),
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.info_outline,
+                  color: AppColors.primaryBlue,
+                  size: 20,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'The locality permit is required but you don\'t have it. Can you proceed with the verification without it?',
+                    style: GoogleFonts.poppins(
+                      fontSize: 13,
+                      color: AppColors.primaryBlue,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          Text(
+            'Are you able to work without the locality permit?',
+            style: GoogleFonts.poppins(
+              fontSize: 16,
+              fontWeight: FontWeight.w500,
+              color: Colors.grey[800],
+            ),
+          ),
+          const SizedBox(height: 16),
+          _buildOptionWithDescription(
+            'Yes, I can proceed without it',
+            'I will continue with the verification',
+            'yes',
+            _canWorkWithoutLocalityPermit,
+            (value) => setState(() => _canWorkWithoutLocalityPermit = value),
+          ),
+          _buildOptionWithDescription(
+            'No, I cannot proceed without it',
+            'Send the sites back to FOM for action',
+            'no',
+            _canWorkWithoutLocalityPermit,
+            (value) => setState(() => _canWorkWithoutLocalityPermit = value),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text('Cancel', style: GoogleFonts.poppins()),
+        ),
+        ElevatedButton(
+          onPressed: _canWorkWithoutLocalityPermit != null
+              ? () => Navigator.of(context).pop({'canWorkWithout': _canWorkWithoutLocalityPermit})
+              : null,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: _canWorkWithoutLocalityPermit == 'no'
+                ? Colors.red
+                : AppColors.primaryBlue,
+          ),
+          child: Text(
+            _canWorkWithoutLocalityPermit == 'no'
+                ? 'Send Back to FOM'
+                : 'Continue',
+            style: GoogleFonts.poppins(color: Colors.white),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildOptionWithDescription(
+    String label,
+    String description,
+    String value,
+    String? selectedValue,
+    Function(String) onSelect,
+  ) {
+    final isSelected = selectedValue == value;
+    return InkWell(
+      onTap: () => onSelect(value),
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          gradient: isSelected
+              ? LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    AppColors.primaryBlue.withOpacity(0.15),
+                    AppColors.primaryBlue.withOpacity(0.05),
+                  ],
+                )
+              : null,
+          border: Border.all(
+            color: isSelected ? AppColors.primaryBlue : Colors.grey[300]!,
+            width: isSelected ? 2 : 1,
+          ),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              isSelected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+              color: isSelected ? AppColors.primaryBlue : Colors.grey[400],
+              size: 20,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: GoogleFonts.poppins(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: isSelected ? AppColors.primaryBlue : Colors.black87,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    description,
+                    style: GoogleFonts.poppins(
+                      fontSize: 12,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ],
         ),
       ),

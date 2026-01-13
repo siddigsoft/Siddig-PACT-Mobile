@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/site_visit.dart';
-import '../models/down_payment_request.dart';
 import '../providers/down_payment_provider.dart';
 import '../providers/site_visit_provider.dart';
 import '../utils/currency_utils.dart';

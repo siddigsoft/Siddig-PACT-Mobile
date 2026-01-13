@@ -7,7 +7,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'modern_app_header.dart';
 import 'language_switcher.dart';
 import '../services/user_notification_service.dart';
-import '../services/auth_service.dart';
 import '../models/user_notification.dart';
 import '../theme/app_colors.dart';
 import '../screens/profile_screen.dart';
@@ -374,10 +373,6 @@ class ReusableAppBar extends StatelessWidget {
               MaterialPageRoute(builder: (context) => const SettingsScreen()),
             );
           },
-          onLogoutTap: () {
-            Navigator.of(context).pop();
-            _showLogoutConfirmation(context);
-          },
         );
       },
       transitionBuilder: (context, animation, secondaryAnimation, child) {
@@ -392,96 +387,6 @@ class ReusableAppBar extends StatelessWidget {
     );
   }
 
-  /// Build menu row widget
-  Widget _buildMenuRow(
-    IconData icon,
-    String title, {
-    Color? iconColor,
-    Color? textColor,
-  }) {
-    return Row(
-      children: [
-        Icon(icon, size: 20, color: iconColor ?? Colors.grey.shade700),
-        const SizedBox(width: 12),
-        Text(
-          title,
-          style: GoogleFonts.poppins(
-            fontSize: 14,
-            color: textColor ?? Colors.black87,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-      ],
-    );
-  }
-
-  /// Show logout confirmation dialog
-  void _showLogoutConfirmation(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (BuildContext dialogContext) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          title: Text(
-            'Log Out',
-            style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
-          ),
-          content: Text(
-            'Are you sure you want to log out?',
-            style: GoogleFonts.poppins(),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: Text(
-                'Cancel',
-                style: GoogleFonts.poppins(color: Colors.grey.shade700),
-              ),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                Navigator.of(dialogContext).pop();
-                await _handleLogout(context);
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.accentRed,
-                foregroundColor: Colors.white,
-              ),
-              child: Text('Log Out', style: GoogleFonts.poppins()),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  /// Handle logout
-  Future<void> _handleLogout(BuildContext context) async {
-    try {
-      final authService = AuthService();
-      await authService.signOut();
-
-      // Navigate to login screen
-      if (context.mounted) {
-        Navigator.of(
-          context,
-        ).pushNamedAndRemoveUntil('/login', (route) => false);
-      }
-    } catch (e) {
-      debugPrint('Error logging out: $e');
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error logging out: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
   /// Check if the Navigator can pop (go back)
   bool _canPop(BuildContext context) {
     return Navigator.canPop(context);
@@ -492,17 +397,14 @@ class ReusableAppBar extends StatelessWidget {
 class _AccountDropdownMenu extends StatelessWidget {
   final VoidCallback onProfileTap;
   final VoidCallback onSettingsTap;
-  final VoidCallback onLogoutTap;
 
   const _AccountDropdownMenu({
     required this.onProfileTap,
     required this.onSettingsTap,
-    required this.onLogoutTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    final Size screenSize = MediaQuery.of(context).size;
     final double dropdownWidth = 200.0;
 
     // Position at top right, below the app bar (aligned with avatar position)
@@ -585,18 +487,6 @@ class _AccountDropdownMenu extends StatelessWidget {
                     onTap: () {
                       HapticFeedback.lightImpact();
                       onSettingsTap();
-                    },
-                  ),
-                  Divider(height: 1, color: Colors.grey.shade200),
-                  _buildMenuItem(
-                    context,
-                    icon: Icons.logout,
-                    title: 'Log out',
-                    iconColor: AppColors.accentRed,
-                    textColor: AppColors.accentRed,
-                    onTap: () {
-                      HapticFeedback.lightImpact();
-                      onLogoutTap();
                     },
                   ),
                 ],

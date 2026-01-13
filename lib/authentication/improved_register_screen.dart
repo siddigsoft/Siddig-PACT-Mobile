@@ -6,11 +6,9 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../theme/app_colors.dart';
-import '../theme/app_design_system.dart';
 import '../widgets/app_widgets.dart';
 import '../services/auth_service.dart';
 import '../services/storage_service.dart';
@@ -35,7 +33,8 @@ class _ImprovedRegisterScreenState extends State<ImprovedRegisterScreen>
 
   // State
   String? _selectedRole;
-  String? _selectedHub; // Store hub ID (string like 'dongola-hub', matching web)
+  String?
+  _selectedHub; // Store hub ID (string like 'dongola-hub', matching web)
   String? _selectedState;
   String? _selectedLocality;
   bool _isPasswordVisible = false;
@@ -60,7 +59,7 @@ class _ImprovedRegisterScreenState extends State<ImprovedRegisterScreen>
   /// Database expects: 'coordinator', 'dataCollector', etc.
   String _normalizeRoleForDatabase(String? displayRole) {
     if (displayRole == null) return 'dataCollector';
-    
+
     // Map display names to database values (lowercase/camelCase)
     switch (displayRole.toLowerCase().trim()) {
       case 'coordinator':
@@ -82,8 +81,8 @@ class _ImprovedRegisterScreenState extends State<ImprovedRegisterScreen>
       default:
         // If it's already in the correct format, return as-is
         // Otherwise default to dataCollector
-        return displayRole.toLowerCase() == displayRole 
-            ? displayRole 
+        return displayRole.toLowerCase() == displayRole
+            ? displayRole
             : 'dataCollector';
     }
   }
@@ -472,7 +471,7 @@ class _ImprovedRegisterScreenState extends State<ImprovedRegisterScreen>
       // Database triggers will automatically create profile and wallet
       // Normalize role from display name to database value
       final normalizedRole = _normalizeRoleForDatabase(_selectedRole);
-      
+
       final response = await _authService.signUp(
         email: _emailController.text.trim(),
         password: _passwordController.text,

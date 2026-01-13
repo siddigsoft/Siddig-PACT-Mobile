@@ -127,13 +127,7 @@ class UserNotificationService {
       );
 
       for (final item in response) {
-        if (item is Map<String, dynamic>) {
-          _upsertNotification(UserNotification.fromJson(item));
-        } else if (item is Map) {
-          _upsertNotification(
-            UserNotification.fromJson(Map<String, dynamic>.from(item as Map)),
-          );
-        }
+        _upsertNotification(UserNotification.fromJson(item));
       }
       await _writeCache();
     } catch (e) {

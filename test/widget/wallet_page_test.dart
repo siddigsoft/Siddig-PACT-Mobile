@@ -4,9 +4,6 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:pact_mobile/config/wallet_constants.dart';
-import 'package:pact_mobile/models/wallet_models.dart';
-import 'package:pact_mobile/pages/wallet_page_enhanced.dart';
 import 'package:pact_mobile/providers/wallet/wallet_notifier.dart';
 
 void main() {

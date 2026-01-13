@@ -8,7 +8,6 @@ import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:connectivity_plus/connectivity_plus.dart';
 import '../models/site_visit.dart';
 import '../services/site_visit_service.dart';
 import '../services/offline_data_service.dart';

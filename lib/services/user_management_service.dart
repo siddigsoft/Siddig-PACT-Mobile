@@ -243,16 +243,14 @@ class UserManagementService {
           .eq('user_id', userId);
 
       final userRoles = <AppRole>[];
-      if (rolesData is List) {
-        for (final roleData in rolesData) {
-          final roleStr = roleData['role'] as String?;
-          if (roleStr != null) {
-            try {
-              final role = _stringToAppRole(roleStr);
-              userRoles.add(role);
-            } catch (e) {
-              debugPrint('Failed to parse role: $roleStr');
-            }
+      for (final roleData in rolesData) {
+        final roleStr = roleData['role'] as String?;
+        if (roleStr != null) {
+          try {
+            final role = _stringToAppRole(roleStr);
+            userRoles.add(role);
+          } catch (e) {
+            debugPrint('Failed to parse role: $roleStr');
           }
         }
       }
@@ -317,16 +315,14 @@ class UserManagementService {
             .eq('user_id', profileData['id'] as String);
 
         final userRoles = <AppRole>[];
-        if (rolesData is List) {
-          for (final roleData in rolesData) {
-            final roleStr = roleData['role'] as String?;
-            if (roleStr != null) {
-              try {
-                final appRole = _stringToAppRole(roleStr);
-                userRoles.add(appRole);
-              } catch (e) {
-                debugPrint('Failed to parse role: $roleStr');
-              }
+        for (final roleData in rolesData) {
+          final roleStr = roleData['role'] as String?;
+          if (roleStr != null) {
+            try {
+              final appRole = _stringToAppRole(roleStr);
+              userRoles.add(appRole);
+            } catch (e) {
+              debugPrint('Failed to parse role: $roleStr');
             }
           }
         }
@@ -394,16 +390,14 @@ class UserManagementService {
                 .eq('user_id', profileData['id'] as String);
 
             final userRoles = <AppRole>[];
-            if (rolesData is List) {
-              for (final roleData in rolesData) {
-                final roleStr = roleData['role'] as String?;
-                if (roleStr != null) {
-                  try {
-                    final appRole = _stringToAppRole(roleStr);
-                    userRoles.add(appRole);
-                  } catch (e) {
-                    debugPrint('Failed to parse role: $roleStr');
-                  }
+            for (final roleData in rolesData) {
+              final roleStr = roleData['role'] as String?;
+              if (roleStr != null) {
+                try {
+                  final appRole = _stringToAppRole(roleStr);
+                  userRoles.add(appRole);
+                } catch (e) {
+                  debugPrint('Failed to parse role: $roleStr');
                 }
               }
             }

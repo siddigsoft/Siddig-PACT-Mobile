@@ -1,6 +1,5 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../models/site_visit.dart';
 import 'notification_trigger_service.dart';
 
 /// AutoReleaseService - Monitors and auto-releases sites that are not confirmed within deadline

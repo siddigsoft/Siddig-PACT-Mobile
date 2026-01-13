@@ -101,8 +101,9 @@ class ProfileRepository {
       if (phone != null) updates['phone'] = phone;
       if (avatarUrl != null) updates['avatar_url'] = avatarUrl;
       if (availability != null) updates['availability'] = availability.name;
-      if (locationSharing != null)
+      if (locationSharing != null) {
         updates['location_sharing'] = locationSharing;
+      }
       if (location != null) updates['location'] = location.toJson();
       if (bankAccount != null) updates['bank_account'] = bankAccount.toJson();
 
