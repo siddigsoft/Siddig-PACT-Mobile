@@ -13,6 +13,9 @@ class AppColors {
   static const Color primaryWhite = Color(
     0xFFFFFFFF,
   ); // Pure white for clean backgrounds
+  static const Color primaryGreen = Color(
+    0xFF2ECC71,
+  ); // Primary green - success and nature
 
   // Secondary Colors - Supporting colors for better UI
   static const Color lightOrange = Color(
