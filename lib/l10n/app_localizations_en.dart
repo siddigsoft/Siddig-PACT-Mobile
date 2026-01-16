@@ -789,4 +789,244 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get passwordsDoNotMatch => 'Passwords do not match';
+
+  @override
+  String get statePermit => 'State Permit';
+
+  @override
+  String get localityPermit => 'Locality Permit';
+
+  @override
+  String get federalPermit => 'Federal Permit';
+
+  @override
+  String get permitRequired => 'Permit Required';
+
+  @override
+  String get permitNotRequired => 'Permit Not Required';
+
+  @override
+  String get uploadStatePermit => 'Upload State Permit';
+
+  @override
+  String get uploadLocalityPermit => 'Upload Locality Permit';
+
+  @override
+  String get statePermitRequired => 'State Permit Required';
+
+  @override
+  String statePermitDescription(String state) {
+    return 'Only the Federal permit has been uploaded. Upload the $state state permit to continue.';
+  }
+
+  @override
+  String get localityPermitRequired => 'Locality Permit Required';
+
+  @override
+  String localityPermitDescription(String locality) {
+    return 'Please upload the locality permit for $locality to continue.';
+  }
+
+  @override
+  String get selectFile => 'Select File';
+
+  @override
+  String get permitFile => 'Permit File';
+
+  @override
+  String get issueDate => 'Issue Date';
+
+  @override
+  String get expiryDate => 'Expiry Date';
+
+  @override
+  String get comments => 'Comments';
+
+  @override
+  String get addCommentsOptional => 'Add comments (optional)';
+
+  @override
+  String get uploadPermit => 'Upload Permit';
+
+  @override
+  String get uploading => 'Uploading...';
+
+  @override
+  String get permitUploadSuccess => 'Permit uploaded successfully';
+
+  @override
+  String get permitUploadError => 'Failed to upload permit';
+
+  @override
+  String get invalidFileType => 'Invalid file type';
+
+  @override
+  String get fileTooLarge => 'File too large';
+
+  @override
+  String get selectPdfOrImage => 'Please select a PDF or image file (JPG, PNG)';
+
+  @override
+  String maxFileSize(int size) {
+    return 'Maximum file size: $size MB';
+  }
+
+  @override
+  String get datesRequired => 'Issue and expiry dates are required';
+
+  @override
+  String get expiryAfterIssue => 'Expiry date must be after issue date';
+
+  @override
+  String get showPreview => 'Show Preview';
+
+  @override
+  String get hidePreview => 'Hide Preview';
+
+  @override
+  String get clearFile => 'Clear File';
+
+  @override
+  String get permitVerification => 'Permit Verification';
+
+  @override
+  String get verifyPermits => 'Verify Permits';
+
+  @override
+  String get permitsAttached => 'Permits Attached';
+
+  @override
+  String get pendingVerification => 'Pending Verification';
+
+  @override
+  String get verified => 'Verified';
+
+  @override
+  String get statePermitAttached => 'State Permit Attached';
+
+  @override
+  String get localityPermitAttached => 'Locality Permit Attached';
+
+  @override
+  String doYouHaveStatePermit(String state) {
+    return 'Do you have the state permit for $state?';
+  }
+
+  @override
+  String doYouHaveLocalityPermit(String locality) {
+    return 'Do you have the locality permit for $locality?';
+  }
+
+  @override
+  String get yesHaveIt => 'Yes, I have the permit';
+
+  @override
+  String get noRequiredDontHave => 'Required but I don\'t have it';
+
+  @override
+  String get notRequiredInLocality => 'Not required in this locality';
+
+  @override
+  String get canProceedWithout => 'Can you proceed without the permit?';
+
+  @override
+  String get yesProceedWithout => 'Yes, I can proceed';
+
+  @override
+  String get noCannotProceed => 'No, I need the permit';
+
+  @override
+  String get sendBackToFom => 'Send Back to FOM';
+
+  @override
+  String get siteVerification => 'Site Verification';
+
+  @override
+  String get verifySite => 'Verify Site';
+
+  @override
+  String get returnToFom => 'Return to FOM';
+
+  @override
+  String get pendingSites => 'Pending Sites';
+
+  @override
+  String get cpVerification => 'CP Verification';
+
+  @override
+  String get verifiedSites => 'Verified Sites';
+
+  @override
+  String sitesNeedStatePermit(int count) {
+    return '$count sites need state permit';
+  }
+
+  @override
+  String sitesNeedLocalityPermit(int count) {
+    return '$count sites need locality permit';
+  }
+
+  @override
+  String get step1SelectFile => 'Step 1: Select File';
+
+  @override
+  String get step2EnterDates => 'Step 2: Enter Dates';
+
+  @override
+  String get step3AddComments => 'Step 3: Add Comments (Optional)';
+
+  @override
+  String get step4Upload => 'Step 4: Upload Permit';
+
+  @override
+  String get tapToSelectFile => 'Tap to select file';
+
+  @override
+  String get supportedFormats => 'Supported formats: PDF, JPG, PNG';
+
+  @override
+  String fileSelected(String fileName) {
+    return 'File selected: $fileName';
+  }
+
+  @override
+  String get gallery => 'Gallery';
+
+  @override
+  String get pdfDocument => 'PDF Document';
+
+  @override
+  String get willUploadPermit => 'I will upload the permit document';
+
+  @override
+  String get cannotProvideNow => 'The permit is required but I cannot provide it now';
+
+  @override
+  String get noPermitNeeded => 'No locality permit is needed for operations here';
+
+  @override
+  String get continueWithoutPermit => 'Continue without the locality permit';
+
+  @override
+  String get sendBackToManager => 'Send back to Field Operations Manager';
+
+  @override
+  String chooseHowToProceed(int count, String sitesLabel, String locality) {
+    return 'Choose how to proceed for $count $sitesLabel in $locality:';
+  }
+
+  @override
+  String get site => 'site';
+
+  @override
+  String get sites => 'sites';
+
+  @override
+  String get uploadFailed => 'Upload failed';
+
+  @override
+  String get databaseUpdateFailed => 'Database update failed. Please try again.';
+
+  @override
+  String get selectDate => 'Select date';
 }

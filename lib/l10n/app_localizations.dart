@@ -1031,7 +1031,7 @@ abstract class AppLocalizations {
   /// **'Speaker'**
   String get speaker;
 
-  /// Camera button
+  /// Camera option for file picker
   ///
   /// In en, this message translates to:
   /// **'Camera'**
@@ -1654,6 +1654,450 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Passwords do not match'**
   String get passwordsDoNotMatch;
+
+  /// State permit label
+  ///
+  /// In en, this message translates to:
+  /// **'State Permit'**
+  String get statePermit;
+
+  /// Locality permit label
+  ///
+  /// In en, this message translates to:
+  /// **'Locality Permit'**
+  String get localityPermit;
+
+  /// Federal permit label
+  ///
+  /// In en, this message translates to:
+  /// **'Federal Permit'**
+  String get federalPermit;
+
+  /// Permit required message
+  ///
+  /// In en, this message translates to:
+  /// **'Permit Required'**
+  String get permitRequired;
+
+  /// Permit not required message
+  ///
+  /// In en, this message translates to:
+  /// **'Permit Not Required'**
+  String get permitNotRequired;
+
+  /// Upload state permit button
+  ///
+  /// In en, this message translates to:
+  /// **'Upload State Permit'**
+  String get uploadStatePermit;
+
+  /// Upload locality permit button
+  ///
+  /// In en, this message translates to:
+  /// **'Upload Locality Permit'**
+  String get uploadLocalityPermit;
+
+  /// State permit required title
+  ///
+  /// In en, this message translates to:
+  /// **'State Permit Required'**
+  String get statePermitRequired;
+
+  /// State permit required description
+  ///
+  /// In en, this message translates to:
+  /// **'Only the Federal permit has been uploaded. Upload the {state} state permit to continue.'**
+  String statePermitDescription(String state);
+
+  /// Locality permit required title
+  ///
+  /// In en, this message translates to:
+  /// **'Locality Permit Required'**
+  String get localityPermitRequired;
+
+  /// Locality permit required description
+  ///
+  /// In en, this message translates to:
+  /// **'Please upload the locality permit for {locality} to continue.'**
+  String localityPermitDescription(String locality);
+
+  /// Select file button
+  ///
+  /// In en, this message translates to:
+  /// **'Select File'**
+  String get selectFile;
+
+  /// Permit file label
+  ///
+  /// In en, this message translates to:
+  /// **'Permit File'**
+  String get permitFile;
+
+  /// Issue date label
+  ///
+  /// In en, this message translates to:
+  /// **'Issue Date'**
+  String get issueDate;
+
+  /// Expiry date label
+  ///
+  /// In en, this message translates to:
+  /// **'Expiry Date'**
+  String get expiryDate;
+
+  /// Comments label
+  ///
+  /// In en, this message translates to:
+  /// **'Comments'**
+  String get comments;
+
+  /// Add comments optional placeholder
+  ///
+  /// In en, this message translates to:
+  /// **'Add comments (optional)'**
+  String get addCommentsOptional;
+
+  /// Upload permit button
+  ///
+  /// In en, this message translates to:
+  /// **'Upload Permit'**
+  String get uploadPermit;
+
+  /// Uploading status
+  ///
+  /// In en, this message translates to:
+  /// **'Uploading...'**
+  String get uploading;
+
+  /// Permit upload success message
+  ///
+  /// In en, this message translates to:
+  /// **'Permit uploaded successfully'**
+  String get permitUploadSuccess;
+
+  /// Permit upload error message
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to upload permit'**
+  String get permitUploadError;
+
+  /// Invalid file type error
+  ///
+  /// In en, this message translates to:
+  /// **'Invalid file type'**
+  String get invalidFileType;
+
+  /// File too large error
+  ///
+  /// In en, this message translates to:
+  /// **'File too large'**
+  String get fileTooLarge;
+
+  /// Select PDF or image instruction
+  ///
+  /// In en, this message translates to:
+  /// **'Please select a PDF or image file (JPG, PNG)'**
+  String get selectPdfOrImage;
+
+  /// Max file size message
+  ///
+  /// In en, this message translates to:
+  /// **'Maximum file size: {size} MB'**
+  String maxFileSize(int size);
+
+  /// Dates required error
+  ///
+  /// In en, this message translates to:
+  /// **'Issue and expiry dates are required'**
+  String get datesRequired;
+
+  /// Expiry after issue date error
+  ///
+  /// In en, this message translates to:
+  /// **'Expiry date must be after issue date'**
+  String get expiryAfterIssue;
+
+  /// Show preview button
+  ///
+  /// In en, this message translates to:
+  /// **'Show Preview'**
+  String get showPreview;
+
+  /// Hide preview button
+  ///
+  /// In en, this message translates to:
+  /// **'Hide Preview'**
+  String get hidePreview;
+
+  /// Clear file button
+  ///
+  /// In en, this message translates to:
+  /// **'Clear File'**
+  String get clearFile;
+
+  /// Permit verification title
+  ///
+  /// In en, this message translates to:
+  /// **'Permit Verification'**
+  String get permitVerification;
+
+  /// Verify permits button
+  ///
+  /// In en, this message translates to:
+  /// **'Verify Permits'**
+  String get verifyPermits;
+
+  /// Permits attached status
+  ///
+  /// In en, this message translates to:
+  /// **'Permits Attached'**
+  String get permitsAttached;
+
+  /// Pending verification status
+  ///
+  /// In en, this message translates to:
+  /// **'Pending Verification'**
+  String get pendingVerification;
+
+  /// Verified status
+  ///
+  /// In en, this message translates to:
+  /// **'Verified'**
+  String get verified;
+
+  /// State permit attached status
+  ///
+  /// In en, this message translates to:
+  /// **'State Permit Attached'**
+  String get statePermitAttached;
+
+  /// Locality permit attached status
+  ///
+  /// In en, this message translates to:
+  /// **'Locality Permit Attached'**
+  String get localityPermitAttached;
+
+  /// Do you have state permit question
+  ///
+  /// In en, this message translates to:
+  /// **'Do you have the state permit for {state}?'**
+  String doYouHaveStatePermit(String state);
+
+  /// Do you have locality permit question
+  ///
+  /// In en, this message translates to:
+  /// **'Do you have the locality permit for {locality}?'**
+  String doYouHaveLocalityPermit(String locality);
+
+  /// Yes I have the permit option
+  ///
+  /// In en, this message translates to:
+  /// **'Yes, I have the permit'**
+  String get yesHaveIt;
+
+  /// Required but don't have option
+  ///
+  /// In en, this message translates to:
+  /// **'Required but I don\'t have it'**
+  String get noRequiredDontHave;
+
+  /// Not required in this locality option
+  ///
+  /// In en, this message translates to:
+  /// **'Not required in this locality'**
+  String get notRequiredInLocality;
+
+  /// Can proceed without permit question
+  ///
+  /// In en, this message translates to:
+  /// **'Can you proceed without the permit?'**
+  String get canProceedWithout;
+
+  /// Yes can proceed without option
+  ///
+  /// In en, this message translates to:
+  /// **'Yes, I can proceed'**
+  String get yesProceedWithout;
+
+  /// No cannot proceed without option
+  ///
+  /// In en, this message translates to:
+  /// **'No, I need the permit'**
+  String get noCannotProceed;
+
+  /// Send back to FOM button
+  ///
+  /// In en, this message translates to:
+  /// **'Send Back to FOM'**
+  String get sendBackToFom;
+
+  /// Site verification title
+  ///
+  /// In en, this message translates to:
+  /// **'Site Verification'**
+  String get siteVerification;
+
+  /// Verify site button
+  ///
+  /// In en, this message translates to:
+  /// **'Verify Site'**
+  String get verifySite;
+
+  /// Return to FOM button
+  ///
+  /// In en, this message translates to:
+  /// **'Return to FOM'**
+  String get returnToFom;
+
+  /// Pending sites tab
+  ///
+  /// In en, this message translates to:
+  /// **'Pending Sites'**
+  String get pendingSites;
+
+  /// CP Verification tab
+  ///
+  /// In en, this message translates to:
+  /// **'CP Verification'**
+  String get cpVerification;
+
+  /// Verified sites tab
+  ///
+  /// In en, this message translates to:
+  /// **'Verified Sites'**
+  String get verifiedSites;
+
+  /// Sites needing state permit count
+  ///
+  /// In en, this message translates to:
+  /// **'{count} sites need state permit'**
+  String sitesNeedStatePermit(int count);
+
+  /// Sites needing locality permit count
+  ///
+  /// In en, this message translates to:
+  /// **'{count} sites need locality permit'**
+  String sitesNeedLocalityPermit(int count);
+
+  /// Step 1 select file
+  ///
+  /// In en, this message translates to:
+  /// **'Step 1: Select File'**
+  String get step1SelectFile;
+
+  /// Step 2 enter dates
+  ///
+  /// In en, this message translates to:
+  /// **'Step 2: Enter Dates'**
+  String get step2EnterDates;
+
+  /// Step 3 add comments
+  ///
+  /// In en, this message translates to:
+  /// **'Step 3: Add Comments (Optional)'**
+  String get step3AddComments;
+
+  /// Step 4 upload
+  ///
+  /// In en, this message translates to:
+  /// **'Step 4: Upload Permit'**
+  String get step4Upload;
+
+  /// Tap to select file instruction
+  ///
+  /// In en, this message translates to:
+  /// **'Tap to select file'**
+  String get tapToSelectFile;
+
+  /// Supported formats list
+  ///
+  /// In en, this message translates to:
+  /// **'Supported formats: PDF, JPG, PNG'**
+  String get supportedFormats;
+
+  /// File selected message
+  ///
+  /// In en, this message translates to:
+  /// **'File selected: {fileName}'**
+  String fileSelected(String fileName);
+
+  /// Gallery option for file picker
+  ///
+  /// In en, this message translates to:
+  /// **'Gallery'**
+  String get gallery;
+
+  /// PDF document option
+  ///
+  /// In en, this message translates to:
+  /// **'PDF Document'**
+  String get pdfDocument;
+
+  /// Subtitle for yes have permit option
+  ///
+  /// In en, this message translates to:
+  /// **'I will upload the permit document'**
+  String get willUploadPermit;
+
+  /// Subtitle for required but don't have option
+  ///
+  /// In en, this message translates to:
+  /// **'The permit is required but I cannot provide it now'**
+  String get cannotProvideNow;
+
+  /// Subtitle for not required option
+  ///
+  /// In en, this message translates to:
+  /// **'No locality permit is needed for operations here'**
+  String get noPermitNeeded;
+
+  /// Subtitle for yes proceed option
+  ///
+  /// In en, this message translates to:
+  /// **'Continue without the locality permit'**
+  String get continueWithoutPermit;
+
+  /// Subtitle for no cannot proceed option
+  ///
+  /// In en, this message translates to:
+  /// **'Send back to Field Operations Manager'**
+  String get sendBackToManager;
+
+  /// Follow up question description
+  ///
+  /// In en, this message translates to:
+  /// **'Choose how to proceed for {count} {sitesLabel} in {locality}:'**
+  String chooseHowToProceed(int count, String sitesLabel, String locality);
+
+  /// Single site label
+  ///
+  /// In en, this message translates to:
+  /// **'site'**
+  String get site;
+
+  /// Multiple sites label
+  ///
+  /// In en, this message translates to:
+  /// **'sites'**
+  String get sites;
+
+  /// Upload failed message
+  ///
+  /// In en, this message translates to:
+  /// **'Upload failed'**
+  String get uploadFailed;
+
+  /// Database update failed message
+  ///
+  /// In en, this message translates to:
+  /// **'Database update failed. Please try again.'**
+  String get databaseUpdateFailed;
+
+  /// Select date placeholder
+  ///
+  /// In en, this message translates to:
+  /// **'Select date'**
+  String get selectDate;
 }
 
 class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {

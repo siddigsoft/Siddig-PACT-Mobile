@@ -1,8 +1,11 @@
+import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import '../widgets/reusable_app_bar.dart';
 import '../widgets/custom_drawer_menu.dart';
 import '../widgets/notifications_panel.dart';
@@ -13,9 +16,12 @@ import '../theme/app_colors.dart';
 import '../services/location_service.dart';
 import '../services/photo_upload_service.dart';
 import '../services/advance_request_service.dart';
+import '../services/offline/offline_db.dart';
 import '../models/visit_report.dart';
 import '../models/visit_report_data.dart';
 import '../widgets/request_advance_dialog.dart';
+import '../models/site_visit.dart';
+import 'visit_report_detail_screen.dart';
 
 class FieldOperationsEnhancedScreen extends StatefulWidget {
   const FieldOperationsEnhancedScreen({super.key});
@@ -483,6 +489,16 @@ class _MMPScreenState extends State<MMPScreen> {
     try {
       if (_userId == null) return;
 
+      // Check connectivity first
+      final connectivityResult = await Connectivity().checkConnectivity();
+      final isOffline = connectivityResult.contains(ConnectivityResult.none);
+      
+      if (isOffline) {
+        debugPrint('[_loadAvailableSites] Offline - loading from cache');
+        await _loadAvailableSitesFromCache();
+        return;
+      }
+
       // Verify session before query
       var session = supabase.auth.currentSession;
       if (session == null || session.isExpired) {
@@ -548,6 +564,9 @@ class _MMPScreenState extends State<MMPScreen> {
 
       debugPrint('Loaded ${_availableSites.length} available sites');
 
+      // Cache the sites for offline use
+      await _cacheAvailableSites(filteredSites);
+
       // Debug: Print first few sites for verification
       if (_availableSites.isNotEmpty) {
         debugPrint(
@@ -557,8 +576,22 @@ class _MMPScreenState extends State<MMPScreen> {
     } catch (e) {
       debugPrint('[_loadAvailableSites] Error loading available sites: $e');
 
-      // Check if it's an auth error
+      // Check if it's a network error - fall back to cache
       final errorStr = e.toString().toLowerCase();
+      if (e is SocketException ||
+          errorStr.contains('socketexception') ||
+          errorStr.contains('failed host lookup') ||
+          errorStr.contains('connection refused') ||
+          errorStr.contains('network is unreachable') ||
+          errorStr.contains('no address associated') ||
+          errorStr.contains('connection timed out') ||
+          errorStr.contains('errno = 7')) {
+        debugPrint('[_loadAvailableSites] Network error - falling back to cache');
+        await _loadAvailableSitesFromCache();
+        return;
+      }
+
+      // Check if it's an auth error
       if (errorStr.contains('auth') ||
           errorStr.contains('unauthorized') ||
           errorStr.contains('jwt') ||
@@ -576,9 +609,48 @@ class _MMPScreenState extends State<MMPScreen> {
         }
       }
 
-      _availableSites = [];
+      // Try to load from cache as last resort
+      if (_availableSites.isEmpty) {
+        await _loadAvailableSitesFromCache();
+      }
+    }
+  }
 
-      // Don't show error to user for reload operations - it's not critical
+  Future<void> _cacheAvailableSites(List<Map<String, dynamic>> sites) async {
+    try {
+      final offlineDb = OfflineDb();
+      final jsonData = jsonEncode(sites);
+      await offlineDb.setCachedItem(
+        OfflineDb.siteCacheBox,
+        'available_sites_$_userId',
+        jsonData,
+        ttlMinutes: 60 * 24, // Cache for 24 hours
+      );
+      debugPrint('[_cacheAvailableSites] Cached ${sites.length} available sites');
+    } catch (e) {
+      debugPrint('[_cacheAvailableSites] Error caching sites: $e');
+    }
+  }
+
+  Future<void> _loadAvailableSitesFromCache() async {
+    try {
+      final offlineDb = OfflineDb();
+      final cachedItem = offlineDb.getCachedItem(
+        OfflineDb.siteCacheBox,
+        'available_sites_$_userId',
+      );
+      
+      if (cachedItem != null && cachedItem.data != null) {
+        final List<dynamic> decoded = jsonDecode(cachedItem.data as String);
+        _availableSites = decoded.map((e) => e as Map<String, dynamic>).toList();
+        debugPrint('[_loadAvailableSitesFromCache] Loaded ${_availableSites.length} sites from cache');
+      } else {
+        debugPrint('[_loadAvailableSitesFromCache] No cached sites found');
+        _availableSites = [];
+      }
+    } catch (e) {
+      debugPrint('[_loadAvailableSitesFromCache] Error loading from cache: $e');
+      _availableSites = [];
     }
   }
 
@@ -587,6 +659,16 @@ class _MMPScreenState extends State<MMPScreen> {
 
     try {
       if (_userId == null) return;
+
+      // Check connectivity first
+      final connectivityResult = await Connectivity().checkConnectivity();
+      final isOffline = connectivityResult.contains(ConnectivityResult.none);
+      
+      if (isOffline) {
+        debugPrint('[_loadSmartAssignedSites] Offline - loading from cache');
+        await _loadSmartAssignedSitesFromCache();
+        return;
+      }
 
       // Verify session before query
       var session = supabase.auth.currentSession;
@@ -639,13 +721,30 @@ class _MMPScreenState extends State<MMPScreen> {
       }
 
       _smartAssignedSites = costFilteredSites;
+      
+      // Cache for offline use
+      await _cacheSmartAssignedSites(costFilteredSites);
     } catch (e) {
       debugPrint(
         '[_loadSmartAssignedSites] Error loading smart assigned sites: $e',
       );
 
-      // Check if it's an auth error
+      // Check if it's a network error - fall back to cache
       final errorStr = e.toString().toLowerCase();
+      if (e is SocketException ||
+          errorStr.contains('socketexception') ||
+          errorStr.contains('failed host lookup') ||
+          errorStr.contains('connection refused') ||
+          errorStr.contains('network is unreachable') ||
+          errorStr.contains('no address associated') ||
+          errorStr.contains('connection timed out') ||
+          errorStr.contains('errno = 7')) {
+        debugPrint('[_loadSmartAssignedSites] Network error - falling back to cache');
+        await _loadSmartAssignedSitesFromCache();
+        return;
+      }
+
+      // Check if it's an auth error
       if (errorStr.contains('auth') ||
           errorStr.contains('unauthorized') ||
           errorStr.contains('jwt') ||
@@ -661,6 +760,49 @@ class _MMPScreenState extends State<MMPScreen> {
           );
         }
       }
+      
+      // Try cache as fallback
+      if (_smartAssignedSites.isEmpty) {
+        await _loadSmartAssignedSitesFromCache();
+      }
+    }
+  }
+
+  Future<void> _cacheSmartAssignedSites(List<Map<String, dynamic>> sites) async {
+    try {
+      final offlineDb = OfflineDb();
+      final jsonData = jsonEncode(sites);
+      await offlineDb.setCachedItem(
+        OfflineDb.siteCacheBox,
+        'smart_assigned_sites_$_userId',
+        jsonData,
+        ttlMinutes: 60 * 24,
+      );
+      debugPrint('[_cacheSmartAssignedSites] Cached ${sites.length} assigned sites');
+    } catch (e) {
+      debugPrint('[_cacheSmartAssignedSites] Error caching sites: $e');
+    }
+  }
+
+  Future<void> _loadSmartAssignedSitesFromCache() async {
+    try {
+      final offlineDb = OfflineDb();
+      final cachedItem = offlineDb.getCachedItem(
+        OfflineDb.siteCacheBox,
+        'smart_assigned_sites_$_userId',
+      );
+      
+      if (cachedItem != null && cachedItem.data != null) {
+        final List<dynamic> decoded = jsonDecode(cachedItem.data as String);
+        _smartAssignedSites = decoded.map((e) => e as Map<String, dynamic>).toList();
+        debugPrint('[_loadSmartAssignedSitesFromCache] Loaded ${_smartAssignedSites.length} sites from cache');
+      } else {
+        debugPrint('[_loadSmartAssignedSitesFromCache] No cached sites found');
+        _smartAssignedSites = [];
+      }
+    } catch (e) {
+      debugPrint('[_loadSmartAssignedSitesFromCache] Error loading from cache: $e');
+      _smartAssignedSites = [];
     }
   }
 
@@ -669,6 +811,16 @@ class _MMPScreenState extends State<MMPScreen> {
 
     try {
       if (_userId == null) return;
+
+      // Check connectivity first
+      final connectivityResult = await Connectivity().checkConnectivity();
+      final isOffline = connectivityResult.contains(ConnectivityResult.none);
+      
+      if (isOffline) {
+        debugPrint('[_loadMySites] Offline - loading from cache');
+        await _loadMySitesFromCache();
+        return;
+      }
 
       // Verify session before query
       var session = supabase.auth.currentSession;
@@ -710,11 +862,28 @@ class _MMPScreenState extends State<MMPScreen> {
       }
 
       _mySites = allSites;
+      
+      // Cache for offline use
+      await _cacheMySites(allSites);
     } catch (e) {
       debugPrint('[_loadMySites] Error loading my sites: $e');
 
-      // Check if it's an auth error
+      // Check if it's a network error - fall back to cache
       final errorStr = e.toString().toLowerCase();
+      if (e is SocketException ||
+          errorStr.contains('socketexception') ||
+          errorStr.contains('failed host lookup') ||
+          errorStr.contains('connection refused') ||
+          errorStr.contains('network is unreachable') ||
+          errorStr.contains('no address associated') ||
+          errorStr.contains('connection timed out') ||
+          errorStr.contains('errno = 7')) {
+        debugPrint('[_loadMySites] Network error - falling back to cache');
+        await _loadMySitesFromCache();
+        return;
+      }
+
+      // Check if it's an auth error
       if (errorStr.contains('auth') ||
           errorStr.contains('unauthorized') ||
           errorStr.contains('jwt') ||
@@ -726,6 +895,49 @@ class _MMPScreenState extends State<MMPScreen> {
           debugPrint('[_loadMySites] Session refresh failed: $refreshError');
         }
       }
+      
+      // Try cache as fallback
+      if (_mySites.isEmpty) {
+        await _loadMySitesFromCache();
+      }
+    }
+  }
+
+  Future<void> _cacheMySites(List<Map<String, dynamic>> sites) async {
+    try {
+      final offlineDb = OfflineDb();
+      final jsonData = jsonEncode(sites);
+      await offlineDb.setCachedItem(
+        OfflineDb.siteCacheBox,
+        'my_sites_$_userId',
+        jsonData,
+        ttlMinutes: 60 * 24,
+      );
+      debugPrint('[_cacheMySites] Cached ${sites.length} my sites');
+    } catch (e) {
+      debugPrint('[_cacheMySites] Error caching sites: $e');
+    }
+  }
+
+  Future<void> _loadMySitesFromCache() async {
+    try {
+      final offlineDb = OfflineDb();
+      final cachedItem = offlineDb.getCachedItem(
+        OfflineDb.siteCacheBox,
+        'my_sites_$_userId',
+      );
+      
+      if (cachedItem != null && cachedItem.data != null) {
+        final List<dynamic> decoded = jsonDecode(cachedItem.data as String);
+        _mySites = decoded.map((e) => e as Map<String, dynamic>).toList();
+        debugPrint('[_loadMySitesFromCache] Loaded ${_mySites.length} sites from cache');
+      } else {
+        debugPrint('[_loadMySitesFromCache] No cached sites found');
+        _mySites = [];
+      }
+    } catch (e) {
+      debugPrint('[_loadMySitesFromCache] Error loading from cache: $e');
+      _mySites = [];
     }
   }
 
@@ -1329,6 +1541,30 @@ class _MMPScreenState extends State<MMPScreen> {
             ),
           ),
         );
+      }
+
+      // View Report Button for completed visits (Admin/FOM/ICT only)
+      if ((status.toString().toLowerCase() == 'completed' ||
+              status.toString().toLowerCase() == 'complete')) {
+        final canViewReport = _isAdminOrSuperUser || 
+                              _userRole == 'fom' ||
+                              _userRole == 'ict';
+        if (canViewReport) {
+          buttons.add(
+            Expanded(
+              child: ElevatedButton.icon(
+                onPressed: () => _viewVisitReport(site),
+                icon: const Icon(Icons.visibility, size: 18),
+                label: const Text('View Report'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+              ),
+            ),
+          );
+        }
       }
     }
 
@@ -2828,8 +3064,11 @@ class _MMPScreenState extends State<MMPScreen> {
     final status = site['status'] ?? 'Pending';
     final enumeratorFee = site['enumerator_fee'] ?? 0;
     final transportFee = site['transport_fee'] ?? 0;
-    // Always calculate total as transport + enumerator fee (not just site['cost'])
-    final cost = (transportFee is num ? transportFee : 0) + (enumeratorFee is num ? enumeratorFee : 0);
+    final storedCost = (site['cost'] as num?)?.toDouble() ?? 0.0;
+    // Calculate total from fees, but use stored cost if it's higher (more accurate)
+    final calculatedCost = ((transportFee is num ? transportFee : 0) + (enumeratorFee is num ? enumeratorFee : 0)).toDouble();
+    // Use whichever is higher: stored cost or calculated cost
+    final cost = storedCost > calculatedCost ? storedCost : calculatedCost;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -3092,6 +3331,8 @@ class _MMPScreenState extends State<MMPScreen> {
     final state = site['state'] ?? '';
     final locality = site['locality'] ?? '';
     final status = site['status'] ?? 'Pending';
+    final isCompleted = status.toString().toLowerCase() == 'completed' || 
+                        status.toString().toLowerCase() == 'complete';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -3155,7 +3396,47 @@ class _MMPScreenState extends State<MMPScreen> {
               ),
             ],
           ),
+          if (isCompleted && (_isAdminOrSuperUser || _userRole == 'fom')) ...[
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () => _viewVisitReport(site),
+                icon: const Icon(Icons.visibility, size: 18),
+                label: const Text('View Visit Report'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ],
+      ),
+    );
+  }
+
+  void _viewVisitReport(Map<String, dynamic> site) {
+    final siteVisit = SiteVisit(
+      id: site['id']?.toString() ?? '',
+      siteName: site['site_name']?.toString() ?? site['siteName']?.toString() ?? 'Unknown',
+      siteCode: site['site_code']?.toString() ?? site['siteCode']?.toString() ?? '',
+      state: site['state']?.toString() ?? '',
+      locality: site['locality']?.toString() ?? '',
+      status: site['status']?.toString() ?? '',
+      transportFee: (site['transport_fee'] as num?)?.toDouble() ?? 0,
+      enumeratorFee: (site['enumerator_fee'] as num?)?.toDouble() ?? 0,
+      dueDate: site['due_date'] != null ? DateTime.tryParse(site['due_date'].toString()) : null,
+    );
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => VisitReportDetailScreen(visit: siteVisit),
       ),
     );
   }
