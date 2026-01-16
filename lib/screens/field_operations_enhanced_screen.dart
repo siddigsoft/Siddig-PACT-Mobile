@@ -2828,7 +2828,8 @@ class _MMPScreenState extends State<MMPScreen> {
     final status = site['status'] ?? 'Pending';
     final enumeratorFee = site['enumerator_fee'] ?? 0;
     final transportFee = site['transport_fee'] ?? 0;
-    final cost = site['cost'] ?? (enumeratorFee + transportFee);
+    // Always calculate total as transport + enumerator fee (not just site['cost'])
+    final cost = (transportFee is num ? transportFee : 0) + (enumeratorFee is num ? enumeratorFee : 0);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -2901,7 +2902,7 @@ class _MMPScreenState extends State<MMPScreen> {
             ],
           ),
 
-          if (cost > 0 || enumeratorFee > 0 || transportFee > 0) ...[
+          if (cost > 0) ...[
             const SizedBox(height: 12),
             Container(
               padding: const EdgeInsets.all(12),
@@ -2910,50 +2911,8 @@ class _MMPScreenState extends State<MMPScreen> {
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  // Collector fee display commented out - only showing total
-                  // if (enumeratorFee > 0)
-                  //   Column(
-                  //     crossAxisAlignment: CrossAxisAlignment.start,
-                  //     children: [
-                  //       Text(
-                  //         'Collector Fee',
-                  //         style: GoogleFonts.poppins(
-                  //           fontSize: 10,
-                  //           color: AppColors.textLight,
-                  //         ),
-                  //       ),
-                  //       Text(
-                  //         '${enumeratorFee.toStringAsFixed(0)} SDG',
-                  //         style: GoogleFonts.poppins(
-                  //           fontSize: 14,
-                  //           fontWeight: FontWeight.w600,
-                  //         ),
-                  //       ),
-                  //     ],
-                  //   ),
-                  // Transport fee display commented out - only showing total
-                  // if (transportFee > 0)
-                  //   Column(
-                  //     crossAxisAlignment: CrossAxisAlignment.start,
-                  //     children: [
-                  //       Text(
-                  //         'Transport',
-                  //         style: GoogleFonts.poppins(
-                  //           fontSize: 10,
-                  //           color: AppColors.textLight,
-                  //         ),
-                  //       ),
-                  //       Text(
-                  //         '${transportFee.toStringAsFixed(0)} SDG',
-                  //         style: GoogleFonts.poppins(
-                  //           fontSize: 14,
-                  //           fontWeight: FontWeight.w600,
-                  //         ),
-                  //       ),
-                  //     ],
-                  //   ),
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
@@ -3266,7 +3225,8 @@ class _CostAcknowledgmentDialogState extends State<_CostAcknowledgmentDialog> {
     final site = widget.site;
     final enumeratorFee = site['enumerator_fee'] ?? 0;
     final transportFee = site['transport_fee'] ?? 0;
-    final totalCost = site['cost'] ?? (enumeratorFee + transportFee);
+    // Always calculate total as transport + enumerator fee (not just site['cost'])
+    final totalCost = (transportFee is num ? transportFee : 0) + (enumeratorFee is num ? enumeratorFee : 0);
 
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -3300,13 +3260,6 @@ class _CostAcknowledgmentDialogState extends State<_CostAcknowledgmentDialog> {
               ),
               child: Column(
                 children: [
-                  // Collector fee display commented out - only showing total
-                  // _buildCostRow('Data Collector Fee', enumeratorFee),
-                  // const Divider(),
-                  // Transport fee display commented out - only showing total
-                  // const Divider(),
-                  // _buildCostRow('Transport Fee', transportFee),
-                  // const Divider(),
                   _buildCostRow('Total Cost', totalCost, isTotal: true),
                 ],
               ),
