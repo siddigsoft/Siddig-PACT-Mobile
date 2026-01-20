@@ -1,5 +1,3 @@
-﻿// lib/main.dart
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -19,6 +17,8 @@ import 'authentication/biometric_prompt_screen.dart';
 import 'screens/main_screen.dart';
 import 'screens/field_operations_enhanced_screen.dart';
 import 'screens/comprehensive_monitoring_form_screen.dart';
+import 'screens/chat_screen.dart';
+import 'models/chat.dart';
 import 'theme/app_colors.dart';
 import 'l10n/app_localizations.dart';
 import 'providers/locale_provider.dart';
@@ -31,6 +31,7 @@ import 'services/notification_service.dart';
 import 'services/update_service.dart';
 import 'services/map_tile_cache_service.dart'
     if (dart.library.html) 'services/map_tile_cache_service_web.dart';
+import 'services/offline/hive_adapters.dart';
 
 // Conditionally import web plugins only when needed
 // This prevents errors on non-web platforms
@@ -75,6 +76,11 @@ void main() async {
 
   // Initialize Hive for local storage
   await Hive.initFlutter();
+  
+  // Register Hive type adapters for offline data models
+  // CRITICAL: Must be done BEFORE opening typed boxes
+  registerHiveAdapters();
+  
   // Open boxes for offline data storage
   await Hive.openBox('tasks');
   await Hive.openBox('equipments');
@@ -337,6 +343,42 @@ class MyApp extends StatelessWidget {
           // Backup with onGenerateRoute for dynamic routes and better debugging
           onGenerateRoute: (settings) {
             debugPrint('⚠️ Fallback route generation: ${settings.name}');
+
+            // Handle /chat route with Chat argument or chatId string
+            if (settings.name == '/chat') {
+              final args = settings.arguments;
+              if (args is Chat) {
+                return MaterialPageRoute(
+                  settings: settings,
+                  builder: (context) => ChatScreen(chat: args),
+                );
+              }
+              // If args is a string (chatId from notification), create a minimal Chat object
+              if (args is String) {
+                final chatId = args;
+                debugPrint('📱 Chat route with chatId: $chatId');
+                // Create a minimal Chat object - the ChatScreen will load full details
+                final chat = Chat(
+                  id: chatId,
+                  isGroup: false,
+                  name: 'Chat',
+                  type: 'private',
+                  createdAt: DateTime.now(),
+                  updatedAt: DateTime.now(),
+                );
+                return MaterialPageRoute(
+                  settings: settings,
+                  builder: (context) => ChatScreen(chat: chat),
+                );
+              }
+              // Fallback for unknown argument types
+              debugPrint('⚠️ Chat route called without proper argument');
+              return MaterialPageRoute(
+                builder: (context) => const Scaffold(
+                  body: Center(child: Text('Unable to open chat')),
+                ),
+              );
+            }
 
             // Only for routes not defined in routes map
             switch (settings.name) {
