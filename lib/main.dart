@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -32,6 +32,7 @@ import 'services/update_service.dart';
 import 'services/map_tile_cache_service.dart'
     if (dart.library.html) 'services/map_tile_cache_service_web.dart';
 import 'services/offline/hive_adapters.dart';
+import 'services/offline/offline_db.dart';
 
 // Conditionally import web plugins only when needed
 // This prevents errors on non-web platforms
@@ -95,6 +96,9 @@ void main() async {
   await Hive.openBox('incidentReports_sync');
   await Hive.openBox('safetyChecklists_sync');
   await Hive.openBox('userProfiles_sync');
+
+  // Initialize OfflineDb which opens typed Hive boxes used by offline services
+  await OfflineDb().init();
 
   // Initialize web-specific configuration and URL strategy
   configureApp();

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../theme/app_colors.dart';
 import '../services/presence_service.dart';
 import '../services/webrtc_service.dart';
@@ -100,14 +101,106 @@ class _CommunicationsScreenState extends State<CommunicationsScreen>
     setState(() => _isLoading = true);
     
     try {
+      // Check connectivity first
+      await _checkConnectivity();
+      
+      if (!_isOnline) {
+        // OFFLINE: Load cached users
+        debugPrint('[CommunicationsScreen] Offline - loading cached users');
+        _allUsers = _presenceService.getAllUsersList();
+        if (_allUsers.isEmpty) {
+          // Try loading from cache
+          await _presenceService.loadCachedUsers();
+          _allUsers = _presenceService.getAllUsersList();
+        }
+        _filterUsers();
+        setState(() => _isLoading = false);
+        return;
+      }
+      
+      // ONLINE: Initialize services and fetch users
+      await _initializeWebRTCService();
+      
       await _presenceService.fetchAllUsers();
       _allUsers = _presenceService.getAllUsersList();
       _filterUsers();
+      
+      // Sync any pending messages
+      final syncedCount = await _chatService.syncPendingMessages();
+      if (syncedCount > 0 && mounted) {
+        _showMessage('Synced $syncedCount pending messages');
+      }
     } catch (e) {
       debugPrint('[CommunicationsScreen] Error loading users: $e');
+      // Fallback to cached data
+      _allUsers = _presenceService.getAllUsersList();
+      _filterUsers();
     }
     
     setState(() => _isLoading = false);
+  }
+  
+  Future<void> _initializeWebRTCService() async {
+    try {
+      final currentUserId = _chatService.getCurrentUserId();
+      if (currentUserId == null) {
+        debugPrint('[CommunicationsScreen] Cannot initialize WebRTC - no user ID');
+        return;
+      }
+      
+      // First ensure PresenceService is initialized with the current user
+      if (!_presenceService.isInitialized) {
+        // Fetch user profile data from Supabase
+        final supabase = Supabase.instance.client;
+        final profileResponse = await supabase
+            .from('profiles')
+            .select('id, full_name, avatar_url, role')
+            .eq('id', currentUserId)
+            .maybeSingle();
+        
+        final userName = profileResponse?['full_name'] as String? ?? 'User';
+        final userAvatar = profileResponse?['avatar_url'] as String?;
+        final userRole = profileResponse?['role'] as String?;
+        
+        // Initialize PresenceService first
+        await _presenceService.initialize(
+          odId: currentUserId,
+          userName: userName,
+          userAvatar: userAvatar,
+          userRole: userRole,
+        );
+        debugPrint('[CommunicationsScreen] PresenceService initialized for $userName');
+        
+        // Now initialize WebRTC with the same data
+        if (!_webrtcService.isInitialized) {
+          await _webrtcService.initialize(
+            currentUserId,
+            userName,
+            userAvatar: userAvatar,
+          );
+          debugPrint('[CommunicationsScreen] WebRTC service initialized for $userName');
+        }
+      } else {
+        // PresenceService already initialized, use its data for WebRTC
+        final currentUserData = _presenceService.getCurrentUserPresence();
+        final userName = currentUserData?.userName ?? 'User';
+        final userAvatar = currentUserData?.userAvatar;
+        
+        if (!_webrtcService.isInitialized) {
+          await _webrtcService.initialize(
+            currentUserId,
+            userName,
+            userAvatar: userAvatar,
+          );
+          debugPrint('[CommunicationsScreen] WebRTC service initialized for $userName');
+        }
+      }
+    } catch (e) {
+      debugPrint('[CommunicationsScreen] Error initializing WebRTC: $e');
+      if (mounted) {
+        _showMessage('Failed to initialize communications. Please try again.', isError: true);
+      }
+    }
   }
 
   void _subscribeToPresence() {
@@ -184,18 +277,42 @@ class _CommunicationsScreenState extends State<CommunicationsScreen>
       return;
     }
 
+    // Check if target user is online
+    if (!user.isOnline) {
+      _showMessage('${user.userName} is offline. Send a message instead.', isError: true);
+      return;
+    }
+
     if (user.isInCall) {
       _showMessage('${user.userName} is currently in another call', isError: true);
       return;
     }
 
-    // Check if already in a call
+    // Check if already in a call - force reset if stuck
     if (_webrtcService.callState.isInCall) {
-      _showMessage('You are already in a call', isError: true);
-      return;
+      // Try to reset stuck state first
+      await _webrtcService.forceResetIfNotInActiveCall();
+      
+      // Check again after reset
+      if (_webrtcService.callState.isInCall) {
+        _showMessage('You are already in a call', isError: true);
+        return;
+      }
     }
 
     HapticFeedback.mediumImpact();
+    
+    // Ensure WebRTC is initialized before making call
+    if (!_webrtcService.isInitialized) {
+      debugPrint('[CommunicationsScreen] WebRTC not initialized, initializing now...');
+      await _initializeWebRTCService();
+      
+      // Check again after initialization
+      if (!_webrtcService.isInitialized) {
+        _showMessage('Could not initialize call service. Please try again.', isError: true);
+        return;
+      }
+    }
     
     final success = await _webrtcService.initiateCall(
       user.odId,
@@ -235,14 +352,29 @@ class _CommunicationsScreenState extends State<CommunicationsScreen>
       return;
     }
     
-    if (!_isOnline) {
-      _showOfflineMessage('Starting new chats requires an internet connection');
-      return;
-    }
-    
     try {
       debugPrint('[CommunicationsScreen] Initiating chat with user: ${user.odId}');
-      // Find or create chat with user
+      
+      if (!_isOnline) {
+        // OFFLINE: Try to find cached chat first
+        debugPrint('[CommunicationsScreen] Offline - looking for cached chat');
+        final cachedChats = await _chatService.getCachedUserChats();
+        final existingChat = cachedChats.where((c) => 
+          c.participants?.any((p) => p.userId == user.odId) ?? false
+        ).toList();
+        
+        if (existingChat.isNotEmpty && mounted) {
+          debugPrint('[CommunicationsScreen] Found cached chat: ${existingChat.first.id}');
+          Navigator.pushNamed(context, '/chat', arguments: existingChat.first);
+          _showMessage('Offline mode - messages will sync when online');
+          return;
+        } else {
+          _showOfflineMessage('No existing chat found. Start a chat when online.');
+          return;
+        }
+      }
+      
+      // ONLINE: Find or create chat with user
       final chat = await _chatService.findOrCreateDirectChat(user.odId);
       
       if (chat != null && mounted) {
@@ -627,19 +759,23 @@ class _CommunicationsScreenState extends State<CommunicationsScreen>
                       onPressed: () => _initiateChat(user),
                       tooltip: 'Message',
                     ),
-                    // Call button
+                    // Call button - only enabled for online users who are available
                     IconButton(
                       icon: Icon(
                         Icons.call,
-                        color: user.isInCall
-                            ? Colors.grey
-                            : (_isOnline ? AppColors.primaryGreen : Colors.grey),
+                        color: (user.isOnline && !user.isInCall && _isOnline)
+                            ? AppColors.primaryGreen
+                            : Colors.grey.withOpacity(0.5),
                       ),
                       iconSize: 22,
-                      onPressed: user.isInCall || !_isOnline
-                          ? null
-                          : () => _initiateCall(user),
-                      tooltip: user.isInCall ? 'User is busy' : 'Call',
+                      onPressed: (user.isOnline && !user.isInCall && _isOnline)
+                          ? () => _initiateCall(user)
+                          : null,
+                      tooltip: !_isOnline
+                          ? 'You are offline'
+                          : (!user.isOnline
+                              ? 'User is offline'
+                              : (user.isInCall ? 'User is busy' : 'Call')),
                     ),
                   ],
                 ),
@@ -794,35 +930,43 @@ class _CommunicationsScreenState extends State<CommunicationsScreen>
                 leading: Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: (user.isInCall || !_isOnline)
-                        ? Colors.grey.withOpacity(0.1)
-                        : AppColors.primaryGreen.withOpacity(0.1),
+                    color: (user.isOnline && !user.isInCall && _isOnline)
+                        ? AppColors.primaryGreen.withOpacity(0.1)
+                        : Colors.grey.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Icon(
                     Icons.call,
-                    color: (user.isInCall || !_isOnline) ? Colors.grey : AppColors.primaryGreen,
+                    color: (user.isOnline && !user.isInCall && _isOnline)
+                        ? AppColors.primaryGreen
+                        : Colors.grey,
                   ),
                 ),
                 title: Text(
                   'Voice Call',
                   style: GoogleFonts.poppins(
                     fontWeight: FontWeight.w500,
-                    color: (user.isInCall || !_isOnline) ? Colors.grey : null,
+                    color: (user.isOnline && !user.isInCall && _isOnline)
+                        ? null
+                        : Colors.grey,
                   ),
                 ),
                 subtitle: Text(
-                  user.isInCall
-                      ? 'User is currently in a call'
-                      : (!_isOnline ? 'Requires internet connection' : 'Start an in-app call'),
+                  !_isOnline
+                      ? 'You are offline'
+                      : (!user.isOnline
+                          ? 'User is offline - send a message instead'
+                          : (user.isInCall
+                              ? 'User is currently in a call'
+                              : 'Start an in-app voice call')),
                   style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey),
                 ),
-                onTap: (user.isInCall || !_isOnline)
-                    ? null
-                    : () {
+                onTap: (user.isOnline && !user.isInCall && _isOnline)
+                    ? () {
                         Navigator.pop(context);
                         _initiateCall(user);
-                      },
+                      }
+                    : null,
               ),
               
               const SizedBox(height: 16),

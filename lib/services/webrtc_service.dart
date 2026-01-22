@@ -544,9 +544,25 @@ class WebRTCService {
     );
   }
 
-  /// Handle incoming offer
+  /// Handle incoming offer (caller receives this after callee accepts)
   Future<void> _handleOffer(Map<String, dynamic> offer) async {
-    debugPrint('[WebRTC] Handling offer');
+    debugPrint('[WebRTC] Handling offer from callee');
+    
+    // Ensure we have local media before creating peer connection
+    // (Caller should already have it from initiateCall, but verify)
+    if (_localStream == null) {
+      debugPrint('[WebRTC] No local stream - setting up media first');
+      try {
+        await _setupLocalMedia(isAudioOnly: _callState.isAudioOnly);
+      } catch (e) {
+        debugPrint('[WebRTC] Failed to setup local media: $e');
+        _errorController.add('Failed to access microphone. Please check permissions.');
+        await _cleanup();
+        _updateCallState(CallStatus.ended);
+        return;
+      }
+    }
+    
     await _createPeerConnection();
 
     await _peerConnection!.setRemoteDescription(
@@ -555,6 +571,8 @@ class WebRTCService {
 
     final answer = await _peerConnection!.createAnswer();
     await _peerConnection!.setLocalDescription(answer);
+    
+    debugPrint('[WebRTC] Sending answer back to callee');
 
     await _sendSignalWithRetry(
       CallSignal(
@@ -616,8 +634,12 @@ class WebRTCService {
         break;
 
       case CallSignalType.callAccept:
-        debugPrint('[WebRTC] Call accepted, creating peer connection');
-        await _createPeerConnection();
+        // Call was accepted by the callee - they will send an offer next
+        // Do NOT create peer connection here - wait for the offer
+        debugPrint('[WebRTC] Call accepted, waiting for offer from callee');
+        _cancelCallTimeoutTimer(); // Stop timeout since call was accepted
+        _callState = _callState.copyWith(status: CallStatus.ringing);
+        _callStateController.add(_callState);
         break;
 
       case CallSignalType.callReject:
@@ -768,6 +790,23 @@ class WebRTCService {
     return muted;
   }
 
+  /// Toggle speaker (earpiece/speaker)
+  bool toggleSpeaker() {
+    final speakerOn = !_callState.isSpeakerOn;
+    
+    // Use flutter_webrtc helper to switch audio output
+    try {
+      Helper.setSpeakerphoneOn(speakerOn);
+    } catch (e) {
+      debugPrint('[WebRTC] Error toggling speaker: $e');
+    }
+
+    _callState = _callState.copyWith(isSpeakerOn: speakerOn);
+    _callStateController.add(_callState);
+
+    return speakerOn;
+  }
+
   /// Switch camera (front/back)
   Future<void> switchCamera() async {
     if (_localStream == null) return;
@@ -847,7 +886,23 @@ class WebRTCService {
     // If we think we're in a call but have no active peer connection,
     // then we're in a stuck state and should reset
     if (_callState.isInCall && _peerConnection == null) {
-      debugPrint('[WebRTC] Detected stuck call state, forcing reset');
+      debugPrint('[WebRTC] Detected stuck call state (no peer connection), forcing reset');
+      await _cleanup();
+      return;
+    }
+    
+    // Also reset if we're in a "ended/rejected/busy" state that wasn't cleaned up
+    if (_callState.status == CallStatus.ended ||
+        _callState.status == CallStatus.rejected ||
+        _callState.status == CallStatus.busy) {
+      debugPrint('[WebRTC] Detected stale terminal call state, forcing reset');
+      await _cleanup();
+      return;
+    }
+    
+    // Reset if local/remote streams are null but we think we're in a call
+    if (_callState.isInCall && _localStream == null && _remoteStream == null) {
+      debugPrint('[WebRTC] Detected stuck call state (no streams), forcing reset');
       await _cleanup();
     }
   }

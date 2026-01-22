@@ -171,6 +171,11 @@ class PresenceService {
       debugPrint('[PresenceService] Error loading cached users: $e');
     }
   }
+  
+  /// Public method to load cached users (for offline mode)
+  Future<void> loadCachedUsers() async {
+    await _loadCachedUsers();
+  }
 
   Future<void> _cacheUsers(List<UserPresence> users) async {
     try {
@@ -436,6 +441,20 @@ class PresenceService {
 
   int get onlineUsersCount => _onlineUsers.length;
   int get totalUsersCount => _allUsers.length;
+
+  /// Get current user's presence info (for WebRTC initialization)
+  UserPresence? getCurrentUserPresence() {
+    if (_currentUserId == null) return null;
+    
+    return UserPresence(
+      odId: _currentUserId!,
+      userName: _currentUserName ?? 'User',
+      userAvatar: _currentUserAvatar,
+      role: _currentUserRole,
+      isOnline: true,
+      isInCall: false,
+    );
+  }
 
   void dispose() {
     _heartbeatTimer?.cancel();
