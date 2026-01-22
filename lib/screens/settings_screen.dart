@@ -2,10 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:package_info_plus/package_info_plus.dart';
+import 'package:shorebird_code_push/shorebird_code_push.dart';
 import 'dart:io';
 import '../widgets/reusable_app_bar.dart';
 import '../widgets/custom_drawer_menu.dart';
 import '../theme/app_colors.dart';
+import '../services/offline/offline_db.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -30,6 +33,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _locationSharing = false;
   bool _notificationsEnabled = true;
   bool _darkMode = false;
+  
+  // App version
+  String _appVersion = '';
+  String _buildNumber = '';
+  int? _patchNumber;
+
+  // Sync status
+  int _pendingSyncCount = 0;
+  int _pendingSiteVisitsCount = 0;
+  int _pendingRequestsCount = 0;
 
   // Password change
   final bool _showChangePassword = false;
@@ -45,6 +58,50 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void initState() {
     super.initState();
     _loadUserData();
+    _loadAppVersion();
+    _loadSyncStatus();
+  }
+
+  Future<void> _loadSyncStatus() async {
+    try {
+      final offlineDb = OfflineDb();
+      final pendingSync = offlineDb.getPendingSyncActions(status: 'pending');
+      final pendingSiteVisits = offlineDb.getPendingSiteVisits();
+      
+      setState(() {
+        _pendingSyncCount = pendingSync.length;
+        _pendingSiteVisitsCount = pendingSiteVisits.length;
+        _pendingRequestsCount = pendingSync.length + pendingSiteVisits.length;
+      });
+    } catch (e) {
+      debugPrint('Error loading sync status: $e');
+    }
+  }
+  
+  Future<void> _loadAppVersion() async {
+    try {
+      final packageInfo = await PackageInfo.fromPlatform();
+      
+      // Get Shorebird patch number
+      int? patchNumber;
+      try {
+        final codePush = ShorebirdCodePush();
+        final isAvailable = await codePush.isShorebirdAvailable();
+        if (isAvailable) {
+          patchNumber = await codePush.currentPatchNumber();
+        }
+      } catch (e) {
+        debugPrint('Error getting Shorebird patch number: $e');
+      }
+      
+      setState(() {
+        _appVersion = packageInfo.version;
+        _buildNumber = packageInfo.buildNumber;
+        _patchNumber = patchNumber;
+      });
+    } catch (e) {
+      debugPrint('Error loading app version: $e');
+    }
   }
 
   @override
@@ -409,6 +466,66 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  Widget _buildSyncStatusBanner() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.orange.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.orange.withOpacity(0.3)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.orange,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Icon(Icons.cloud_upload, color: Colors.white, size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Pending Sync',
+                  style: GoogleFonts.poppins(
+                    fontWeight: FontWeight.w600,
+                    color: Colors.orange[800],
+                    fontSize: 14,
+                  ),
+                ),
+                Text(
+                  '$_pendingRequestsCount item${_pendingRequestsCount > 1 ? 's' : ''} waiting to upload',
+                  style: GoogleFonts.poppins(
+                    color: Colors.orange[700],
+                    fontSize: 12,
+                  ),
+                ),
+                if (_pendingSiteVisitsCount > 0)
+                  Text(
+                    '($_pendingSiteVisitsCount site visit${_pendingSiteVisitsCount > 1 ? 's' : ''}, $_pendingSyncCount other action${_pendingSyncCount > 1 ? 's' : ''})',
+                    style: GoogleFonts.poppins(
+                      color: Colors.orange[600],
+                      fontSize: 11,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          IconButton(
+            icon: Icon(Icons.refresh, color: Colors.orange[700]),
+            onPressed: _loadSyncStatus,
+            tooltip: 'Refresh sync status',
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildSwitchTile({
     required String title,
     required String subtitle,
@@ -453,6 +570,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          // Sync Status Banner
+                          if (_pendingRequestsCount > 0)
+                            _buildSyncStatusBanner(),
+                            
                           // Profile Section
                           _buildSection(
                             title: 'Profile',
@@ -663,6 +784,46 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           ),
 
                           const SizedBox(height: 24),
+                          
+                          // App Version Display
+                          if (_appVersion.isNotEmpty) ...[
+                            Center(
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 12,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: AppColors.backgroundGray,
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.info_outline,
+                                      size: 18,
+                                      color: AppColors.textLight,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      _patchNumber != null
+                                          ? 'Version $_appVersion (Build $_buildNumber, Patch $_patchNumber)'
+                                          : 'Version $_appVersion (Build $_buildNumber)',
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 13,
+                                        color: AppColors.textLight,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                          ],
                         ],
                       ),
                     ),

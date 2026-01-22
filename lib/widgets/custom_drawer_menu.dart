@@ -4,6 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:shorebird_code_push/shorebird_code_push.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import '../services/auth_service.dart';
 import '../providers/sync_provider.dart';
 import '../providers/profile_provider.dart';
@@ -19,6 +22,10 @@ import '../screens/site_verification_screen.dart';
 import '../screens/chats_screen.dart';
 import '../screens/help_screen.dart';
 import '../screens/support_screen.dart';
+import '../screens/help_support_screen.dart';
+import '../screens/admin_dashboard_screen.dart';
+import '../screens/super_admin_screen.dart';
+import '../screens/communications_screen.dart';
 
 class CustomDrawerMenu extends ConsumerStatefulWidget {
   final User? currentUser;
@@ -38,6 +45,7 @@ class _CustomDrawerMenuState extends ConsumerState<CustomDrawerMenu> {
   String _userRole = 'Loading...';
   String _appVersion = '';
   String _buildNumber = '';
+  int? _patchNumber;
 
   @override
   void initState() {
@@ -54,10 +62,24 @@ class _CustomDrawerMenuState extends ConsumerState<CustomDrawerMenu> {
   Future<void> _fetchAppVersion() async {
     try {
       final packageInfo = await PackageInfo.fromPlatform();
+      
+      // Get Shorebird patch number
+      int? patchNumber;
+      try {
+        final codePush = ShorebirdCodePush();
+        final isAvailable = await codePush.isShorebirdAvailable();
+        if (isAvailable) {
+          patchNumber = await codePush.currentPatchNumber();
+        }
+      } catch (e) {
+        debugPrint('Error getting Shorebird patch number: $e');
+      }
+      
       if (mounted) {
         setState(() {
           _appVersion = packageInfo.version;
           _buildNumber = packageInfo.buildNumber;
+          _patchNumber = patchNumber;
         });
       }
     } catch (e) {
@@ -67,20 +89,70 @@ class _CustomDrawerMenuState extends ConsumerState<CustomDrawerMenu> {
 
   Future<void> _fetchUserRole() async {
     if (widget.currentUser == null) return;
+    
+    // Load cached role first for instant offline support
+    await _loadCachedRole();
+    
+    // Check connectivity
+    final connectivity = await Connectivity().checkConnectivity();
+    final isOnline = !connectivity.contains(ConnectivityResult.none);
+    
+    if (!isOnline) {
+      debugPrint('📴 Drawer: Offline mode - using cached role');
+      return;
+    }
+    
     try {
-      final response = await Supabase.instance.client
+      // Try user_roles table first
+      var response = await Supabase.instance.client
           .from('user_roles')
           .select('role')
           .eq('user_id', widget.currentUser!.id)
           .maybeSingle();
 
+      // Fallback to profiles table if user_roles doesn't have data
+      if (response == null) {
+        response = await Supabase.instance.client
+            .from('profiles')
+            .select('role')
+            .eq('id', widget.currentUser!.id)
+            .maybeSingle();
+      }
+
       if (response != null && mounted) {
+        final role = response['role'] as String? ?? 'User';
         setState(() {
-          _userRole = response['role'] as String;
+          _userRole = role;
         });
+        // Cache role for offline use
+        await _cacheRole(role);
       }
     } catch (e) {
       debugPrint('Error fetching role: $e');
+    }
+  }
+  
+  Future<void> _loadCachedRole() async {
+    try {
+      final box = await Hive.openBox('user_profile_cache');
+      final cachedRole = box.get('user_role') as String?;
+      if (cachedRole != null && mounted) {
+        setState(() {
+          _userRole = cachedRole;
+        });
+        debugPrint('📦 Drawer: Loaded cached role: $cachedRole');
+      }
+    } catch (e) {
+      debugPrint('Error loading cached role in drawer: $e');
+    }
+  }
+  
+  Future<void> _cacheRole(String role) async {
+    try {
+      final box = await Hive.openBox('user_profile_cache');
+      await box.put('user_role', role);
+    } catch (e) {
+      debugPrint('Error caching role in drawer: $e');
     }
   }
 
@@ -466,14 +538,14 @@ class _CustomDrawerMenuState extends ConsumerState<CustomDrawerMenu> {
                       ),
                       _MenuItemData(
                         icon: Icons.help_rounded,
-                        title: 'Help',
+                        title: 'Help & Support',
                         subtitle: 'Get help and find answers',
                         iconColor: Colors.purple,
                         onTap: () {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (context) => const HelpScreen(),
+                              builder: (context) => const HelpSupportScreen(),
                             ),
                           );
                           widget.onClose();
@@ -494,6 +566,58 @@ class _CustomDrawerMenuState extends ConsumerState<CustomDrawerMenu> {
                           widget.onClose();
                         },
                       ),
+                      _MenuItemData(
+                        icon: Icons.phone_in_talk_rounded,
+                        title: 'Communications',
+                        subtitle: 'Calls and messages',
+                        iconColor: Colors.indigo,
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const CommunicationsScreen(),
+                            ),
+                          );
+                          widget.onClose();
+                        },
+                      ),
+                      // Admin Dashboard - Only for admins
+                      if (_userRole.toLowerCase() == 'admin' ||
+                          _userRole.toLowerCase() == 'super_admin' ||
+                          _userRole.toLowerCase() == 'superadmin')
+                        _MenuItemData(
+                          icon: Icons.admin_panel_settings_rounded,
+                          title: 'Admin Dashboard',
+                          subtitle: 'Manage contacts and users',
+                          iconColor: Colors.deepPurple,
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const AdminDashboardScreen(),
+                              ),
+                            );
+                            widget.onClose();
+                          },
+                        ),
+                      // Super Admin - Only for super admins
+                      if (_userRole.toLowerCase() == 'super_admin' ||
+                          _userRole.toLowerCase() == 'superadmin')
+                        _MenuItemData(
+                          icon: Icons.security_rounded,
+                          title: 'Super Admin',
+                          subtitle: 'System administration',
+                          iconColor: Colors.red,
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const SuperAdminScreen(),
+                              ),
+                            );
+                            widget.onClose();
+                          },
+                        ),
                       // _MenuItemData(
                       //   icon: Icons.dashboard_rounded,
                       //   title: 'PACT Dashboard',
@@ -660,31 +784,33 @@ class _CustomDrawerMenuState extends ConsumerState<CustomDrawerMenu> {
             ),
 
             // App Version
-            // Padding(
-            //   padding: const EdgeInsets.only(bottom: 16),
-            //   child: Column(
-            //     children: [
-            //       Text(
-            //         _appVersion.isNotEmpty
-            //             ? 'PACT Mobile v$_appVersion'
-            //             : 'PACT Mobile',
-            //         style: TextStyle(
-            //           color: Colors.grey.shade500,
-            //           fontSize: 12,
-            //           fontWeight: FontWeight.w500,
-            //         ),
-            //       ),
-            //       if (_buildNumber.isNotEmpty)
-            //         Text(
-            //           'Build $_buildNumber',
-            //           style: TextStyle(
-            //             color: Colors.grey.shade400,
-            //             fontSize: 10,
-            //           ),
-            //         ),
-            //     ],
-            //   ),
-            // ),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: Column(
+                children: [
+                  Text(
+                    _appVersion.isNotEmpty
+                        ? 'PACT Mobile v$_appVersion'
+                        : 'PACT Mobile',
+                    style: TextStyle(
+                      color: Colors.grey.shade500,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  if (_buildNumber.isNotEmpty)
+                    Text(
+                      _patchNumber != null
+                          ? 'Build $_buildNumber (Patch $_patchNumber)'
+                          : 'Build $_buildNumber',
+                      style: TextStyle(
+                        color: Colors.grey.shade400,
+                        fontSize: 10,
+                      ),
+                    ),
+                ],
+              ),
+            ),
           ],
         ),
       ),

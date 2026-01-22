@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'offline_db.dart';
 import 'models.dart';
 import '../offline_data_service.dart';
+import '../chat_service.dart';
 
 typedef SyncProgressCallback = void Function(SyncProgress progress);
 typedef SyncCompleteCallback = void Function(SyncResult result);
@@ -125,11 +127,13 @@ class SyncManager {
     int failedCount = 0;
 
     try {
+      const totalPhases = 5;
+      
       // Phase 1: Sync site visits
       _notifyProgress(SyncProgress(
         phase: 'site_visits',
-        current: 0,
-        total: 1,
+        current: 1,
+        total: totalPhases,
         percentage: 0,
         message: 'Syncing site visits...',
       ));
@@ -141,9 +145,9 @@ class SyncManager {
       // Phase 2: Sync locations
       _notifyProgress(SyncProgress(
         phase: 'locations',
-        current: 1,
-        total: 3,
-        percentage: 33,
+        current: 2,
+        total: totalPhases,
+        percentage: 20,
         message: 'Syncing location data...',
       ));
       final (locSynced, locFailed, locErrors) = await _syncLocations();
@@ -154,9 +158,9 @@ class SyncManager {
       // Phase 3: Sync pending actions
       _notifyProgress(SyncProgress(
         phase: 'pending_actions',
-        current: 2,
-        total: 3,
-        percentage: 66,
+        current: 3,
+        total: totalPhases,
+        percentage: 40,
         message: 'Processing pending actions...',
       ));
       final (actionSynced, actionFailed, actionErrors) = await _syncPendingActions();
@@ -164,15 +168,37 @@ class SyncManager {
       failedCount += actionFailed;
       errors.addAll(actionErrors);
 
-      // Phase 4: Cleanup
+      // Phase 4: Sync chat messages
+      _notifyProgress(SyncProgress(
+        phase: 'chat_messages',
+        current: 4,
+        total: totalPhases,
+        percentage: 60,
+        message: 'Syncing messages...',
+      ));
+      final (chatSynced, chatFailed, chatErrors) = await _syncChatMessages();
+      syncedCount += chatSynced;
+      failedCount += chatFailed;
+      errors.addAll(chatErrors);
+
+      // Phase 5: Cleanup
       _notifyProgress(SyncProgress(
         phase: 'cleanup',
-        current: 3,
-        total: 3,
-        percentage: 100,
+        current: 5,
+        total: totalPhases,
+        percentage: 80,
         message: 'Cleaning up...',
       ));
       await _cleanupExpiredData();
+      
+      // Final progress
+      _notifyProgress(SyncProgress(
+        phase: 'complete',
+        current: totalPhases,
+        total: totalPhases,
+        percentage: 100,
+        message: 'Sync complete',
+      ));
 
       // Success
       _consecutiveFailures = 0;
@@ -461,6 +487,32 @@ class SyncManager {
       }
     } catch (e) {
       errors.add('OfflineDataService sync failed: $e');
+    }
+
+    return (synced, failed, errors);
+  }
+
+  // ============================================================================
+  // PHASE 4: SYNC CHAT MESSAGES
+  // ============================================================================
+
+  Future<(int, int, List<String>)> _syncChatMessages() async {
+    int synced = 0;
+    int failed = 0;
+    final errors = <String>[];
+
+    try {
+      final chatService = ChatService();
+      final syncedCount = await chatService.syncPendingMessages();
+      synced = syncedCount;
+      
+      if (syncedCount > 0) {
+        debugPrint('[SyncManager] Synced $syncedCount chat messages');
+      }
+    } catch (e) {
+      failed++;
+      errors.add('Chat message sync failed: $e');
+      debugPrint('[SyncManager] Error syncing chat messages: $e');
     }
 
     return (synced, failed, errors);

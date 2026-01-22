@@ -1,9 +1,16 @@
+import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../widgets/reusable_app_bar.dart';
+import '../services/webrtc_service.dart';
+import '../models/call_state.dart';
+import 'call_screen.dart';
 import '../widgets/custom_drawer_menu.dart';
 import '../widgets/notifications_panel.dart';
 import '../widgets/main_layout.dart';
@@ -13,9 +20,16 @@ import '../theme/app_colors.dart';
 import '../services/location_service.dart';
 import '../services/photo_upload_service.dart';
 import '../services/advance_request_service.dart';
+import '../services/offline_data_service.dart';
+import '../services/offline/sync_manager.dart';
+import '../services/offline/offline_db.dart';
+import '../services/offline/models.dart';
 import '../models/visit_report.dart';
 import '../models/visit_report_data.dart';
 import '../widgets/request_advance_dialog.dart';
+import '../models/site_visit.dart';
+import 'visit_report_detail_screen.dart';
+import '../widgets/sync_status_indicator.dart';
 
 class FieldOperationsEnhancedScreen extends StatefulWidget {
   const FieldOperationsEnhancedScreen({super.key});
@@ -31,9 +45,11 @@ class _MMPScreenState extends State<MMPScreen> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   bool _isLoading = true;
+  bool _isOffline = false;
   bool _isCoordinator = false;
   bool _isDataCollector = false;
   String? _userId;
+  String? _userName;
   String? _userStateId;
   String? _userLocalityId;
   String? _userStateName;
@@ -57,6 +73,9 @@ class _MMPScreenState extends State<MMPScreen> {
   // Advance requests map: siteId -> request data
   Map<String, Map<String, dynamic>> _advanceRequests = {};
   bool _loadingAdvanceRequests = false;
+
+  // User's enumerator fee based on classification
+  double _userEnumeratorFee = 50.0; // Default fee if no classification
 
   // Grouped data
   Map<String, List<Map<String, dynamic>>> _groupedByStateLocality = {};
@@ -91,57 +110,142 @@ class _MMPScreenState extends State<MMPScreen> {
 
       _userId = user.id;
 
-      // Get user profile to determine role
-      final profileResponse = await Supabase.instance.client
-          .from('profiles')
-          .select('role, state_id, locality_id')
-          .eq('id', user.id)
-          .maybeSingle();
+      // Check connectivity first
+      final connectivityResult = await Connectivity().checkConnectivity();
+      final isOffline = connectivityResult.contains(ConnectivityResult.none);
+      
+      if (mounted) {
+        setState(() => _isOffline = isOffline);
+      }
+      
+      if (isOffline) {
+        // OFFLINE MODE: Load everything from cache
+        debugPrint('[_initializeMMP] Offline - loading from cache');
+        await _initializeFromCache(user.id);
+        return;
+      }
 
-      if (profileResponse != null) {
-        _userRole = (profileResponse['role'] as String?)?.toLowerCase() ?? '';
-        _isCoordinator =
-            _userRole == 'coordinator' ||
-            _userRole == 'field_coordinator' ||
-            _userRole == 'state_coordinator';
-        _isDataCollector =
-            _userRole == 'datacollector' ||
-            _userRole == 'enumerator' ||
-            _userRole == 'data_collector';
+      // ONLINE MODE: Fetch from Supabase and cache
+      try {
+        // Get user profile to determine role
+        final profileResponse = await Supabase.instance.client
+            .from('profiles')
+            .select('role, state_id, locality_id')
+            .eq('id', user.id)
+            .maybeSingle();
 
-        _userStateId = profileResponse['state_id'] as String?;
-        _userLocalityId = profileResponse['locality_id'] as String?;
+        if (profileResponse != null) {
+          // Cache profile for offline use
+          final offlineService = OfflineDataService();
+          await offlineService.cacheUserProfile(user.id, profileResponse);
+          
+          _applyProfileData(profileResponse);
 
-        // Check if user is admin or supervisor (can see all projects)
-        _isAdminOrSuperUser =
-            _userRole == 'admin' ||
-            _userRole == 'super_admin' ||
-            _userRole == 'supervisor' ||
-            _userRole == 'fom';
+          // Fetch user's project memberships (for non-admin users)
+          if (!_isAdminOrSuperUser) {
+            await _fetchUserProjectMemberships();
+          }
 
-        // Fetch user's project memberships (for non-admin users)
-        if (!_isAdminOrSuperUser) {
-          await _fetchUserProjectMemberships();
+          // Query actual state and locality names from database
+          await _loadLocationNames();
         }
 
-        // Query actual state and locality names from database
-        await _loadLocationNames();
-      }
+        // Load data based on role
+        // Coordinators should see the same MMP experience as data collectors
+        if (_isDataCollector || _isCoordinator) {
+          await _loadDataCollectorData();
+          _setupRealtimeSubscription();
+        }
 
-      // Load data based on role
-      // Coordinators should see the same MMP experience as data collectors
+        if (!mounted) return;
+        setState(() => _isLoading = false);
+      } catch (e) {
+        // Network error while online - fall back to cache
+        debugPrint('[_initializeMMP] Network error, falling back to cache: $e');
+        await _initializeFromCache(user.id);
+      }
+    } catch (e) {
+      debugPrint('Error initializing MMP: $e');
+      // Last resort - try cache
+      final user = Supabase.instance.client.auth.currentUser;
+      if (user != null) {
+        await _initializeFromCache(user.id);
+      } else {
+        if (!mounted) return;
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+  
+  /// Initialize from cached data when offline
+  Future<void> _initializeFromCache(String userId) async {
+    try {
+      // CRITICAL: Set _userId BEFORE loading from cache (cache keys use _userId)
+      _userId = userId;
+      
+      if (mounted) {
+        setState(() => _isOffline = true);
+      }
+      debugPrint('[_initializeFromCache] Loading cached profile and data for user: $_userId');
+      final offlineService = OfflineDataService();
+      
+      // Load cached profile
+      final cachedProfile = await offlineService.getCachedUserProfile(userId);
+      if (cachedProfile != null) {
+        _applyProfileData(cachedProfile);
+        debugPrint('[_initializeFromCache] Loaded cached profile: $_userRole');
+      } else {
+        debugPrint('[_initializeFromCache] No cached profile found');
+      }
+      
+      // Load data based on role - mirror the online path
       if (_isDataCollector || _isCoordinator) {
         await _loadDataCollectorData();
-        _setupRealtimeSubscription();
+        // Group sites after loading
+        _groupAvailableSites();
+        // Load advance requests from cache if available
+        await _loadAdvanceRequests();
       }
-
+      
+      // Coordinators also need coordinator data
+      if (_isCoordinator) {
+        await _loadCoordinatorData();
+      }
+      
       if (!mounted) return;
       setState(() => _isLoading = false);
     } catch (e) {
-      debugPrint('Error initializing MMP: $e');
+      debugPrint('[_initializeFromCache] Error: $e');
       if (!mounted) return;
       setState(() => _isLoading = false);
     }
+  }
+  
+  /// Apply profile data to instance variables
+  void _applyProfileData(Map<String, dynamic> profileResponse) {
+    _userRole = (profileResponse['role'] as String?)?.toLowerCase() ?? '';
+    _userName = profileResponse['full_name'] as String? ?? 
+                profileResponse['name'] as String? ??
+                profileResponse['email'] as String? ?? 
+                'PACT User';
+    _isCoordinator =
+        _userRole == 'coordinator' ||
+        _userRole == 'field_coordinator' ||
+        _userRole == 'state_coordinator';
+    _isDataCollector =
+        _userRole == 'datacollector' ||
+        _userRole == 'enumerator' ||
+        _userRole == 'data_collector';
+
+    _userStateId = profileResponse['state_id'] as String?;
+    _userLocalityId = profileResponse['locality_id'] as String?;
+
+    // Check if user is admin or supervisor (can see all projects)
+    _isAdminOrSuperUser =
+        _userRole == 'admin' ||
+        _userRole == 'super_admin' ||
+        _userRole == 'supervisor' ||
+        _userRole == 'fom';
   }
 
   void _setupRealtimeSubscription() {
@@ -180,13 +284,77 @@ class _MMPScreenState extends State<MMPScreen> {
     }
   }
 
+  /// Fetch user's enumerator fee based on classification
+  Future<void> _loadUserEnumeratorFee() async {
+    if (_userId == null) return;
+    
+    final supabase = Supabase.instance.client;
+    
+    try {
+      // Get user's classification
+      final classificationResult = await supabase
+          .from('user_classifications')
+          .select('classification_level, role_scope, is_active')
+          .eq('user_id', _userId!)
+          .eq('is_active', true)
+          .order('effective_from', ascending: false)
+          .limit(1)
+          .maybeSingle();
+      
+      if (classificationResult == null) {
+        debugPrint('[_loadUserEnumeratorFee] No classification found, using default fee');
+        return;
+      }
+      
+      final classificationLevel = classificationResult['classification_level'];
+      final roleScope = classificationResult['role_scope'];
+      
+      // Get fee structure for this classification
+      final feeResult = await supabase
+          .from('classification_fee_structures')
+          .select('site_visit_base_fee_cents, complexity_multiplier, is_active')
+          .eq('classification_level', classificationLevel)
+          .eq('role_scope', roleScope)
+          .eq('is_active', true)
+          .order('effective_from', ascending: false)
+          .limit(1)
+          .maybeSingle();
+      
+      if (feeResult != null) {
+        final baseFee = (feeResult['site_visit_base_fee_cents'] as num?)?.toDouble() ?? 0;
+        final multiplier = (feeResult['complexity_multiplier'] as num?)?.toDouble() ?? 1.0;
+        _userEnumeratorFee = (baseFee * multiplier * 100).roundToDouble() / 100;
+        debugPrint('[_loadUserEnumeratorFee] Calculated fee: $_userEnumeratorFee SDG (level: $classificationLevel)');
+      } else {
+        debugPrint('[_loadUserEnumeratorFee] No fee structure found, using default');
+      }
+    } catch (e) {
+      debugPrint('[_loadUserEnumeratorFee] Error: $e');
+    }
+  }
+
   Future<void> _loadDataCollectorData({
     bool preserveExistingData = false,
   }) async {
     final supabase = Supabase.instance.client;
 
     try {
-      // Validate session before starting reload
+      // Check connectivity first - if offline, load from cache directly
+      final connectivityResult = await Connectivity().checkConnectivity();
+      final isOffline = connectivityResult.contains(ConnectivityResult.none);
+      
+      if (isOffline) {
+        debugPrint('[_loadDataCollectorData] Offline - loading all data from cache');
+        await _loadAvailableSitesFromCache();
+        await _loadSmartAssignedSitesFromCache();
+        await _loadMySitesFromCache();
+        await _loadUnsyncedCompletedVisits();
+        _groupAvailableSites();
+        debugPrint('[_loadDataCollectorData] Offline load completed');
+        return;
+      }
+      
+      // Validate session before starting reload (only when online)
       var session = supabase.auth.currentSession;
       if (session == null || session.isExpired) {
         debugPrint('[_loadDataCollectorData] Session expired, refreshing...');
@@ -195,8 +363,13 @@ class _MMPScreenState extends State<MMPScreen> {
           session = supabase.auth.currentSession;
           if (session == null) {
             debugPrint(
-              '[_loadDataCollectorData] Session refresh failed - aborting reload',
+              '[_loadDataCollectorData] Session refresh failed - loading from cache',
             );
+            await _loadAvailableSitesFromCache();
+            await _loadSmartAssignedSitesFromCache();
+            await _loadMySitesFromCache();
+            await _loadUnsyncedCompletedVisits();
+            _groupAvailableSites();
             return;
           }
           // Update _userId if it changed
@@ -206,8 +379,13 @@ class _MMPScreenState extends State<MMPScreen> {
           }
         } catch (refreshError) {
           debugPrint(
-            '[_loadDataCollectorData] Session refresh error: $refreshError',
+            '[_loadDataCollectorData] Session refresh error: $refreshError - loading from cache',
           );
+          await _loadAvailableSitesFromCache();
+          await _loadSmartAssignedSitesFromCache();
+          await _loadMySitesFromCache();
+          await _loadUnsyncedCompletedVisits();
+          _groupAvailableSites();
           return;
         }
       }
@@ -216,8 +394,13 @@ class _MMPScreenState extends State<MMPScreen> {
       final currentUserId = supabase.auth.currentUser?.id;
       if (currentUserId == null) {
         debugPrint(
-          '[_loadDataCollectorData] User ID is null - aborting reload',
+          '[_loadDataCollectorData] User ID is null - loading from cache',
         );
+        await _loadAvailableSitesFromCache();
+        await _loadSmartAssignedSitesFromCache();
+        await _loadMySitesFromCache();
+        await _loadUnsyncedCompletedVisits();
+        _groupAvailableSites();
         return;
       }
       _userId = currentUserId;
@@ -230,6 +413,9 @@ class _MMPScreenState extends State<MMPScreen> {
       if (!preserveExistingData) {
         // Only clear if this is a fresh load, not a background refresh
       }
+
+      // Load user's enumerator fee based on classification
+      await _loadUserEnumeratorFee();
 
       // Load available sites (Dispatched, not accepted, in collector's area)
       await _loadAvailableSites();
@@ -483,6 +669,16 @@ class _MMPScreenState extends State<MMPScreen> {
     try {
       if (_userId == null) return;
 
+      // Check connectivity first
+      final connectivityResult = await Connectivity().checkConnectivity();
+      final isOffline = connectivityResult.contains(ConnectivityResult.none);
+      
+      if (isOffline) {
+        debugPrint('[_loadAvailableSites] Offline - loading from cache');
+        await _loadAvailableSitesFromCache();
+        return;
+      }
+
       // Verify session before query
       var session = supabase.auth.currentSession;
       if (session == null || session.isExpired) {
@@ -548,6 +744,9 @@ class _MMPScreenState extends State<MMPScreen> {
 
       debugPrint('Loaded ${_availableSites.length} available sites');
 
+      // Cache the sites for offline use
+      await _cacheAvailableSites(filteredSites);
+
       // Debug: Print first few sites for verification
       if (_availableSites.isNotEmpty) {
         debugPrint(
@@ -557,8 +756,22 @@ class _MMPScreenState extends State<MMPScreen> {
     } catch (e) {
       debugPrint('[_loadAvailableSites] Error loading available sites: $e');
 
-      // Check if it's an auth error
+      // Check if it's a network error - fall back to cache
       final errorStr = e.toString().toLowerCase();
+      if (e is SocketException ||
+          errorStr.contains('socketexception') ||
+          errorStr.contains('failed host lookup') ||
+          errorStr.contains('connection refused') ||
+          errorStr.contains('network is unreachable') ||
+          errorStr.contains('no address associated') ||
+          errorStr.contains('connection timed out') ||
+          errorStr.contains('errno = 7')) {
+        debugPrint('[_loadAvailableSites] Network error - falling back to cache');
+        await _loadAvailableSitesFromCache();
+        return;
+      }
+
+      // Check if it's an auth error
       if (errorStr.contains('auth') ||
           errorStr.contains('unauthorized') ||
           errorStr.contains('jwt') ||
@@ -576,9 +789,52 @@ class _MMPScreenState extends State<MMPScreen> {
         }
       }
 
-      _availableSites = [];
+      // Try to load from cache as last resort
+      if (_availableSites.isEmpty) {
+        await _loadAvailableSitesFromCache();
+      }
+    }
+  }
 
-      // Don't show error to user for reload operations - it's not critical
+  Future<void> _cacheAvailableSites(List<Map<String, dynamic>> sites) async {
+    try {
+      final offlineDb = OfflineDb();
+      await offlineDb.cacheItem(
+        OfflineDb.siteCacheBox,
+        'available_sites_$_userId',
+        data: {'sites': sites},
+        ttl: const Duration(hours: 24),
+      );
+      debugPrint('[_cacheAvailableSites] Cached ${sites.length} available sites');
+    } catch (e) {
+      debugPrint('[_cacheAvailableSites] Error caching sites: $e');
+    }
+  }
+
+  Future<void> _loadAvailableSitesFromCache() async {
+    try {
+      final offlineDb = OfflineDb();
+      final cachedItem = offlineDb.getCachedItem(
+        OfflineDb.siteCacheBox,
+        'available_sites_$_userId',
+      );
+      
+      if (cachedItem != null && cachedItem.data != null) {
+        final data = cachedItem.data as Map<String, dynamic>;
+        final sites = data['sites'] as List?;
+        if (sites != null) {
+          _availableSites = sites.map((e) => e as Map<String, dynamic>).toList();
+          debugPrint('[_loadAvailableSitesFromCache] Loaded ${_availableSites.length} sites from cache');
+        } else {
+          _availableSites = [];
+        }
+      } else {
+        debugPrint('[_loadAvailableSitesFromCache] No cached sites found');
+        _availableSites = [];
+      }
+    } catch (e) {
+      debugPrint('[_loadAvailableSitesFromCache] Error loading from cache: $e');
+      _availableSites = [];
     }
   }
 
@@ -587,6 +843,16 @@ class _MMPScreenState extends State<MMPScreen> {
 
     try {
       if (_userId == null) return;
+
+      // Check connectivity first
+      final connectivityResult = await Connectivity().checkConnectivity();
+      final isOffline = connectivityResult.contains(ConnectivityResult.none);
+      
+      if (isOffline) {
+        debugPrint('[_loadSmartAssignedSites] Offline - loading from cache');
+        await _loadSmartAssignedSitesFromCache();
+        return;
+      }
 
       // Verify session before query
       var session = supabase.auth.currentSession;
@@ -609,10 +875,10 @@ class _MMPScreenState extends State<MMPScreen> {
 
       // Filter out cost-acknowledged sites
       List<Map<String, dynamic>> costFilteredSites = allSites.where((site) {
-        final additionalData = site['additional_data'] as Map<String, dynamic>?;
+        final additionalData = _safeParseAdditionalData(site['additional_data']);
         final costAcknowledged =
             site['cost_acknowledged'] ??
-            additionalData?['cost_acknowledged'] ??
+            additionalData['cost_acknowledged'] ??
             false;
         return !costAcknowledged;
       }).toList();
@@ -639,13 +905,30 @@ class _MMPScreenState extends State<MMPScreen> {
       }
 
       _smartAssignedSites = costFilteredSites;
+      
+      // Cache for offline use
+      await _cacheSmartAssignedSites(costFilteredSites);
     } catch (e) {
       debugPrint(
         '[_loadSmartAssignedSites] Error loading smart assigned sites: $e',
       );
 
-      // Check if it's an auth error
+      // Check if it's a network error - fall back to cache
       final errorStr = e.toString().toLowerCase();
+      if (e is SocketException ||
+          errorStr.contains('socketexception') ||
+          errorStr.contains('failed host lookup') ||
+          errorStr.contains('connection refused') ||
+          errorStr.contains('network is unreachable') ||
+          errorStr.contains('no address associated') ||
+          errorStr.contains('connection timed out') ||
+          errorStr.contains('errno = 7')) {
+        debugPrint('[_loadSmartAssignedSites] Network error - falling back to cache');
+        await _loadSmartAssignedSitesFromCache();
+        return;
+      }
+
+      // Check if it's an auth error
       if (errorStr.contains('auth') ||
           errorStr.contains('unauthorized') ||
           errorStr.contains('jwt') ||
@@ -661,6 +944,53 @@ class _MMPScreenState extends State<MMPScreen> {
           );
         }
       }
+      
+      // Try cache as fallback
+      if (_smartAssignedSites.isEmpty) {
+        await _loadSmartAssignedSitesFromCache();
+      }
+    }
+  }
+
+  Future<void> _cacheSmartAssignedSites(List<Map<String, dynamic>> sites) async {
+    try {
+      final offlineDb = OfflineDb();
+      await offlineDb.cacheItem(
+        OfflineDb.siteCacheBox,
+        'smart_assigned_sites_$_userId',
+        data: {'sites': sites},
+        ttl: const Duration(hours: 24),
+      );
+      debugPrint('[_cacheSmartAssignedSites] Cached ${sites.length} assigned sites');
+    } catch (e) {
+      debugPrint('[_cacheSmartAssignedSites] Error caching sites: $e');
+    }
+  }
+
+  Future<void> _loadSmartAssignedSitesFromCache() async {
+    try {
+      final offlineDb = OfflineDb();
+      final cachedItem = offlineDb.getCachedItem(
+        OfflineDb.siteCacheBox,
+        'smart_assigned_sites_$_userId',
+      );
+      
+      if (cachedItem != null && cachedItem.data != null) {
+        final data = cachedItem.data as Map<String, dynamic>;
+        final sites = data['sites'] as List?;
+        if (sites != null) {
+          _smartAssignedSites = sites.map((e) => e as Map<String, dynamic>).toList();
+          debugPrint('[_loadSmartAssignedSitesFromCache] Loaded ${_smartAssignedSites.length} sites from cache');
+        } else {
+          _smartAssignedSites = [];
+        }
+      } else {
+        debugPrint('[_loadSmartAssignedSitesFromCache] No cached sites found');
+        _smartAssignedSites = [];
+      }
+    } catch (e) {
+      debugPrint('[_loadSmartAssignedSitesFromCache] Error loading from cache: $e');
+      _smartAssignedSites = [];
     }
   }
 
@@ -669,6 +999,16 @@ class _MMPScreenState extends State<MMPScreen> {
 
     try {
       if (_userId == null) return;
+
+      // Check connectivity first
+      final connectivityResult = await Connectivity().checkConnectivity();
+      final isOffline = connectivityResult.contains(ConnectivityResult.none);
+      
+      if (isOffline) {
+        debugPrint('[_loadMySites] Offline - loading from cache');
+        await _loadMySitesFromCache();
+        return;
+      }
 
       // Verify session before query
       var session = supabase.auth.currentSession;
@@ -709,12 +1049,30 @@ class _MMPScreenState extends State<MMPScreen> {
         );
       }
 
-      _mySites = allSites;
+      // Merge with any pending offline data before setting state
+      _mySites = await _mergeWithOfflineData(allSites);
+      
+      // Cache for offline use (only server data, not merged)
+      await _cacheMySites(allSites);
     } catch (e) {
       debugPrint('[_loadMySites] Error loading my sites: $e');
 
-      // Check if it's an auth error
+      // Check if it's a network error - fall back to cache
       final errorStr = e.toString().toLowerCase();
+      if (e is SocketException ||
+          errorStr.contains('socketexception') ||
+          errorStr.contains('failed host lookup') ||
+          errorStr.contains('connection refused') ||
+          errorStr.contains('network is unreachable') ||
+          errorStr.contains('no address associated') ||
+          errorStr.contains('connection timed out') ||
+          errorStr.contains('errno = 7')) {
+        debugPrint('[_loadMySites] Network error - falling back to cache');
+        await _loadMySitesFromCache();
+        return;
+      }
+
+      // Check if it's an auth error
       if (errorStr.contains('auth') ||
           errorStr.contains('unauthorized') ||
           errorStr.contains('jwt') ||
@@ -726,6 +1084,155 @@ class _MMPScreenState extends State<MMPScreen> {
           debugPrint('[_loadMySites] Session refresh failed: $refreshError');
         }
       }
+      
+      // Try cache as fallback
+      if (_mySites.isEmpty) {
+        await _loadMySitesFromCache();
+      }
+    }
+  }
+
+  Future<void> _cacheMySites(List<Map<String, dynamic>> sites) async {
+    try {
+      final offlineDb = OfflineDb();
+      await offlineDb.cacheItem(
+        OfflineDb.siteCacheBox,
+        'my_sites_$_userId',
+        data: {'sites': sites},
+        ttl: const Duration(hours: 24),
+      );
+      debugPrint('[_cacheMySites] Cached ${sites.length} my sites');
+    } catch (e) {
+      debugPrint('[_cacheMySites] Error caching sites: $e');
+    }
+  }
+
+  Future<void> _loadMySitesFromCache() async {
+    try {
+      final offlineDb = OfflineDb();
+      final cachedItem = offlineDb.getCachedItem(
+        OfflineDb.siteCacheBox,
+        'my_sites_$_userId',
+      );
+      
+      if (cachedItem != null && cachedItem.data != null) {
+        final data = cachedItem.data as Map<String, dynamic>;
+        final sites = data['sites'] as List?;
+        if (sites != null) {
+          final cachedSites = sites.map((e) => e as Map<String, dynamic>).toList();
+          // Merge with offline data when loading from cache
+          _mySites = await _mergeWithOfflineData(cachedSites);
+          debugPrint('[_loadMySitesFromCache] Loaded ${_mySites.length} sites from cache (merged with offline)');
+        } else {
+          _mySites = [];
+        }
+      } else {
+        debugPrint('[_loadMySitesFromCache] No cached sites found');
+        _mySites = [];
+      }
+    } catch (e) {
+      debugPrint('[_loadMySitesFromCache] Error loading from cache: $e');
+      _mySites = [];
+    }
+  }
+
+  /// Safely parse additional_data which may be a JSON string or Map
+  Map<String, dynamic> _safeParseAdditionalData(dynamic data) {
+    if (data is String) {
+      try {
+        return Map<String, dynamic>.from(jsonDecode(data) as Map<String, dynamic>);
+      } catch (_) {
+        return {};
+      }
+    } else if (data is Map<String, dynamic>) {
+      return Map<String, dynamic>.from(data);
+    } else if (data is Map) {
+      return Map<String, dynamic>.from(data);
+    }
+    return {};
+  }
+
+  /// Merge server/cached sites with pending offline data from OfflineDb
+  Future<List<Map<String, dynamic>>> _mergeWithOfflineData(
+    List<Map<String, dynamic>> sites,
+  ) async {
+    try {
+      final offlineDb = OfflineDb();
+      final pendingVisits = offlineDb.getPendingSiteVisits();
+      
+      if (pendingVisits.isEmpty) {
+        return sites;
+      }
+      
+      debugPrint('[_mergeWithOfflineData] Found ${pendingVisits.length} pending offline visits');
+      
+      // Create a map of pending visits by siteEntryId for quick lookup
+      final pendingMap = <String, OfflineSiteVisit>{};
+      for (final visit in pendingVisits) {
+        pendingMap[visit.siteEntryId] = visit;
+      }
+      
+      // Merge offline data into sites
+      final mergedSites = sites.map((site) {
+        final siteId = site['id']?.toString();
+        if (siteId == null) return site;
+        
+        final pendingVisit = pendingMap[siteId];
+        if (pendingVisit == null) return site;
+        
+        // Merge offline data into the site
+        final mergedSite = Map<String, dynamic>.from(site);
+        mergedSite['_offline_modified'] = true;
+        mergedSite['_synced'] = false;
+        
+        // Override status/category from offline visit so local changes are visible
+        if (pendingVisit.status == 'completed') {
+          mergedSite['status'] = 'Completed';
+          mergedSite['_category'] = 'completed';
+          if (pendingVisit.completedAt != null) {
+            mergedSite['visit_completed_at'] = pendingVisit.completedAt!.toIso8601String();
+          }
+        } else if (pendingVisit.status == 'draft') {
+          // Draft means started but not completed - should show as Ongoing
+          mergedSite['status'] = 'Ongoing';
+          mergedSite['_category'] = 'ongoing';
+          if (pendingVisit.startedAt != null) {
+            mergedSite['visit_started_at'] = pendingVisit.startedAt.toIso8601String();
+          }
+        }
+        
+        // Always normalize additional_data to a Map for consistent handling
+        final additionalData = _safeParseAdditionalData(site['additional_data']);
+        
+        // Preserve GPS coordinates from offline visit
+        if (pendingVisit.startLocation != null) {
+          additionalData['start_location'] = pendingVisit.startLocation;
+        }
+        
+        // Always set the normalized additional_data
+        mergedSite['additional_data'] = additionalData;
+        
+        // Preserve completion data
+        if (pendingVisit.status == 'completed' || pendingVisit.status == 'draft') {
+          if (pendingVisit.notes != null) {
+            mergedSite['_offline_notes'] = pendingVisit.notes;
+          }
+          if (pendingVisit.photos != null && pendingVisit.photos!.isNotEmpty) {
+            mergedSite['_offline_photos'] = pendingVisit.photos;
+          }
+          if (pendingVisit.endLocation != null) {
+            mergedSite['_offline_end_location'] = pendingVisit.endLocation;
+          }
+        }
+        
+        debugPrint('[_mergeWithOfflineData] Merged offline data for site: $siteId (status: ${pendingVisit.status})');
+        return mergedSite;
+      }).toList();
+      
+      return mergedSites;
+    } catch (e) {
+      debugPrint('[_mergeWithOfflineData] Error merging offline data: $e');
+      return sites;
     }
   }
 
@@ -809,8 +1316,8 @@ class _MMPScreenState extends State<MMPScreen> {
       // Also check additional_data for visit_report_submitted flag (backup check)
       final sitesWithReportFlag = allCompletedSites
           .where((site) {
-            final additionalData = site['additional_data'] as Map<String, dynamic>?;
-            return additionalData?['visit_report_submitted'] == true;
+            final additionalData = _safeParseAdditionalData(site['additional_data']);
+            return additionalData['visit_report_submitted'] == true;
           })
           .map((site) => site['id']?.toString())
           .where((id) => id != null && id.isNotEmpty)
@@ -1330,12 +1837,307 @@ class _MMPScreenState extends State<MMPScreen> {
           ),
         );
       }
+
+      // View Report Button for completed visits (Admin/FOM/ICT only)
+      if ((status.toString().toLowerCase() == 'completed' ||
+              status.toString().toLowerCase() == 'complete')) {
+        final canViewReport = _isAdminOrSuperUser || 
+                              _userRole == 'fom' ||
+                              _userRole == 'ict';
+        if (canViewReport) {
+          buttons.add(
+            Expanded(
+              child: ElevatedButton.icon(
+                onPressed: () => _viewVisitReport(site),
+                icon: const Icon(Icons.visibility, size: 18),
+                label: const Text('View Report'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+              ),
+            ),
+          );
+        }
+      }
     }
 
     if (buttons.isEmpty) return const SizedBox.shrink();
 
     // Use Row with Expanded widgets - they'll share space equally
     return Row(children: buttons);
+  }
+
+  // ==================== CALL AND MESSAGE FUNCTIONALITY ====================
+
+  /// Make a phone call to a contact
+  Future<void> _makeCall(String phoneNumber) async {
+    final cleanPhone = phoneNumber.replaceAll(RegExp(r'[^\d+]'), '');
+    final uri = Uri.parse('tel:$cleanPhone');
+    try {
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri);
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Cannot make phone calls on this device'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('[_makeCall] Error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to make call: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  /// Send an SMS message to a contact
+  Future<void> _sendSMS(String phoneNumber, {String? message}) async {
+    final cleanPhone = phoneNumber.replaceAll(RegExp(r'[^\d+]'), '');
+    final uri = message != null 
+        ? Uri.parse('sms:$cleanPhone?body=${Uri.encodeComponent(message)}')
+        : Uri.parse('sms:$cleanPhone');
+    try {
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri);
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Cannot send SMS on this device'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('[_sendSMS] Error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to send SMS: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  /// Open WhatsApp chat with a contact
+  Future<void> _openWhatsApp(String phoneNumber, {String? message}) async {
+    // Remove any non-digit characters except +
+    String cleanPhone = phoneNumber.replaceAll(RegExp(r'[^\d+]'), '');
+    
+    // Handle country codes properly
+    if (cleanPhone.startsWith('+')) {
+      // Already has country code, just remove the +
+      cleanPhone = cleanPhone.substring(1);
+    } else if (cleanPhone.startsWith('00')) {
+      // International format with 00 prefix
+      cleanPhone = cleanPhone.substring(2);
+    } else if (cleanPhone.startsWith('0')) {
+      // Local number - assume Sudan country code (249)
+      cleanPhone = '249${cleanPhone.substring(1)}';
+    }
+    // If it's just digits without any prefix and has 9+ digits, assume it already has country code
+    
+    final uri = message != null
+        ? Uri.parse('https://wa.me/$cleanPhone?text=${Uri.encodeComponent(message)}')
+        : Uri.parse('https://wa.me/$cleanPhone');
+    
+    try {
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('WhatsApp is not installed'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('[_openWhatsApp] Error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to open WhatsApp: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  /// Initiate an in-app WebRTC call to a PACT user
+  Future<void> _initiateInAppCall(String targetUserId, String targetUserName, {bool isAudioOnly = true}) async {
+    try {
+      // Use existing singleton instance - already initialized at app startup in main_screen.dart
+      final webrtcService = WebRTCService();
+      
+      // Check if user is logged in
+      if (_userId == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Unable to initiate call. Please try again.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+      
+      // Check if already in a call
+      if (webrtcService.callState.isInCall) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('You are already in a call'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        return;
+      }
+      
+      // Initiate the call (service should already be initialized at app startup)
+      final success = await webrtcService.initiateCall(
+        targetUserId,
+        targetUserName,
+        isAudioOnly: isAudioOnly,
+      );
+      
+      if (success && mounted) {
+        // Navigate to call screen
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (context) => CallScreen(
+              remoteUserName: targetUserName,
+            ),
+          ),
+        );
+      } else if (mounted) {
+        final callState = webrtcService.callState;
+        String message = 'Unable to connect call';
+        if (callState.status == CallStatus.busy) {
+          message = '$targetUserName is busy on another call';
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(message),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('[_initiateInAppCall] Error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to start call: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  /// Build contact buttons row for a site
+  Widget _buildContactButtons(Map<String, dynamic> site) {
+    // Try to get phone number from various possible fields
+    final phone = site['contact_phone'] ?? 
+                  site['phone'] ?? 
+                  site['phone_number'] ??
+                  site['enumerator_phone'] ??
+                  site['assigned_phone'];
+    
+    // Check if contact is a PACT user (has user_id)
+    final contactUserId = site['accepted_by'] ?? 
+                          site['assigned_to'] ?? 
+                          site['enumerator_id'] ??
+                          site['coordinator_id'];
+    final contactName = site['enumerator_name'] ?? 
+                        site['assigned_name'] ?? 
+                        site['coordinator_name'] ??
+                        'PACT User';
+    final isPactUser = contactUserId != null && contactUserId.toString().isNotEmpty;
+    
+    // If no phone and not a PACT user, don't show buttons
+    if ((phone == null || phone.toString().isEmpty) && !isPactUser) {
+      return const SizedBox.shrink();
+    }
+    
+    final phoneStr = phone?.toString() ?? '';
+    final siteName = site['site_name'] ?? site['siteName'] ?? 'Site';
+    
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      child: Column(
+        children: [
+          // In-App Call button removed per user request - use Communications screen instead
+          // External contact buttons (Phone, SMS, WhatsApp)
+          if (phoneStr.isNotEmpty)
+            Row(
+              children: [
+                // Call Button (native phone)
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _makeCall(phoneStr),
+                    icon: const Icon(Icons.phone, size: 16),
+                    label: const Text('Call'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.green,
+                      side: const BorderSide(color: Colors.green),
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                // SMS Button
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _sendSMS(phoneStr, message: 'Regarding site visit: $siteName'),
+                    icon: const Icon(Icons.message, size: 16),
+                    label: const Text('SMS'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.blue,
+                      side: const BorderSide(color: Colors.blue),
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                // WhatsApp Button
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _openWhatsApp(phoneStr, message: 'Hello, regarding site visit: $siteName'),
+                    icon: const Icon(Icons.chat, size: 16),
+                    label: const Text('WhatsApp'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF25D366),
+                      side: const BorderSide(color: Color(0xFF25D366)),
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+        ],
+      ),
+    );
   }
 
   Future<void> _acknowledgeCost(Map<String, dynamic> site) async {
@@ -1361,7 +2163,7 @@ class _MMPScreenState extends State<MMPScreen> {
             'accepted_by': _userId,
             'updated_at': now,
             'additional_data': {
-              ...(site['additional_data'] as Map<String, dynamic>? ?? {}),
+              ..._safeParseAdditionalData(site['additional_data']),
               'cost_acknowledged': true,
               'cost_acknowledged_at': now,
               'cost_acknowledged_by': _userId,
@@ -1398,48 +2200,11 @@ class _MMPScreenState extends State<MMPScreen> {
     final supabase = Supabase.instance.client;
 
     try {
-      // Validate and refresh session before starting operation
-      final session = supabase.auth.currentSession;
-
-      debugPrint(
-        '[_startVisit] Session check - valid: ${session != null}, expired: ${session?.isExpired ?? true}',
-      );
-
-      if (session == null || session.isExpired) {
-        debugPrint(
-          '[_startVisit] Session expired or missing, attempting refresh...',
-        );
-        try {
-          await supabase.auth.refreshSession();
-          debugPrint('[_startVisit] Session refreshed successfully');
-        } catch (refreshError) {
-          debugPrint('[_startVisit] Session refresh failed: $refreshError');
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Session expired. Please log in again.'),
-                backgroundColor: Colors.red,
-              ),
-            );
-          }
-          return;
-        }
-      }
-
-      // Re-check user ID after potential refresh
-      final userId = supabase.auth.currentUser?.id;
-      if (userId == null) {
-        debugPrint('[_startVisit] User ID is null after session check');
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Authentication error. Please log in again.'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-        return;
-      }
+      // Check connectivity first
+      final connectivity = await Connectivity().checkConnectivity();
+      final isOffline = connectivity.contains(ConnectivityResult.none);
+      
+      debugPrint('[_startVisit] Connectivity check - offline: $isOffline');
 
       // Check location permissions
       final hasPermission = await LocationService.checkPermissions();
@@ -1465,7 +2230,7 @@ class _MMPScreenState extends State<MMPScreen> {
 
       if (confirmed != true) return;
 
-      // Get current location
+      // Get current location (works offline - uses device GPS)
       final position = await LocationService.getCurrentLocation();
       if (position == null) {
         if (mounted) {
@@ -1485,6 +2250,11 @@ class _MMPScreenState extends State<MMPScreen> {
       final isAssigned =
           siteStatus == 'assigned' && site['accepted_by'] == null;
 
+      // Calculate fees from cached data (works offline)
+      final enumeratorFee = (site['enumerator_fee'] as num?)?.toDouble() ?? 0.0;
+      final transportFee = (site['transport_fee'] as num?)?.toDouble() ?? 0.0;
+      final calculatedCost = enumeratorFee + transportFee;
+
       // Build update data
       final updateData = <String, dynamic>{
         'status': 'In Progress',
@@ -1495,8 +2265,7 @@ class _MMPScreenState extends State<MMPScreen> {
 
       // Add location to additional_data if available
       if (position != null) {
-        final additionalData =
-            site['additional_data'] as Map<String, dynamic>? ?? {};
+        final additionalData = _safeParseAdditionalData(site['additional_data']);
         additionalData['start_location'] = {
           'latitude': position.latitude,
           'longitude': position.longitude,
@@ -1510,25 +2279,6 @@ class _MMPScreenState extends State<MMPScreen> {
       if (isAssigned) {
         updateData['accepted_by'] = _userId;
         updateData['accepted_at'] = now;
-
-        // Fetch fresh site data to get latest fees
-        final freshSite = await Supabase.instance.client
-            .from('mmp_site_entries')
-            .select('enumerator_fee, transport_fee, cost')
-            .eq('id', site['id'])
-            .maybeSingle();
-
-        // Calculate fees if missing
-        var enumeratorFee =
-            (freshSite?['enumerator_fee'] as num?)?.toDouble() ?? 0.0;
-        final transportFee =
-            (freshSite?['transport_fee'] as num?)?.toDouble() ??
-            (site['transport_fee'] as num?)?.toDouble() ??
-            0.0;
-
-        // Calculate total cost
-        final calculatedCost = enumeratorFee + transportFee;
-
         if (enumeratorFee > 0 || calculatedCost > 0) {
           updateData['enumerator_fee'] = enumeratorFee;
           updateData['transport_fee'] = transportFee;
@@ -1536,20 +2286,118 @@ class _MMPScreenState extends State<MMPScreen> {
         }
       }
 
-      // Verify session is still valid before database operation
-      final currentSession = supabase.auth.currentSession;
-      if (currentSession == null || currentSession.isExpired) {
+      // OFFLINE MODE: Queue for sync and update local cache
+      if (isOffline) {
+        debugPrint('[_startVisit] Offline mode - saving locally');
+        
+        // Build start location from GPS
+        final startLocation = position != null
+            ? {
+                'latitude': position.latitude,
+                'longitude': position.longitude,
+                'accuracy': position.accuracy,
+              }
+            : <String, dynamic>{};
+        
+        // Queue using OfflineDataService with site metadata
+        final offlineDataService = OfflineDataService();
+        await offlineDataService.queueStartVisit(
+          visitId: site['id'].toString(),
+          userId: _userId ?? '',
+          startLocation: startLocation,
+          siteName: site['site_name']?.toString() ?? site['siteName']?.toString(),
+          siteCode: site['site_code']?.toString() ?? site['siteCode']?.toString(),
+          state: site['state']?.toString(),
+          locality: site['locality']?.toString(),
+        );
+        
+        // Note: Don't call forceSync while offline - SyncManager will pick up pending actions
+        // when connectivity is restored via auto-sync
+        
+        // Update local cache
+        final updatedSite = Map<String, dynamic>.from(site);
+        updatedSite.addAll(updateData);
+        updatedSite['_offline_modified'] = true;
+        updatedSite['_synced'] = false;
+        
+        // Update in _mySites list
+        final siteIndex = _mySites.indexWhere((s) => s['id'] == site['id']);
+        if (siteIndex != -1) {
+          _mySites[siteIndex] = updatedSite;
+        }
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Visit started (offline). Will sync when online.'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+          setState(() {});
+        }
+        return;
+      }
+
+      // ONLINE MODE: Validate session and update database
+      final session = supabase.auth.currentSession;
+      debugPrint(
+        '[_startVisit] Session check - valid: ${session != null}, expired: ${session?.isExpired ?? true}',
+      );
+
+      if (session == null || session.isExpired) {
         debugPrint(
-          '[_startVisit] Session expired during operation, refreshing...',
+          '[_startVisit] Session expired or missing, attempting refresh...',
         );
         try {
           await supabase.auth.refreshSession();
+          debugPrint('[_startVisit] Session refreshed successfully');
         } catch (refreshError) {
-          debugPrint(
-            '[_startVisit] Session refresh failed during operation: $refreshError',
+          debugPrint('[_startVisit] Session refresh failed: $refreshError');
+          // Fall back to offline mode
+          debugPrint('[_startVisit] Falling back to offline mode');
+          final startLocation = position != null
+              ? {
+                  'latitude': position.latitude,
+                  'longitude': position.longitude,
+                  'accuracy': position.accuracy,
+                }
+              : <String, dynamic>{};
+          final offlineDataService = OfflineDataService();
+          await offlineDataService.queueStartVisit(
+            visitId: site['id'].toString(),
+            userId: _userId ?? '',
+            startLocation: startLocation,
+            siteName: site['site_name']?.toString() ?? site['siteName']?.toString(),
+            siteCode: site['site_code']?.toString() ?? site['siteCode']?.toString(),
+            state: site['state']?.toString(),
+            locality: site['locality']?.toString(),
           );
-          throw Exception('Session expired. Please try again.');
+          // SyncManager will pick up pending actions when online
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Visit started (will sync when online).'),
+                backgroundColor: Colors.orange,
+              ),
+            );
+          }
+          return;
         }
+      }
+
+      // Re-check user ID after potential refresh
+      final userId = supabase.auth.currentUser?.id;
+      if (userId == null) {
+        debugPrint('[_startVisit] User ID is null after session check');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Authentication error. Please log in again.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
       }
 
       // Update database
@@ -1561,8 +2409,42 @@ class _MMPScreenState extends State<MMPScreen> {
         debugPrint('[_startVisit] Database update successful');
       } catch (dbError) {
         debugPrint('[_startVisit] Database error: $dbError');
-        // Check if it's an auth-related error
+        // Check if it's a network error - queue offline
         final errorStr = dbError.toString().toLowerCase();
+        if (errorStr.contains('socket') ||
+            errorStr.contains('network') ||
+            errorStr.contains('host lookup') ||
+            errorStr.contains('connection')) {
+          debugPrint('[_startVisit] Network error - queueing offline');
+          final startLocation = position != null
+              ? {
+                  'latitude': position.latitude,
+                  'longitude': position.longitude,
+                  'accuracy': position.accuracy,
+                }
+              : <String, dynamic>{};
+          final offlineDataService = OfflineDataService();
+          await offlineDataService.queueStartVisit(
+            visitId: site['id'].toString(),
+            userId: _userId ?? '',
+            startLocation: startLocation,
+            siteName: site['site_name']?.toString() ?? site['siteName']?.toString(),
+            siteCode: site['site_code']?.toString() ?? site['siteCode']?.toString(),
+            state: site['state']?.toString(),
+            locality: site['locality']?.toString(),
+          );
+          // SyncManager will pick up pending actions when online
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Visit started (will sync when online).'),
+                backgroundColor: Colors.orange,
+              ),
+            );
+          }
+          return;
+        }
+        // Check if it's an auth-related error
         if (errorStr.contains('auth') ||
             errorStr.contains('unauthorized') ||
             errorStr.contains('jwt') ||
@@ -1629,7 +2511,129 @@ class _MMPScreenState extends State<MMPScreen> {
         '[_completeVisit] Starting completion for site: ${site['id']}',
       );
 
-      // Validate and refresh session before starting operation
+      // Check connectivity first
+      final connectivity = await Connectivity().checkConnectivity();
+      final isOffline = connectivity.contains(ConnectivityResult.none);
+      
+      debugPrint('[_completeVisit] Connectivity check - offline: $isOffline');
+
+      // Show visit report dialog first (works offline)
+      final reportData = await showDialog<VisitReportData>(
+        context: context,
+        builder: (context) => VisitReportDialog(site: site),
+      );
+
+      if (reportData == null) return;
+
+      // Get final location (works offline - uses device GPS)
+      final position =
+          reportData.coordinates ?? await LocationService.getCurrentLocation();
+
+      final now = DateTime.now().toIso8601String();
+
+      // Build coordinates JSON
+      final coordinates = position != null
+          ? {
+              'latitude': position.latitude,
+              'longitude': position.longitude,
+              'accuracy': position.accuracy,
+            }
+          : <String, dynamic>{};
+
+      // Calculate fees from cached data (works offline)
+      final enumeratorFee = (site['enumerator_fee'] as num?)?.toDouble() ?? 0.0;
+      final transportFee = (site['transport_fee'] as num?)?.toDouble() ?? 0.0;
+      final totalCost = enumeratorFee + transportFee;
+
+      // OFFLINE MODE: Save locally and queue for sync
+      if (isOffline) {
+        debugPrint('[_completeVisit] Offline mode - saving locally');
+        
+        // Build end location map
+        final endLocation = coordinates.isNotEmpty ? coordinates : <String, dynamic>{};
+        
+        // Convert photos to base64 for offline storage
+        final List<String> photoBase64Urls = [];
+        for (final photoPath in reportData.photos) {
+          try {
+            final file = File(photoPath);
+            final bytes = await file.readAsBytes();
+            final base64String = 'data:image/jpeg;base64,${base64Encode(bytes)}';
+            photoBase64Urls.add(base64String);
+          } catch (e) {
+            debugPrint('[_completeVisit] Error converting photo to base64: $e');
+          }
+        }
+        
+        // Get start location from additional_data if available (safely handle JSON string or map)
+        Map<String, dynamic> additionalData;
+        final existingData = site['additional_data'];
+        if (existingData is String) {
+          try {
+            additionalData = Map<String, dynamic>.from(jsonDecode(existingData) as Map<String, dynamic>);
+          } catch (_) {
+            additionalData = {};
+          }
+        } else if (existingData is Map<String, dynamic>) {
+          additionalData = Map<String, dynamic>.from(existingData);
+        } else {
+          additionalData = {};
+        }
+        final savedStartLocation = additionalData['start_location'] as Map<String, dynamic>?;
+        
+        // Queue using OfflineDataService with site metadata
+        final offlineDataService = OfflineDataService();
+        await offlineDataService.queueCompleteVisit(
+          visitId: site['id'].toString(),
+          userId: _userId ?? '',
+          endLocation: endLocation,
+          notes: reportData.notes,
+          activities: reportData.activities,
+          durationMinutes: reportData.durationMinutes,
+          photoDataUrls: photoBase64Urls,
+          siteName: site['site_name']?.toString() ?? site['siteName']?.toString(),
+          siteCode: site['site_code']?.toString() ?? site['siteCode']?.toString(),
+          state: site['state']?.toString(),
+          locality: site['locality']?.toString(),
+          startLocation: savedStartLocation,
+        );
+        
+        // Note: Don't call forceSync while offline - SyncManager will pick up pending actions
+        // when connectivity is restored via auto-sync
+        
+        // Update local cache with all offline data preserved
+        final updatedSite = Map<String, dynamic>.from(site);
+        updatedSite['status'] = 'Completed';
+        updatedSite['visit_completed_at'] = now;
+        updatedSite['_offline_modified'] = true;
+        updatedSite['_synced'] = false;
+        updatedSite['_offline_notes'] = reportData.notes;
+        updatedSite['_offline_activities'] = reportData.activities;
+        updatedSite['_offline_photos'] = photoBase64Urls;
+        updatedSite['_offline_end_location'] = endLocation;
+        
+        // Update in _mySites list
+        final siteIndex = _mySites.indexWhere((s) => s['id'] == site['id']);
+        if (siteIndex != -1) {
+          _mySites[siteIndex] = updatedSite;
+        }
+        
+        // Add to unsynced list for Outbox display
+        _unsyncedCompletedVisits.add(updatedSite);
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Visit completed (offline). Will sync when online.'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+          setState(() {});
+        }
+        return;
+      }
+
+      // ONLINE MODE: Validate session
       final session = supabase.auth.currentSession;
       debugPrint(
         '[_completeVisit] Session check - valid: ${session != null}, expired: ${session?.isExpired ?? true}',
@@ -1644,13 +2648,62 @@ class _MMPScreenState extends State<MMPScreen> {
           debugPrint('[_completeVisit] Session refreshed successfully');
         } catch (refreshError) {
           debugPrint('[_completeVisit] Session refresh failed: $refreshError');
+          // Fall back to offline mode
+          debugPrint('[_completeVisit] Falling back to offline mode');
+          final endLocation = coordinates.isNotEmpty ? coordinates : <String, dynamic>{};
+          
+          // Convert photos to base64
+          final List<String> photoBase64Urls = [];
+          for (final photoPath in reportData.photos) {
+            try {
+              final file = File(photoPath);
+              final bytes = await file.readAsBytes();
+              final base64String = 'data:image/jpeg;base64,${base64Encode(bytes)}';
+              photoBase64Urls.add(base64String);
+            } catch (e) {
+              debugPrint('[_completeVisit] Error converting photo to base64: $e');
+            }
+          }
+          
+          // Get start location from additional_data if available (safely handle JSON string or map)
+          final additionalData = _safeParseAdditionalData(site['additional_data']);
+          final savedStartLocation = additionalData['start_location'] as Map<String, dynamic>?;
+          
+          final offlineDataService = OfflineDataService();
+          await offlineDataService.queueCompleteVisit(
+            visitId: site['id'].toString(),
+            userId: _userId ?? '',
+            endLocation: endLocation,
+            notes: reportData.notes,
+            activities: reportData.activities,
+            durationMinutes: reportData.durationMinutes,
+            photoDataUrls: photoBase64Urls,
+            siteName: site['site_name']?.toString() ?? site['siteName']?.toString(),
+            siteCode: site['site_code']?.toString() ?? site['siteCode']?.toString(),
+            state: site['state']?.toString(),
+            locality: site['locality']?.toString(),
+            startLocation: savedStartLocation,
+          );
+          
+          // SyncManager will pick up pending actions when online
+          _unsyncedCompletedVisits.add({
+            ...site, 
+            'status': 'Completed', 
+            '_offline_modified': true,
+            '_offline_notes': reportData.notes,
+            '_offline_activities': reportData.activities,
+            '_offline_photos': photoBase64Urls,
+            '_offline_end_location': endLocation,
+          });
+          
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
-                content: Text('Session expired. Please log in again.'),
-                backgroundColor: Colors.red,
+                content: Text('Visit completed (will sync when online).'),
+                backgroundColor: Colors.orange,
               ),
             );
+            setState(() {});
           }
           return;
         }
@@ -1671,36 +2724,22 @@ class _MMPScreenState extends State<MMPScreen> {
         return;
       }
 
-      // Show visit report dialog
-      final reportData = await showDialog<VisitReportData>(
-        context: context,
-        builder: (context) => VisitReportDialog(site: site),
-      );
-
-      if (reportData == null) return;
-
-      // Verify session is still valid after dialog (user may have been idle)
+      // Verify session is still valid after session validation
       var currentSession = supabase.auth.currentSession;
       if (currentSession == null || currentSession.isExpired) {
         debugPrint(
-          '[_completeVisit] Session expired after dialog, refreshing...',
+          '[_completeVisit] Session expired, refreshing...',
         );
         try {
           await supabase.auth.refreshSession();
           currentSession = supabase.auth.currentSession;
         } catch (refreshError) {
           debugPrint(
-            '[_completeVisit] Session refresh failed after dialog: $refreshError',
+            '[_completeVisit] Session refresh failed: $refreshError',
           );
           throw Exception('Session expired. Please try again.');
         }
       }
-
-      // Get final location
-      final position =
-          reportData.coordinates ?? await LocationService.getCurrentLocation();
-
-      final now = DateTime.now().toIso8601String();
 
       // Upload photos with session refresh during long operation
       List<String> photoUrls = [];
@@ -1786,16 +2825,7 @@ class _MMPScreenState extends State<MMPScreen> {
         }
       }
 
-      // Build coordinates JSON to match existing reports schema
-      final coordinates = position != null
-          ? {
-              'latitude': position.latitude,
-              'longitude': position.longitude,
-              'accuracy': position.accuracy,
-            }
-          : <String, dynamic>{};
-
-      // Prepare insert payload to match existing reports table schema
+      // Prepare insert payload to match existing reports table schema (coordinates already defined above)
       final reportInsert = <String, dynamic>{
         'site_visit_id': site['id'],
         'notes': reportData.notes.trim(),
@@ -1927,7 +2957,7 @@ class _MMPScreenState extends State<MMPScreen> {
         'visit_completed_by': userId,
         'updated_at': now,
         'additional_data': {
-          ...(site['additional_data'] as Map<String, dynamic>? ?? {}),
+          ..._safeParseAdditionalData(site['additional_data']),
           'visit_report_submitted': true,
           'visit_report_id': savedReport['id'],
           'visit_report_submitted_at': now,
@@ -2147,8 +3177,8 @@ class _MMPScreenState extends State<MMPScreen> {
     if (isUnsynced) return false;
 
     // Check additional_data flag (most reliable indicator)
-    final additionalData = site['additional_data'] as Map<String, dynamic>?;
-    if (additionalData?['visit_report_submitted'] == true) {
+    final additionalData = _safeParseAdditionalData(site['additional_data']);
+    if (additionalData['visit_report_submitted'] == true) {
       return true;
     }
 
@@ -2483,7 +3513,7 @@ class _MMPScreenState extends State<MMPScreen> {
               child: Text(
                 count.toString(),
                 style: GoogleFonts.poppins(
-                  fontSize: 10,
+                  fontSize: 11,
                   fontWeight: FontWeight.w600,
                   color: isActive ? AppColors.primaryBlue : AppColors.textLight,
                 ),
@@ -2495,12 +3525,14 @@ class _MMPScreenState extends State<MMPScreen> {
     );
   }
 
-  Widget _buildSubTabButton(String tab, String label, int count) {
+  Widget _buildSubTabButton(String tab, String label, int count, {IconData? icon}) {
     final isActive = _mySitesSubTab == tab;
+    // Default icons for sub-tabs if not provided
+    final tabIcon = icon ?? _getSubTabIcon(tab);
     return InkWell(
       onTap: () => setState(() => _mySitesSubTab = tab),
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8),
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
         decoration: BoxDecoration(
           color: isActive
               ? AppColors.primaryBlue.withOpacity(0.1)
@@ -2514,19 +3546,30 @@ class _MMPScreenState extends State<MMPScreen> {
         ),
         child: Column(
           children: [
-            Text(
-              label,
-              style: GoogleFonts.poppins(
-                fontSize: 11,
-                fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
-                color: isActive ? AppColors.primaryBlue : AppColors.textLight,
-              ),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  tabIcon,
+                  size: 14,
+                  color: isActive ? AppColors.primaryBlue : AppColors.textLight,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  label,
+                  style: GoogleFonts.poppins(
+                    fontSize: 13,
+                    fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
+                    color: isActive ? AppColors.primaryBlue : AppColors.textLight,
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 2),
             Text(
               count.toString(),
               style: GoogleFonts.poppins(
-                fontSize: 10,
+                fontSize: 11,
                 color: isActive ? AppColors.primaryBlue : AppColors.textLight,
               ),
             ),
@@ -2534,6 +3577,21 @@ class _MMPScreenState extends State<MMPScreen> {
         ),
       ),
     );
+  }
+
+  IconData _getSubTabIcon(String tab) {
+    switch (tab) {
+      case 'pending':
+        return Icons.pending_actions;
+      case 'drafts':
+        return Icons.edit_note;
+      case 'outbox':
+        return Icons.outbox;
+      case 'sent':
+        return Icons.check_circle_outline;
+      default:
+        return Icons.folder;
+    }
   }
 
   Widget _buildDataCollectorContent() {
@@ -2550,6 +3608,61 @@ class _MMPScreenState extends State<MMPScreen> {
   }
 
   Widget _buildClaimableSites() {
+    // Claimable tab requires internet - show offline message
+    if (_isOffline) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.wifi_off, size: 64, color: AppColors.primaryOrange),
+              const SizedBox(height: 16),
+              Text(
+                'Internet Required',
+                style: GoogleFonts.poppins(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textDark,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Claiming sites requires an internet connection. Please connect to the internet and try again.',
+                style: GoogleFonts.poppins(
+                  fontSize: 14,
+                  color: AppColors.textLight,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton.icon(
+                onPressed: () async {
+                  final result = await Connectivity().checkConnectivity();
+                  final isOffline = result.contains(ConnectivityResult.none);
+                  if (mounted) {
+                    setState(() => _isOffline = isOffline);
+                    if (!isOffline) {
+                      _initializeMMP();
+                    }
+                  }
+                },
+                icon: const Icon(Icons.refresh, color: Colors.white),
+                label: Text(
+                  'Retry',
+                  style: GoogleFonts.poppins(color: Colors.white),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primaryBlue,
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    
     final filtered = _getFilteredSites(_availableSites);
 
     if (filtered.isEmpty) {
@@ -2826,9 +3939,13 @@ class _MMPScreenState extends State<MMPScreen> {
     final state = site['state'] ?? '';
     final locality = site['locality'] ?? '';
     final status = site['status'] ?? 'Pending';
-    final enumeratorFee = site['enumerator_fee'] ?? 0;
-    final transportFee = site['transport_fee'] ?? 0;
-    final cost = site['cost'] ?? (enumeratorFee + transportFee);
+    final storedEnumeratorFee = (site['enumerator_fee'] as num?)?.toDouble() ?? 0.0;
+    final transportFee = (site['transport_fee'] as num?)?.toDouble() ?? 0.0;
+    // For claimable sites (Dispatched), use user's classification-based fee if site has no enumerator_fee
+    final isClaimableSite = status.toLowerCase() == 'dispatched';
+    final enumeratorFee = (storedEnumeratorFee > 0) ? storedEnumeratorFee : (isClaimableSite ? _userEnumeratorFee : 0.0);
+    // Calculate total as enumerator_fee + transport_fee
+    final cost = enumeratorFee + transportFee;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -2901,10 +4018,11 @@ class _MMPScreenState extends State<MMPScreen> {
             ],
           ),
 
-          if (cost > 0 || enumeratorFee > 0 || transportFee > 0) ...[
+          // Show only Total (no Transport/Enumerator breakdown)
+          if (cost > 0) ...[
             const SizedBox(height: 12),
             Container(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
                 color: AppColors.backgroundGray,
                 borderRadius: BorderRadius.circular(8),
@@ -2912,67 +4030,21 @@ class _MMPScreenState extends State<MMPScreen> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  // Collector fee display commented out - only showing total
-                  // if (enumeratorFee > 0)
-                  //   Column(
-                  //     crossAxisAlignment: CrossAxisAlignment.start,
-                  //     children: [
-                  //       Text(
-                  //         'Collector Fee',
-                  //         style: GoogleFonts.poppins(
-                  //           fontSize: 10,
-                  //           color: AppColors.textLight,
-                  //         ),
-                  //       ),
-                  //       Text(
-                  //         '${enumeratorFee.toStringAsFixed(0)} SDG',
-                  //         style: GoogleFonts.poppins(
-                  //           fontSize: 14,
-                  //           fontWeight: FontWeight.w600,
-                  //         ),
-                  //       ),
-                  //     ],
-                  //   ),
-                  // Transport fee display commented out - only showing total
-                  // if (transportFee > 0)
-                  //   Column(
-                  //     crossAxisAlignment: CrossAxisAlignment.start,
-                  //     children: [
-                  //       Text(
-                  //         'Transport',
-                  //         style: GoogleFonts.poppins(
-                  //           fontSize: 10,
-                  //           color: AppColors.textLight,
-                  //         ),
-                  //       ),
-                  //       Text(
-                  //         '${transportFee.toStringAsFixed(0)} SDG',
-                  //         style: GoogleFonts.poppins(
-                  //           fontSize: 14,
-                  //           fontWeight: FontWeight.w600,
-                  //         ),
-                  //       ),
-                  //     ],
-                  //   ),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(
-                        'Total',
-                        style: GoogleFonts.poppins(
-                          fontSize: 10,
-                          color: AppColors.textLight,
-                        ),
-                      ),
-                      Text(
-                        '${cost.toStringAsFixed(0)} SDG',
-                        style: GoogleFonts.poppins(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.primaryBlue,
-                        ),
-                      ),
-                    ],
+                  Text(
+                    'Total',
+                    style: GoogleFonts.poppins(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textDark,
+                    ),
+                  ),
+                  Text(
+                    '${cost.toStringAsFixed(0)} SDG',
+                    style: GoogleFonts.poppins(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.primaryBlue,
+                    ),
                   ),
                 ],
               ),
@@ -2987,6 +4059,8 @@ class _MMPScreenState extends State<MMPScreen> {
             showAcknowledgeButton: showAcknowledgeButton,
             showVisitActions: showVisitActions,
           ),
+          // Contact buttons (Call, SMS, WhatsApp) if contact info is available
+          _buildContactButtons(site),
         ],
       ),
     );
@@ -3133,6 +4207,8 @@ class _MMPScreenState extends State<MMPScreen> {
     final state = site['state'] ?? '';
     final locality = site['locality'] ?? '';
     final status = site['status'] ?? 'Pending';
+    final isCompleted = status.toString().toLowerCase() == 'completed' || 
+                        status.toString().toLowerCase() == 'complete';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -3196,7 +4272,55 @@ class _MMPScreenState extends State<MMPScreen> {
               ),
             ],
           ),
+          if (isCompleted && (_isAdminOrSuperUser || _userRole == 'fom')) ...[
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () => _viewVisitReport(site),
+                icon: const Icon(Icons.visibility, size: 18),
+                label: const Text('View Visit Report'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ],
+      ),
+    );
+  }
+
+  void _viewVisitReport(Map<String, dynamic> site) {
+    final siteVisit = SiteVisit(
+      id: site['id']?.toString() ?? '',
+      siteName: site['site_name']?.toString() ?? site['siteName']?.toString() ?? 'Unknown',
+      siteCode: site['site_code']?.toString() ?? site['siteCode']?.toString() ?? '',
+      state: site['state']?.toString() ?? '',
+      locality: site['locality']?.toString() ?? '',
+      status: site['status']?.toString() ?? '',
+      activity: site['activity']?.toString() ?? site['main_activity']?.toString() ?? '',
+      priority: site['priority']?.toString() ?? 'medium',
+      notes: site['notes']?.toString() ?? '',
+      mainActivity: site['main_activity']?.toString() ?? site['activity']?.toString() ?? '',
+      assignedTo: site['accepted_by']?.toString() ?? site['assigned_to']?.toString() ?? '',
+      createdAt: site['created_at'] != null 
+          ? DateTime.tryParse(site['created_at'].toString()) ?? DateTime.now()
+          : DateTime.now(),
+      transportFee: (site['transport_fee'] as num?)?.toDouble() ?? 0,
+      enumeratorFee: (site['enumerator_fee'] as num?)?.toDouble() ?? 0,
+      dueDate: site['due_date'] != null ? DateTime.tryParse(site['due_date'].toString()) : null,
+    );
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => VisitReportDetailScreen(visit: siteVisit),
       ),
     );
   }
@@ -3266,7 +4390,8 @@ class _CostAcknowledgmentDialogState extends State<_CostAcknowledgmentDialog> {
     final site = widget.site;
     final enumeratorFee = site['enumerator_fee'] ?? 0;
     final transportFee = site['transport_fee'] ?? 0;
-    final totalCost = site['cost'] ?? (enumeratorFee + transportFee);
+    // Always calculate total as transport + enumerator fee (not just site['cost'])
+    final totalCost = (transportFee is num ? transportFee : 0) + (enumeratorFee is num ? enumeratorFee : 0);
 
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -3300,13 +4425,6 @@ class _CostAcknowledgmentDialogState extends State<_CostAcknowledgmentDialog> {
               ),
               child: Column(
                 children: [
-                  // Collector fee display commented out - only showing total
-                  // _buildCostRow('Data Collector Fee', enumeratorFee),
-                  // const Divider(),
-                  // Transport fee display commented out - only showing total
-                  // const Divider(),
-                  // _buildCostRow('Transport Fee', transportFee),
-                  // const Divider(),
                   _buildCostRow('Total Cost', totalCost, isTotal: true),
                 ],
               ),

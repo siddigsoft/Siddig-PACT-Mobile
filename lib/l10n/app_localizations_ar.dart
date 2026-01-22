@@ -789,4 +789,244 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get passwordsDoNotMatch => 'كلمات المرور غير متطابقة';
+
+  @override
+  String get statePermit => 'تصريح الولاية';
+
+  @override
+  String get localityPermit => 'تصريح المحلية';
+
+  @override
+  String get federalPermit => 'التصريح الفيدرالي';
+
+  @override
+  String get permitRequired => 'التصريح مطلوب';
+
+  @override
+  String get permitNotRequired => 'التصريح غير مطلوب';
+
+  @override
+  String get uploadStatePermit => 'رفع تصريح الولاية';
+
+  @override
+  String get uploadLocalityPermit => 'رفع تصريح المحلية';
+
+  @override
+  String get statePermitRequired => 'تصريح الولاية مطلوب';
+
+  @override
+  String statePermitDescription(String state) {
+    return 'تم رفع التصريح الفيدرالي فقط. يرجى رفع تصريح ولاية $state للمتابعة.';
+  }
+
+  @override
+  String get localityPermitRequired => 'تصريح المحلية مطلوب';
+
+  @override
+  String localityPermitDescription(String locality) {
+    return 'يرجى رفع تصريح المحلية لـ $locality للمتابعة.';
+  }
+
+  @override
+  String get selectFile => 'اختر ملف';
+
+  @override
+  String get permitFile => 'ملف التصريح';
+
+  @override
+  String get issueDate => 'تاريخ الإصدار';
+
+  @override
+  String get expiryDate => 'تاريخ الانتهاء';
+
+  @override
+  String get comments => 'ملاحظات';
+
+  @override
+  String get addCommentsOptional => 'أضف ملاحظات (اختياري)';
+
+  @override
+  String get uploadPermit => 'رفع التصريح';
+
+  @override
+  String get uploading => 'جاري الرفع...';
+
+  @override
+  String get permitUploadSuccess => 'تم رفع التصريح بنجاح';
+
+  @override
+  String get permitUploadError => 'فشل رفع التصريح';
+
+  @override
+  String get invalidFileType => 'نوع ملف غير صالح';
+
+  @override
+  String get fileTooLarge => 'الملف كبير جداً';
+
+  @override
+  String get selectPdfOrImage => 'يرجى اختيار ملف PDF أو صورة (JPG، PNG)';
+
+  @override
+  String maxFileSize(int size) {
+    return 'الحد الأقصى لحجم الملف: $size ميجابايت';
+  }
+
+  @override
+  String get datesRequired => 'تاريخ الإصدار والانتهاء مطلوبان';
+
+  @override
+  String get expiryAfterIssue => 'يجب أن يكون تاريخ الانتهاء بعد تاريخ الإصدار';
+
+  @override
+  String get showPreview => 'عرض المعاينة';
+
+  @override
+  String get hidePreview => 'إخفاء المعاينة';
+
+  @override
+  String get clearFile => 'مسح الملف';
+
+  @override
+  String get permitVerification => 'التحقق من التصريح';
+
+  @override
+  String get verifyPermits => 'التحقق من التصاريح';
+
+  @override
+  String get permitsAttached => 'التصاريح مرفقة';
+
+  @override
+  String get pendingVerification => 'في انتظار التحقق';
+
+  @override
+  String get verified => 'تم التحقق';
+
+  @override
+  String get statePermitAttached => 'تصريح الولاية مرفق';
+
+  @override
+  String get localityPermitAttached => 'تصريح المحلية مرفق';
+
+  @override
+  String doYouHaveStatePermit(String state) {
+    return 'هل لديك تصريح الولاية لـ $state؟';
+  }
+
+  @override
+  String doYouHaveLocalityPermit(String locality) {
+    return 'هل لديك تصريح المحلية لـ $locality؟';
+  }
+
+  @override
+  String get yesHaveIt => 'نعم، لدي التصريح';
+
+  @override
+  String get noRequiredDontHave => 'مطلوب ولكن ليس لدي';
+
+  @override
+  String get notRequiredInLocality => 'غير مطلوب في هذه المحلية';
+
+  @override
+  String get canProceedWithout => 'هل يمكنك المتابعة بدون التصريح؟';
+
+  @override
+  String get yesProceedWithout => 'نعم، يمكنني المتابعة';
+
+  @override
+  String get noCannotProceed => 'لا، أحتاج التصريح';
+
+  @override
+  String get sendBackToFom => 'إرسال إلى مدير العمليات';
+
+  @override
+  String get siteVerification => 'التحقق من الموقع';
+
+  @override
+  String get verifySite => 'التحقق من الموقع';
+
+  @override
+  String get returnToFom => 'إعادة إلى مدير العمليات';
+
+  @override
+  String get pendingSites => 'المواقع المعلقة';
+
+  @override
+  String get cpVerification => 'التحقق من التصاريح';
+
+  @override
+  String get verifiedSites => 'المواقع المتحقق منها';
+
+  @override
+  String sitesNeedStatePermit(int count) {
+    return '$count مواقع تحتاج تصريح الولاية';
+  }
+
+  @override
+  String sitesNeedLocalityPermit(int count) {
+    return '$count مواقع تحتاج تصريح المحلية';
+  }
+
+  @override
+  String get step1SelectFile => 'الخطوة 1: اختر الملف';
+
+  @override
+  String get step2EnterDates => 'الخطوة 2: أدخل التواريخ';
+
+  @override
+  String get step3AddComments => 'الخطوة 3: أضف ملاحظات (اختياري)';
+
+  @override
+  String get step4Upload => 'الخطوة 4: رفع التصريح';
+
+  @override
+  String get tapToSelectFile => 'اضغط لاختيار ملف';
+
+  @override
+  String get supportedFormats => 'الصيغ المدعومة: PDF، JPG، PNG';
+
+  @override
+  String fileSelected(String fileName) {
+    return 'تم اختيار الملف: $fileName';
+  }
+
+  @override
+  String get gallery => 'المعرض';
+
+  @override
+  String get pdfDocument => 'مستند PDF';
+
+  @override
+  String get willUploadPermit => 'سأقوم برفع مستند التصريح';
+
+  @override
+  String get cannotProvideNow => 'التصريح مطلوب لكن لا أستطيع توفيره الآن';
+
+  @override
+  String get noPermitNeeded => 'لا يلزم تصريح محلية للعمليات هنا';
+
+  @override
+  String get continueWithoutPermit => 'المتابعة بدون تصريح المحلية';
+
+  @override
+  String get sendBackToManager => 'إرسال إلى مدير العمليات الميدانية';
+
+  @override
+  String chooseHowToProceed(int count, String sitesLabel, String locality) {
+    return 'اختر كيفية المتابعة لـ $count $sitesLabel في $locality:';
+  }
+
+  @override
+  String get site => 'موقع';
+
+  @override
+  String get sites => 'مواقع';
+
+  @override
+  String get uploadFailed => 'فشل الرفع';
+
+  @override
+  String get databaseUpdateFailed => 'فشل تحديث قاعدة البيانات. يرجى المحاولة مرة أخرى.';
+
+  @override
+  String get selectDate => 'اختر التاريخ';
 }
